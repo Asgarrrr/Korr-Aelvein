@@ -1,0 +1,12 @@
+{
+  "extends": "@korr-aelvein/typescript-config/base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "moduleDetection": "force",
+    "noEmit": true,
+    "types": ["bun"]
+  },
+  "include": ["src", "scripts"],
+  "exclude": ["node_modules"]
+}
