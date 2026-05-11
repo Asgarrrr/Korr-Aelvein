@@ -1,0 +1,143 @@
+# Korr Aelvein — Codebase map
+
+Read this **before** grepping or reinventing. Claude: this is your first stop when orienting in this repo.
+
+## Folder structure
+
+```
+apps/
+  client/             Vite 8 + React 19 SPA. Renders state, forwards input. NO game logic.
+  server/             Bun + Elysia. Single source of truth for game state.
+    src/
+      app.ts          Elysia builder (pure). Use `createApp()` for in-memory testing.
+      index.ts        Listener: `createApp().listen(PORT)`, re-exports `type App`.
+      tests/          app.test.ts (/health + factory).
+      domain/         Pure game logic. No imports from transport/.
+        rng/          Seeded sfc32 PRNG with serialisable state.
+          index.ts, index.bench.ts          PRNG + microbench.
+          tests/                            index.test.ts.
+        dungeon/      Procgen — see `docs/PROCGEN.md` for the full story.
+          types.ts, grid.ts, index.ts       Level/Tile types, flat-array helpers, public surface.
+          tests/                            grid / index / properties — foundation + adversarial.
+          styles/rim/                       Brogue-style room accretion.
+            <passes>.ts, index.ts           5 passes + pipeline recipe.
+            tests/                          per-pass + integration / invariants / determinism / edge-cases.
+          styles/caverns/                   Cellular-automata caves.
+            <passes>.ts, index.ts           5 passes + pipeline recipe.
+            tests/                          per-pass + ca-correctness / integration / invariants / determinism / edge-cases.
+    scripts/          CLI utilities.
+      preview-dungeon.ts                   ASCII preview of any (seed, style).
+      preview-shrine.ts                    Demo of constraint-as-pass.
+packages/
+  typescript-config/  Shared tsconfigs (base, react-library).
+packages/
+  typescript-config/  Shared tsconfigs (base, react-library).
+.claude/              Claude Code config: skills, agents, hooks, settings.
+.github/workflows/    CI: lint + typecheck + test + build on PR/push.
+docs/                 You are here.
+biome.json            Single quality config (lint + format + organize-imports).
+CLAUDE.md             Project rules — read every session.
+turbo.json            Build / dev / test / check-types tasks.
+```
+
+## Modules and their public surfaces
+
+### `@korr-aelvein/typescript-config`
+
+- Two presets: `base.json` (runtime-agnostic, no DOM) and `react-library.json` (extends base + DOM lib + JSX).
+- All workspaces extend one of these. Don't add lib/types directly to per-app tsconfigs; modify the shared preset instead.
+- Strict flags enabled: `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noImplicitReturns`, `noPropertyAccessFromIndexSignature`.
+
+### `apps/server`
+
+- **Entry point**: `src/index.ts` calls `createApp().listen(PORT)`. Re-exports `type App` for the client via Eden Treaty.
+- **App builder**: `src/app.ts` — pure `createApp()` that returns the Elysia instance without listening. Use this from tests: `await createApp().handle(new Request(...))`.
+- **WebSocket**: `/game` with TypeBox `body` and `response` schemas. Inbound validation is the security boundary of the server-authoritative model.
+- **HTTP**: `/health` returns `{ ok: true }`.
+- **Port**: `3001` (override with `PORT` env var; declared in `turbo.json#globalEnv`).
+- **Game logic**: lives under `src/domain/`. Currently `rng/` (PRNG infra) and `dungeon/` (procgen).
+- **Public package exports** (`package.json#exports`): `./src/index.ts` for both `types` and `import` conditions — that's how the client pulls `App` via `import type { App } from "server"`.
+
+### `apps/server/src/domain/dungeon`
+
+- **Public API**: `generateLevel(rng, w, h, style)`, `StyleId = "rim" | "caverns"`, `emptyLevel`, `runPipeline`, types (`Level`, `Tile`, `Grid`, `Room`, `Pass`, `Pipeline`), grid helpers (`idx`, `inBounds`, `getTile`, `setTile`, `DX4`/`DY4`).
+- **Architecture**: pipeline of pure passes `(Level, Rng) => Level`. Each style is a `Pipeline = ReadonlyArray<Pass>` recipe. Adding a style = adding a folder under `styles/`.
+- **Reproducibility**: same seed → byte-identical `Level`. 200 seed-runs pinned via FNV-1a hash regression (`styles/{rim,caverns}/tests/determinism.test.ts`).
+- **Perf**: rim ~0.03 ms, caverns ~2 ms at 300×150 (~95× speedup vs initial O(N²) algorithm).
+- **CLI**: `bun run preview --style {rim,caverns} --seed N` from `apps/server/`.
+- **Full doc**: `docs/PROCGEN.md` covers passes, constraints, determinism contract, and rejected alternatives.
+
+### `apps/server/src/domain/rng`
+
+- **Public API**: `createRng(seed: number)`, `fromRngState(state: RngState)`, `Rng`, `RngCore`, `RngState`.
+- **Free ops** (work on any `RngCore`): `nextInt(core, min, max)`, `nextPick(core, arr)`, `nextChance(core, p)`.
+- **Lifecycle in reducers**: `const rng = fromRngState(state.rngState); … return { ...state, rngState: rng.state() };`.
+- **Algorithm**: sfc32 (128-bit state) + SplitMix32 expansion. Pure 32-bit JS arithmetic, no BigInt. Identical sequences across V8/Bun and any modern browser.
+- **Why this and not Mulberry32 / PCG / xoshiro / wyrand / ChaCha8**: see the docstring at the top of `index.ts` and `~/.claude/projects/-Users-asgarrrr-Documents-Projects-korr-aelvein/memory/project_design_decisions.md`.
+- **Bench**: `bun run bench` (in `apps/server`). Reference: `next() ≈ 4.6 ns/op`, `pick(arr[10]) ≈ 36.5 ns/op` (O(n) is the cost of the no-`as`/no-`!` rule, accepted).
+
+### `apps/client`
+
+- **Entry point**: `src/main.tsx` mounts `<Game />`.
+- **Eden client**: `treaty<App>(SERVER_URL)` instantiated once at module scope in `src/Game.tsx`. The client never re-declares WS message types.
+- **WS connection**: opened in `useEffect`, cleanup closes the socket. React 19 StrictMode causes a dev-only double-mount; not a bug.
+- **Build**: `tsc -b && vite build`. Output to `dist/` (gitignored).
+- **Dev port**: `5173`.
+
+## Established patterns (use these, don't reinvent)
+
+| Need                                         | What we use                                     | Where                                            |
+| -------------------------------------------- | ----------------------------------------------- | ------------------------------------------------ |
+| Seeded determinism                           | sfc32 with state in `GameState.rngState`        | `apps/server/src/domain/rng/`                    |
+| WS contract                                  | TypeBox `body` + `response` per handler         | `apps/server/src/index.ts`                       |
+| Client → server type sharing                 | Eden Treaty + workspace dep `server`            | `apps/client/src/Game.tsx`                       |
+| Indexed array access without `as` / `!`      | `for (const [i, item] of arr.entries())`        | `apps/server/src/domain/rng/index.ts:nthOrThrow` |
+| Verification before "done"                   | Stop hook                                       | `.claude/hooks/before-stop.sh`                   |
+| Adversarial code review                      | Subagent `code-critic`                          | `.claude/agents/code-critic.md`                  |
+| SOTA / library / algorithm pick research     | Skill `/research-before-recommending`           | `.claude/skills/research-before-recommending/`   |
+| Workspace dep declaration (Bun-idiomatic)    | `"<name>": "workspace:*"`                       | every `package.json` in workspaces               |
+| Type-only import from another workspace      | `import type { X } from "<workspace>"` via Bun symlink | `apps/client/src/Game.tsx`                |
+
+## Don't reach for these — explicit rejections
+
+Considered, deliberately not used. Re-read the rationale before challenging.
+
+- **ESLint, Prettier** — replaced by Biome (single tool for lint + format + organise-imports). See `feedback_official_scaffolds.md`.
+- **`as` casts, `!` non-null, `as const`, import-alias `import { X as Y }`** — banned project-wide. Refactor with `for…of` / `entries()`, runtime guards, or local renames. See `feedback_no_as_no_nonnull.md`.
+- **Mulberry32** — superseded by sfc32 (period exhaustion at 2³², ~1/3 missing u32 outputs).
+- **PCG / wyrand** — need 64-bit arithmetic → BigInt → 10–60× slowdown in V8. Not viable for browser-side determinism.
+- **xoshiro128++** — known low-bit weakness, fails linear-complexity tests (Vigna's own docs).
+- **ChaCha8** — overkill (cryptographic) and ~10× slower than sfc32 in pure JS.
+- **ECS (bitecs, miniplex, koota), Redux, Zustand, effect-ts, Result/Either libs** — premature for our scale and turn-based loop. Will revisit if cross-cutting traits genuinely multiply.
+- **Next.js, SSR, RSC** — client is and stays a Vite SPA targeting a Canvas/WebGL game.
+- **Database, ORM, persistence layer** — server state lives in memory only, until explicitly asked otherwise.
+- **`packages/game-core`** — not extracted preemptively. Trigger: same type duplicated between client and server. Until then, types live in `apps/server/src/domain/`.
+
+For the full rationale of any item: `~/.claude/projects/-Users-asgarrrr-Documents-Projects-korr-aelvein/memory/project_design_decisions.md`.
+
+## External references — canonical sources, 2026-05
+
+When in doubt about how a tool works, fetch the canonical docs (don't rely on training-distribution recall).
+
+- **Biome 2.4** — https://biomejs.dev (config schema in `biome.json` `$schema`).
+- **Elysia 1.4** — https://elysiajs.com.
+- **Eden Treaty (WS)** — https://elysiajs.com/eden/treaty/websocket.html.
+- **Bun workspaces** — https://bun.com/docs/pm/workspaces.
+- **Bun test runner** — https://bun.com/docs/cli/test.
+- **TypeBox** — https://github.com/sinclairzx81/typebox.
+- **Vite 8** — https://vite.dev.
+- **Turborepo** — https://turborepo.dev.
+- **Claude Code skills** — https://code.claude.com/docs/en/skills.
+- **Claude Code subagents** — https://code.claude.com/docs/en/sub-agents.
+- **Claude Code hooks** — https://code.claude.com/docs/en/hooks.
+- **Claude Code memory & CLAUDE.md** — https://code.claude.com/docs/en/memory.
+
+## Setting (story / lore)
+
+An island built around a vast inexplicable abyss whose presence shapes the world for unknown reasons. A town encircles the rim; people live, work, descend.
+
+_Korr_ and _Aelvein_ are invented proper nouns — their referents (town, abyss, order, era, dynasty) crystallise as the lore is written. **Do not translate to English equivalents in code or copy.**
+
+## Maintenance
+
+This file is checked into git and shared with the team. Keep it under ~150 lines. When a section of CLAUDE.md grows to describe "where things live", move it here. When this file grows past 150 lines, split (e.g., `docs/PATTERNS.md`).
