@@ -36,3 +36,9 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+# Local command-wrapper logs (auto-regenerates per shell invocation, never commit)
+.mira/
+
+# Local Claude Code config — user's own dev tooling, not project source
+.claude/
