@@ -1,7 +1,7 @@
 # Velm
 
-The island would be unremarkable — a stone shoulder rising out of grey water, pines that grow stubborn from rock — if not for the wound at its heart: an abyss no one has measured, whose presence shapes the world for reasons no one understands. People felt it long before they ever saw it. The compasses turn strangely here. The birds do not nest. The water tastes of something that has no name yet.
+L'île n'aurait rien de remarquable — une épaule de pierre sortie d'une eau grise, des pins qui s'obstinent dans la roche — sans la plaie en son cœur : un abysse que personne n'a sondé, dont la présence façonne le monde pour des raisons que nul ne comprend. On l'a senti bien avant de le voir. Les boussoles s'y égarent, les oiseaux n'y nichent pas, et l'eau prend un goût qui n'a pas encore de nom.
 
-Around the rim, a town. Houses built right up against the lip, as if proximity were a covenant. People are born here, work here, marry here, and most of them die here too — but some descend. Not as heroes, not as conquerors. As blacksmiths who need the iron, as herbalists tracing a root, as scouts hired by a worried neighbour. The descent is a chore done by professionals who happen to live next to it. Some come back. Many do not. And once in a while, something comes back that no one brought down.
+Autour du rebord, une ville. Des maisons bâties contre la lèvre même, comme si la proximité tenait lieu d'alliance. On y naît, on y travaille, on s'y marie, et la plupart y meurent aussi — mais certains descendent. Pas en héros, pas en conquérants. En forgerons venus pour le fer, en herboristes suivant une racine, en éclaireurs payés par un voisin inquiet. La descente est une corvée que font des professionnels qui se trouvent vivre à côté. Certains reviennent. Beaucoup non. Et de temps en temps, c'est quelque chose qui remonte, sans que personne ne l'ait fait descendre.
 
 ---
