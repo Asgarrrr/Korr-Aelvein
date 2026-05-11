@@ -30,11 +30,9 @@ apps/
       preview-shrine.ts                    Demo of constraint-as-pass.
 packages/
   typescript-config/  Shared tsconfigs (base, react-library).
-packages/
-  typescript-config/  Shared tsconfigs (base, react-library).
-.claude/              Claude Code config: skills, agents, hooks, settings.
 .github/workflows/    CI: lint + typecheck + test + build on PR/push.
-docs/                 You are here.
+docs/                 Technical docs — codebase map, procgen deep-dive.
+registry/             Worldbuilding + narrative-design notes (not code). See `registry/README.md`.
 biome.json            Single quality config (lint + format + organize-imports).
 CLAUDE.md             Project rules — read every session.
 turbo.json            Build / dev / test / check-types tasks.
