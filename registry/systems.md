@@ -35,7 +35,7 @@ Examples:
 - *You descended too deep once. You hear stones speak. But sleep no longer comes.*
 - *You touched the grey blood. You can pass sealed doors. But your shadow no longer follows you.*
 
-You do not *farm* marks. The abyss leaves them on you.
+You do not *farm* marks. The abyss leaves them on you — it has *noticed* you. A mark is not a wound, it is the trace of a brief negotiation with something that almost has a will (see `world.md` § Almost an entity).
 
 ## Chain rules
 
@@ -64,7 +64,9 @@ Each métier must:
 
 ## Abyss simulation (separate progression)
 
-The abyss has its **own** progression, mechanically distinct from the player's:
+The abyss has its **own** progression, mechanically distinct from the player's. In lore terms, this is not ecology — it is **metabolism** (see `world.md` § Almost an entity). The creatures are not independent dwellers; they are organs, antibodies, excretions. The sim layer is the body of a thing.
+
+In design terms, it is still a tick loop:
 
 - Creatures have actual stats (HP, damage, etc.) — abstracted, this is the sim layer
 - Hunting/predation events resolve server-side
@@ -72,5 +74,7 @@ The abyss has its **own** progression, mechanically distinct from the player's:
 - A creature strong enough begins to migrate upward
 
 > [TBD] Granularity of the sim — does the server tick combat between every pair of NPCs in the abyss, or are populations modeled at a more abstract faction/density level? Performance and emergent behavior trade-off.
+
+> [TBD] Does the abyss-as-entity have **moods** that bias the sim? E.g. a "restless" abyss spawns more aggressive antibodies; a "dormant" one barely moves. This is where the entity-ness manifests mechanically without us needing to claim it is sentient.
 
 The player's progression (mastery / knowledge / marks) does not feed the abyss's progression, and vice versa. They evolve in parallel and meet only when the player descends or when something surfaces.
