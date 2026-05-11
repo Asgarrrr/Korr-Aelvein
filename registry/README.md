@@ -13,6 +13,7 @@ Worldbuilding and narrative-design notes for Korr Aelvein.
 | `systems.md` | Game-system design (progression, métiers, chain mechanics) |
 | `vocabulary.md` | Words of the world — Korr, Aelvein, glyphs, songs (gameplay-bearing) |
 | `story.md` | Events, characters, myths (stub) |
+| `velm.md` | Single open notebook for ongoing design — sketches, fragments, threads. Content migrates out when it crystallizes |
 
 ## Writing convention
 
