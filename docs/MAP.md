@@ -21,6 +21,10 @@ apps/
           *.ts                              world / query / forQuery / components / entity / system.
           tests/                            world / query / forquery / system / determinism / stress.
           bench/                            standard.bench.ts + mega.bench.ts.
+        game/         Turn-based game loop. Pure (state, action) → state.
+          state.ts                          GameState type + newGame factory.
+          tick.ts                           Action type + tick reducer (MOVE).
+          tests/                            tick.test.ts.
         dungeon/      Procgen — see `docs/PROCGEN.md` for the full story.
           types.ts, grid.ts, index.ts       Level/Tile types, flat-array helpers, public surface.
           tests/                            grid / index / properties — foundation + adversarial.
@@ -59,7 +63,7 @@ turbo.json            Build / dev / test / check-types tasks.
 - **WebSocket**: `/game` with TypeBox `body` and `response` schemas. Inbound validation is the security boundary of the server-authoritative model.
 - **HTTP**: `/health` returns `{ ok: true }`.
 - **Port**: `3001` (override with `PORT` env var; declared in `turbo.json#globalEnv`).
-- **Game logic**: lives under `src/domain/`. Currently `rng/` (PRNG infra) and `dungeon/` (procgen).
+- **Game logic**: lives under `src/domain/`. Currently `rng/` (PRNG infra), `dungeon/` (procgen), and `game/` (tick loop).
 - **Public package exports** (`package.json#exports`): `./src/index.ts` for both `types` and `import` conditions — that's how the client pulls `App` via `import type { App } from "server"`.
 
 ### `apps/server/src/domain/dungeon`
