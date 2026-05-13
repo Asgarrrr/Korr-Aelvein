@@ -1,3 +1,4 @@
+import { cloneTiles, fillBorder } from "../../grid";
 import { type Pass, TILE_FLOOR, TILE_WALL } from "../../types";
 
 export type SeedCAParams = {
@@ -20,9 +21,7 @@ export function seedCA(params: SeedCAParams = {}): Pass {
   }
 
   return (level, rng) => {
-    const { width: W, height: H } = level.grid;
-    const tiles = new Uint8Array(level.grid.tiles);
-    const cap = W * H;
+    const { W, H, tiles, cap } = cloneTiles(level.grid);
 
     // Sample every cell (including the border) so the number of RNG draws is
     // exactly W*H — deterministic and independent of border width. Single flat
@@ -32,16 +31,7 @@ export function seedCA(params: SeedCAParams = {}): Pass {
       tiles[i] = rng.chance(wallProbability) ? TILE_WALL : TILE_FLOOR;
     }
     // Border to WALL unconditionally, enclosing the cave.
-    const lastRow = (H - 1) * W;
-    for (let x = 0; x < W; x++) {
-      tiles[x] = TILE_WALL;
-      tiles[lastRow + x] = TILE_WALL;
-    }
-    for (let y = 1; y < H - 1; y++) {
-      const yBase = y * W;
-      tiles[yBase] = TILE_WALL;
-      tiles[yBase + W - 1] = TILE_WALL;
-    }
+    fillBorder(tiles, W, H, TILE_WALL);
 
     return { ...level, grid: { ...level.grid, tiles } };
   };

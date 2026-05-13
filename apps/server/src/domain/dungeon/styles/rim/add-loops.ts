@@ -1,4 +1,11 @@
-import { DX4, DY4, idx, inBounds } from "../../grid";
+import {
+  cloneTiles,
+  DX4,
+  DY4,
+  idx,
+  inBounds,
+  makeBfsScratch,
+} from "../../grid";
 import { type Pass, TILE_DOOR, TILE_FLOOR, TILE_WALL } from "../../types";
 
 export type AddLoopsParams = {
@@ -32,19 +39,13 @@ export function addLoops(params: AddLoopsParams = {}): Pass {
   }
 
   return (level, rng) => {
-    const W = level.grid.width;
-    const H = level.grid.height;
-    const tiles = new Uint8Array(level.grid.tiles);
-    const cap = W * H;
+    const { W, H, tiles, cap } = cloneTiles(level.grid);
 
     // Hoist BFS scratch buffers out of the attempt loop. We reuse them across
     // up to `maxAttempts` BFS calls — `visited.fill(0)` between attempts. This
     // replaces ~maxAttempts × (Uint8Array(cap) + 3 × number[]) allocations
     // (~480 kB churn per generateLevel at 80×30) with 4 fixed allocations.
-    const visited = new Uint8Array(cap);
-    const queueX = new Int32Array(cap);
-    const queueY = new Int32Array(cap);
-    const queueD = new Int32Array(cap);
+    const { visited, queueX, queueY, queueD } = makeBfsScratch(cap);
 
     const isWalkable = (x: number, y: number): boolean => {
       if (!inBounds(x, y, level.grid)) return false;

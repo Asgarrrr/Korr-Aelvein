@@ -9,14 +9,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { createRng } from "../../rng/index";
-import {
-  getTile,
-  idx,
-  inBounds,
-  neighbors4,
-  neighbors8,
-  setTile,
-} from "../grid";
+import { getTile, idx, inBounds } from "../grid";
 import {
   emptyLevel,
   type Level,
@@ -47,74 +40,6 @@ function pickTile(rngFloat: number): Tile {
 }
 
 // ─── A. Property tests ────────────────────────────────────────────────────────
-
-describe("property: setTile/getTile round-trip is reflexive", () => {
-  test("setTile(g, x, y, getTile(g, x, y)) preserves every cell", () => {
-    const rng = createRng(0xa11ce);
-    const w = 12;
-    const h = 9;
-    // Fill a grid with random tiles first so we have something to round-trip.
-    let g: Grid = makeGrid(w, h);
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        g = setTile(g, x, y, pickTile(rng.next()));
-      }
-    }
-    const before = new Uint8Array(g.tiles);
-    // Re-write every cell with its own current value; nothing should change.
-    let g2: Grid = g;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        g2 = setTile(g2, x, y, getTile(g2, x, y));
-      }
-    }
-    expect(Array.from(g2.tiles)).toEqual(Array.from(before));
-  });
-});
-
-describe("property: setTile is local (changes exactly one byte)", () => {
-  test("over 200 random writes, only the targeted byte differs", () => {
-    const rng = createRng(0x10ca1);
-    const w = 17;
-    const h = 11;
-    let g: Grid = makeGrid(w, h);
-    for (let i = 0; i < 200; i++) {
-      const x = rng.int(0, w - 1);
-      const y = rng.int(0, h - 1);
-      const t = pickTile(rng.next());
-      const before = new Uint8Array(g.tiles);
-      const g2 = setTile(g, x, y, t);
-      const target = idx(x, y, w);
-      for (let k = 0; k < before.length; k++) {
-        if (k === target) {
-          expect(g2.tiles[k]).toBe(t);
-        } else {
-          expect(g2.tiles[k]).toBe(before[k]);
-        }
-      }
-      g = g2;
-    }
-  });
-});
-
-describe("property: setTile does not mutate input grid", () => {
-  test("input.tiles is byte-identical and reference-distinct from output.tiles", () => {
-    const rng = createRng(0xbabe);
-    for (let i = 0; i < 50; i++) {
-      const w = rng.int(1, 20);
-      const h = rng.int(1, 20);
-      const g = makeGrid(w, h);
-      // Seed grid with a marker so we can detect any mutation.
-      for (let k = 0; k < g.tiles.length; k++) g.tiles[k] = 1;
-      const snapshot = new Uint8Array(g.tiles);
-      const x = rng.int(0, w - 1);
-      const y = rng.int(0, h - 1);
-      const g2 = setTile(g, x, y, TILE_DOOR);
-      expect(Array.from(g.tiles)).toEqual(Array.from(snapshot));
-      expect(g.tiles).not.toBe(g2.tiles);
-    }
-  });
-});
 
 describe("property: emptyLevel produces only TILE_WALL", () => {
   test("over many sizes up to 50x50, every byte is 0", () => {
@@ -151,52 +76,6 @@ describe("property: idx is injective and surjective onto [0, w*h)", () => {
       expect(min).toBe(0);
       expect(max).toBe(w * h - 1);
     }
-  });
-});
-
-describe("property: neighbors4 / neighbors8 consistency", () => {
-  test("neighbors4: all entries are at Manhattan distance 1, no duplicates, no self", () => {
-    const rng = createRng(0xfeed);
-    for (let i = 0; i < 50; i++) {
-      const x = rng.int(-100, 100);
-      const y = rng.int(-100, 100);
-      const ns = neighbors4(x, y);
-      expect(ns.length).toBe(4);
-      const set = new Set<string>();
-      for (const [nx, ny] of ns) {
-        const dx = Math.abs(nx - x);
-        const dy = Math.abs(ny - y);
-        expect(dx + dy).toBe(1);
-        expect(nx === x && ny === y).toBe(false);
-        set.add(`${nx},${ny}`);
-      }
-      expect(set.size).toBe(4);
-    }
-  });
-
-  test("neighbors8: all entries at Chebyshev distance 1, no duplicates, no self", () => {
-    const rng = createRng(0xface);
-    for (let i = 0; i < 50; i++) {
-      const x = rng.int(-100, 100);
-      const y = rng.int(-100, 100);
-      const ns = neighbors8(x, y);
-      expect(ns.length).toBe(8);
-      const set = new Set<string>();
-      for (const [nx, ny] of ns) {
-        const dx = Math.abs(nx - x);
-        const dy = Math.abs(ny - y);
-        expect(Math.max(dx, dy)).toBe(1);
-        expect(dx + dy).toBeGreaterThan(0);
-        set.add(`${nx},${ny}`);
-      }
-      expect(set.size).toBe(8);
-    }
-  });
-
-  test("neighbors4 is a strict subset of neighbors8", () => {
-    const ns4 = new Set(neighbors4(3, 7).map(([x, y]) => `${x},${y}`));
-    const ns8 = new Set(neighbors8(3, 7).map(([x, y]) => `${x},${y}`));
-    for (const k of ns4) expect(ns8.has(k)).toBe(true);
   });
 });
 
@@ -238,7 +117,7 @@ describe("property: runPipeline does not leak state between calls", () => {
   });
 });
 
-describe("property: hot-loop convention (bypassing setTile) is valid", () => {
+describe("property: direct tiles[idx] writes are observable via getTile", () => {
   test("a pass that copies tiles + writes via idx produces a Level whose getTile agrees", () => {
     const rng = createRng(0xbaba);
     const w = 20;
@@ -319,20 +198,6 @@ describe("adversarial: hand-crafted malformed Grid", () => {
     expect(() => getTile(malformed, 3, 3)).toThrow();
   });
 
-  test("setTile on a grid with too-short tiles array: out-of-range write is dropped silently by Uint8Array", () => {
-    // Uint8Array writes past the end are no-ops in JS. This is a SILENT
-    // corruption mode that the API does not detect — flagged in the report.
-    const malformed: Grid = { width: 4, height: 4, tiles: new Uint8Array(4) };
-    // setTile validates inBounds (which only looks at width/height), then
-    // writes at idx 15 — past the end of the 4-byte array.
-    const out = setTile(malformed, 3, 3, TILE_FLOOR);
-    expect(out.tiles.length).toBe(4);
-    // The write is silently dropped; reading back yields TILE_WALL.
-    // This documents the bug; if this test starts failing because the API
-    // grew a length check, that's a good sign — update the expectation.
-    expect(getTile(out, 0, 0)).toBe(TILE_WALL);
-  });
-
   test("getTile throws on corrupted byte (e.g., 99 or 255)", () => {
     const g = makeGrid(2, 2);
     g.tiles[0] = 99;
@@ -341,6 +206,24 @@ describe("adversarial: hand-crafted malformed Grid", () => {
     expect(() => getTile(g, 0, 0)).toThrow();
     g.tiles[0] = 3; // just past TILE_DOOR
     expect(() => getTile(g, 0, 0)).toThrow();
+  });
+
+  test("hot-loop pattern silently drops writes past tiles.length on a malformed Grid", () => {
+    // Pins the failure mode that the removed `setTile` adversarial test used
+    // to pin: passes write tiles via `tiles[idx(x, y, W)] = TILE_X` directly
+    // (no length check). On a hand-crafted Grid where tiles.length < W*H, the
+    // out-of-range index is silently dropped by Uint8Array — the cell stays
+    // at its previous value, and `getTile` then throws because the underlying
+    // byte is `undefined`. Surfaces in the report; do not "fix" by guarding
+    // every write site — fix by enforcing the invariant at Grid construction.
+    const malformed: Grid = { width: 4, height: 4, tiles: new Uint8Array(4) };
+    // (3, 3) is in-bounds per width/height, idx = 15, but past tiles.length.
+    malformed.tiles[idx(3, 3, 4)] = TILE_FLOOR;
+    expect(malformed.tiles.length).toBe(4);
+    expect(() => getTile(malformed, 3, 3)).toThrow();
+    // In-range writes still land.
+    malformed.tiles[idx(0, 0, 4)] = TILE_FLOOR;
+    expect(getTile(malformed, 0, 0)).toBe(TILE_FLOOR);
   });
 });
 
