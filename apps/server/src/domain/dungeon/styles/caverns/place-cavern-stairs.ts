@@ -1,4 +1,4 @@
-import { DX4, DY4 } from "../../grid";
+import { DX4, DY4, makeBfsScratch } from "../../grid";
 import { type Pass, TILE_DOOR, TILE_FLOOR } from "../../types";
 
 export const placeCavernStairs: Pass = (level) => {
@@ -9,12 +9,7 @@ export const placeCavernStairs: Pass = (level) => {
   }
   const [sx, sy] = level.spawn;
   const { width: W, height: H, tiles } = level.grid;
-  const cap = W * H;
-
-  const visited = new Uint8Array(cap);
-  const queueX = new Int32Array(cap);
-  const queueY = new Int32Array(cap);
-  const queueD = new Int32Array(cap);
+  const { visited, queueX, queueY, queueD } = makeBfsScratch(W * H);
 
   queueX[0] = sx;
   queueY[0] = sy;

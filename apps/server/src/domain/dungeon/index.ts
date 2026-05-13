@@ -5,14 +5,7 @@
 // `styles/`, a `Pipeline` constant, and one line in `PIPELINES`.
 
 import type { Rng } from "../rng/index";
-import {
-  getTile,
-  idx,
-  inBounds,
-  neighbors4,
-  neighbors8,
-  setTile,
-} from "./grid";
+import { getTile, idx, inBounds } from "./grid";
 import { CAVERNS } from "./styles/caverns/index";
 import { RIM } from "./styles/rim/index";
 import {
@@ -28,17 +21,7 @@ import {
 } from "./types";
 
 export type { Grid, Level, Pass, Pipeline, Room, Tile };
-export {
-  getTile,
-  idx,
-  inBounds,
-  neighbors4,
-  neighbors8,
-  setTile,
-  TILE_DOOR,
-  TILE_FLOOR,
-  TILE_WALL,
-};
+export { getTile, idx, inBounds, TILE_DOOR, TILE_FLOOR, TILE_WALL };
 
 export function emptyLevel(width: number, height: number): Level {
   if (!Number.isInteger(width) || width <= 0) {

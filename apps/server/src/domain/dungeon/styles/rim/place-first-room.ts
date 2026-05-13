@@ -1,4 +1,4 @@
-import { idx } from "../../grid";
+import { cloneTiles, idx } from "../../grid";
 import { type Pass, type Room, TILE_FLOOR } from "../../types";
 
 export type PlaceFirstRoomParams = {
@@ -29,7 +29,7 @@ export function placeFirstRoom(params: PlaceFirstRoomParams = {}): Pass {
         `placeFirstRoom: precondition violated — expected an empty rooms array (got ${level.rooms.length})`,
       );
     }
-    const { width: W, height: H } = level.grid;
+    const { W, H, tiles } = cloneTiles(level.grid);
     const w = rng.int(minSize, maxSize);
     const h = rng.int(minSize, maxSize);
     if (w > W || h > H) {
@@ -40,7 +40,6 @@ export function placeFirstRoom(params: PlaceFirstRoomParams = {}): Pass {
     const x = Math.floor((W - w) / 2);
     const y = Math.floor((H - h) / 2);
 
-    const tiles = new Uint8Array(level.grid.tiles);
     for (let yy = y; yy < y + h; yy++) {
       for (let xx = x; xx < x + w; xx++) {
         tiles[idx(xx, yy, W)] = TILE_FLOOR;

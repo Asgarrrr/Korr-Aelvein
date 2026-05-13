@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
+  cloneTiles,
+  fillBorder,
   getTile,
   idx,
   inBounds,
-  neighbors4,
-  neighbors8,
-  setTile,
+  makeBfsScratch,
 } from "../grid";
 import { type Grid, TILE_DOOR, TILE_FLOOR, TILE_WALL } from "../types";
 
@@ -65,31 +65,14 @@ describe("inBounds", () => {
   });
 });
 
-describe("getTile / setTile", () => {
-  test("setTile then getTile returns the new tile", () => {
+describe("getTile", () => {
+  test("reads back what was written directly into tiles[idx]", () => {
     const g = makeGrid(5, 4);
-    const g2 = setTile(g, 2, 3, TILE_FLOOR);
-    expect(getTile(g2, 2, 3)).toBe(TILE_FLOOR);
+    g.tiles[idx(2, 3, 5)] = TILE_FLOOR;
+    expect(getTile(g, 2, 3)).toBe(TILE_FLOOR);
   });
 
-  test("setTile does not mutate the input grid", () => {
-    const g = makeGrid(5, 4);
-    expect(getTile(g, 2, 3)).toBe(TILE_WALL);
-    const g2 = setTile(g, 2, 3, TILE_DOOR);
-    expect(getTile(g, 2, 3)).toBe(TILE_WALL);
-    expect(getTile(g2, 2, 3)).toBe(TILE_DOOR);
-    expect(g.tiles).not.toBe(g2.tiles);
-  });
-
-  test("setTile returns a grid with the same dimensions", () => {
-    const g = makeGrid(7, 9);
-    const g2 = setTile(g, 1, 1, TILE_FLOOR);
-    expect(g2.width).toBe(7);
-    expect(g2.height).toBe(9);
-    expect(g2.tiles.length).toBe(63);
-  });
-
-  test("getTile throws on out-of-bounds", () => {
+  test("throws on out-of-bounds", () => {
     const g = makeGrid(5, 4);
     expect(() => getTile(g, -1, 0)).toThrow();
     expect(() => getTile(g, 0, -1)).toThrow();
@@ -97,82 +80,101 @@ describe("getTile / setTile", () => {
     expect(() => getTile(g, 0, 4)).toThrow();
   });
 
-  test("setTile throws on out-of-bounds", () => {
-    const g = makeGrid(5, 4);
-    expect(() => setTile(g, -1, 0, TILE_FLOOR)).toThrow();
-    expect(() => setTile(g, 0, -1, TILE_FLOOR)).toThrow();
-    expect(() => setTile(g, 5, 0, TILE_FLOOR)).toThrow();
-    expect(() => setTile(g, 0, 4, TILE_FLOOR)).toThrow();
-  });
-
-  test("getTile throws when underlying byte is not a known tile", () => {
+  test("throws when underlying byte is not a known tile", () => {
     const g = makeGrid(2, 2);
     g.tiles[0] = 99;
     expect(() => getTile(g, 0, 0)).toThrow();
   });
 
-  test("getTile recognises all three valid tile values", () => {
-    const g0 = makeGrid(1, 1);
-    const g1 = setTile(g0, 0, 0, TILE_FLOOR);
-    const g2 = setTile(g0, 0, 0, TILE_DOOR);
-    expect(getTile(g0, 0, 0)).toBe(TILE_WALL);
-    expect(getTile(g1, 0, 0)).toBe(TILE_FLOOR);
-    expect(getTile(g2, 0, 0)).toBe(TILE_DOOR);
+  test("recognises all three valid tile values", () => {
+    const g = makeGrid(1, 1);
+    expect(getTile(g, 0, 0)).toBe(TILE_WALL);
+    g.tiles[0] = TILE_FLOOR;
+    expect(getTile(g, 0, 0)).toBe(TILE_FLOOR);
+    g.tiles[0] = TILE_DOOR;
+    expect(getTile(g, 0, 0)).toBe(TILE_DOOR);
   });
 });
 
-describe("neighbors4", () => {
-  test("returns exactly 4 entries", () => {
-    expect(neighbors4(0, 0).length).toBe(4);
-    expect(neighbors4(10, 10).length).toBe(4);
+describe("cloneTiles", () => {
+  test("returns a fresh Uint8Array with the same bytes as the input", () => {
+    const g = makeGrid(5, 4);
+    g.tiles[0] = TILE_FLOOR;
+    g.tiles[6] = TILE_DOOR;
+    const { W, H, tiles, cap } = cloneTiles(g);
+    expect(W).toBe(5);
+    expect(H).toBe(4);
+    expect(cap).toBe(20);
+    expect(tiles.length).toBe(20);
+    expect(tiles).not.toBe(g.tiles);
+    expect(Array.from(tiles)).toEqual(Array.from(g.tiles));
   });
 
-  test("offsets are N, E, S, W of the input", () => {
-    const ns = neighbors4(5, 7);
-    expect(ns).toEqual([
-      [5, 6],
-      [6, 7],
-      [5, 8],
-      [4, 7],
-    ]);
-  });
-
-  test("does not include the input cell or diagonals", () => {
-    const ns = neighbors4(0, 0);
-    for (const [nx, ny] of ns) {
-      expect(nx === 0 && ny === 0).toBe(false);
-      expect(Math.abs(nx) + Math.abs(ny)).toBe(1);
-    }
+  test("mutating the returned tiles does not affect the input grid", () => {
+    const g = makeGrid(3, 3);
+    const { tiles } = cloneTiles(g);
+    tiles.fill(TILE_FLOOR);
+    for (const b of g.tiles) expect(b).toBe(TILE_WALL);
   });
 });
 
-describe("neighbors8", () => {
-  test("returns exactly 8 entries", () => {
-    expect(neighbors8(0, 0).length).toBe(8);
-    expect(neighbors8(10, 10).length).toBe(8);
-  });
-
-  test("excludes the input cell (0,0)", () => {
-    const ns = neighbors8(0, 0);
-    for (const [nx, ny] of ns) {
-      expect(nx === 0 && ny === 0).toBe(false);
+describe("fillBorder", () => {
+  test("on a 4x4 grid, writes exactly the 12 perimeter cells and leaves the 4 interior cells untouched", () => {
+    const tiles = new Uint8Array(16);
+    fillBorder(tiles, 4, 4, TILE_FLOOR);
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 4; x++) {
+        const isBorder = x === 0 || x === 3 || y === 0 || y === 3;
+        expect(tiles[idx(x, y, 4)]).toBe(isBorder ? TILE_FLOOR : TILE_WALL);
+      }
     }
   });
 
-  test("includes the four diagonals", () => {
-    const ns = neighbors8(5, 7);
-    const set = new Set(ns.map(([x, y]) => `${x},${y}`));
-    expect(set.has("4,6")).toBe(true);
-    expect(set.has("6,6")).toBe(true);
-    expect(set.has("4,8")).toBe(true);
-    expect(set.has("6,8")).toBe(true);
+  test("on a 1x4 (W=1) strip, every cell is on the border", () => {
+    const tiles = new Uint8Array(4);
+    fillBorder(tiles, 1, 4, TILE_FLOOR);
+    for (let i = 0; i < 4; i++) expect(tiles[i]).toBe(TILE_FLOOR);
   });
 
-  test("entries are exactly the Moore neighborhood", () => {
-    const ns = neighbors8(0, 0);
-    const set = new Set(ns.map(([x, y]) => `${x},${y}`));
-    expect(set).toEqual(
-      new Set(["-1,-1", "0,-1", "1,-1", "-1,0", "1,0", "-1,1", "0,1", "1,1"]),
-    );
+  test("on a 4x1 (H=1) strip, every cell is on the border", () => {
+    const tiles = new Uint8Array(4);
+    fillBorder(tiles, 4, 1, TILE_FLOOR);
+    for (let i = 0; i < 4; i++) expect(tiles[i]).toBe(TILE_FLOOR);
+  });
+
+  test("preserves interior contents when called on a partly-filled grid", () => {
+    const tiles = new Uint8Array(16).fill(TILE_DOOR);
+    fillBorder(tiles, 4, 4, TILE_WALL);
+    // Interior cells (the four inner cells of a 4x4 grid) keep TILE_DOOR.
+    expect(tiles[idx(1, 1, 4)]).toBe(TILE_DOOR);
+    expect(tiles[idx(2, 1, 4)]).toBe(TILE_DOOR);
+    expect(tiles[idx(1, 2, 4)]).toBe(TILE_DOOR);
+    expect(tiles[idx(2, 2, 4)]).toBe(TILE_DOOR);
+    // Perimeter cells flipped to TILE_WALL.
+    expect(tiles[idx(0, 0, 4)]).toBe(TILE_WALL);
+    expect(tiles[idx(3, 3, 4)]).toBe(TILE_WALL);
+  });
+});
+
+describe("makeBfsScratch", () => {
+  test("returns four buffers of the requested capacity, zero-initialised", () => {
+    const cap = 25;
+    const { visited, queueX, queueY, queueD } = makeBfsScratch(cap);
+    expect(visited.length).toBe(cap);
+    expect(queueX.length).toBe(cap);
+    expect(queueY.length).toBe(cap);
+    expect(queueD.length).toBe(cap);
+    for (const b of visited) expect(b).toBe(0);
+    for (const b of queueX) expect(b).toBe(0);
+    for (const b of queueY) expect(b).toBe(0);
+    for (const b of queueD) expect(b).toBe(0);
+  });
+
+  test("queues are Int32Array (signed) and visited is Uint8Array", () => {
+    const { visited, queueX, queueY, queueD } = makeBfsScratch(1);
+    expect(visited).toBeInstanceOf(Uint8Array);
+    expect(queueX).toBeInstanceOf(Int32Array);
+    expect(queueY).toBeInstanceOf(Int32Array);
+    expect(queueD).toBeInstanceOf(Int32Array);
   });
 });

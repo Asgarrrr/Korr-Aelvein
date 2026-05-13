@@ -1,3 +1,4 @@
+import { cloneTiles, fillBorder } from "../../grid";
 import { type Pass, TILE_FLOOR, TILE_WALL } from "../../types";
 
 export type IterateCAParams = {
@@ -48,26 +49,16 @@ export function iterateCA(params: IterateCAParams = {}): Pass {
   }
 
   return (level) => {
-    const { width: W, height: H } = level.grid;
-    let prev = new Uint8Array(level.grid.tiles);
-    let next = new Uint8Array(W * H);
-    const lastRow = (H - 1) * W;
-    const lastCol = W - 1;
+    const { W, H, cap, tiles: cloned } = cloneTiles(level.grid);
+    let prev = cloned;
+    let next = new Uint8Array(cap);
 
     for (let step = 0; step < iterations; step++) {
       // Border-force is identity at every iteration (OOB-as-WALL + project
       // requirement). Write WALL directly to all 4 edges so the inner loop
       // can specialise to "interior only" — no bounds checks, no idx() call,
       // 8 explicit neighbor reads against row-base locals.
-      for (let x = 0; x < W; x++) {
-        next[x] = TILE_WALL;
-        next[lastRow + x] = TILE_WALL;
-      }
-      for (let y = 1; y < H - 1; y++) {
-        const yBase = y * W;
-        next[yBase] = TILE_WALL;
-        next[yBase + lastCol] = TILE_WALL;
-      }
+      fillBorder(next, W, H, TILE_WALL);
 
       // Interior cells (1 ≤ x ≤ W-2, 1 ≤ y ≤ H-2): all 8 neighbors in bounds.
       //

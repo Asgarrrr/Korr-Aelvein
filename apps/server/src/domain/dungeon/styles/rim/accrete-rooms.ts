@@ -1,4 +1,4 @@
-import { idx, inBounds } from "../../grid";
+import { cloneTiles, idx, inBounds } from "../../grid";
 import { type Pass, TILE_DOOR, TILE_FLOOR, TILE_WALL } from "../../types";
 
 export type AccreteRoomsParams = {
@@ -51,8 +51,7 @@ export function accreteRooms(params: AccreteRoomsParams = {}): Pass {
   }
 
   return (level, rng) => {
-    const W = level.grid.width;
-    const tiles = new Uint8Array(level.grid.tiles);
+    const { W, tiles } = cloneTiles(level.grid);
 
     // Working copy: we extend host.doors in place when committing. The mutable
     // shape is structurally compatible with `ReadonlyArray<Room>`, so no
