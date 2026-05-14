@@ -99,16 +99,12 @@ function seedToState(seed: number): RngState {
   return [splitmix32(), splitmix32(), splitmix32(), splitmix32()];
 }
 
-// ─── Free operations on RngCore ────────────────────────────────────────────────
-//
-// Validation in this module is intentional, not a contradiction with the global
-// "only validate at boundaries" rule: the PRNG is infrastructure consumed by
-// every reducer in the project, so its public surface *is* a boundary for the
-// rest of the domain. A silent NaN propagating from `int(NaN, 5)` would corrupt
-// a whole tick.
+// Validation in this module is intentional, not a contradiction with the
+// global "validate at boundaries only" rule: the PRNG is infrastructure
+// consumed by every reducer, so its public surface IS a boundary. A silent
+// NaN from `int(NaN, 5)` would corrupt a whole tick.
 
-/** Random integer in [min, max], inclusive. Throws on invalid bounds. */
-export function nextInt(core: RngCore, min: number, max: number): number {
+function nextInt(core: RngCore, min: number, max: number): number {
   if (!Number.isInteger(min))
     throw new Error(`nextInt: min must be a finite integer (got ${min})`);
   if (!Number.isInteger(max))
@@ -117,14 +113,12 @@ export function nextInt(core: RngCore, min: number, max: number): number {
   return min + Math.floor(core.next() * (max - min + 1));
 }
 
-/** Random element of a non-empty array. Throws if empty. */
-export function nextPick<T>(core: RngCore, arr: readonly T[]): T {
+function nextPick<T>(core: RngCore, arr: readonly T[]): T {
   if (arr.length === 0) throw new Error("nextPick: empty array");
   return nthOrThrow(arr, Math.floor(core.next() * arr.length));
 }
 
-/** True with probability `p` ∈ [0, 1]. Throws on out-of-range or non-finite p. */
-export function nextChance(core: RngCore, p: number): boolean {
+function nextChance(core: RngCore, p: number): boolean {
   if (!Number.isFinite(p))
     throw new Error(`nextChance: p must be finite (got ${p})`);
   if (p < 0 || p > 1)
@@ -132,13 +126,8 @@ export function nextChance(core: RngCore, p: number): boolean {
   return core.next() < p;
 }
 
-/**
- * Index into an array without using `as` or non-null assertion.
- * O(n) (consequence of the project's no-`as`/no-`!` rule); for arrays of
- * gameplay-realistic size (≤ a few hundred) the cost is negligible.
- * Throws if `idx` is out of bounds — which is unreachable when the caller
- * has validated `idx ∈ [0, arr.length)` beforehand.
- */
+// O(n) indexed access without `as` or `!`. Accepted cost — see
+// `project_design_decisions.md` for the rationale on `pick` O(n).
 function nthOrThrow<T>(arr: readonly T[], idx: number): T {
   for (const [i, item] of arr.entries()) {
     if (i === idx) return item;
