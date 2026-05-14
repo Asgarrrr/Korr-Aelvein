@@ -2,7 +2,7 @@
  * Quick perf measurement for the RNG. Run with `bun run bench` from
  * `apps/server/`. Not part of CI — for hand-tuning only.
  */
-import { createRng } from "./index";
+import { createRng } from "../index";
 
 const ITERS = 1_000_000;
 

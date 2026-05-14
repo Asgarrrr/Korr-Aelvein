@@ -14,8 +14,9 @@ apps/
       tests/          app.test.ts (/health + factory).
       domain/         Pure game logic. No imports from transport/.
         rng/          Seeded sfc32 PRNG with serialisable state.
-          index.ts, index.bench.ts          PRNG + microbench.
+          index.ts                          PRNG public surface.
           tests/                            index.test.ts.
+          bench/                            main.bench.ts.
         ecs/          Sparse-set ECS — see `apps/server/src/domain/ecs/README.md`.
           *.ts                              world / query / forQuery / components / entity / system.
           tests/                            world / query / forquery / system / determinism / stress.
@@ -23,13 +24,14 @@ apps/
         dungeon/      Procgen — see `docs/PROCGEN.md` for the full story.
           types.ts, grid.ts, index.ts       Level/Tile types, flat-array helpers, public surface.
           tests/                            grid / index / properties — foundation + adversarial.
+          bench/                            connect-components.bench.ts + place-cavern-stairs.bench.ts.
           styles/rim/                       Brogue-style room accretion.
             <passes>.ts, index.ts           5 passes + pipeline recipe.
             tests/                          per-pass + integration / invariants / determinism / edge-cases.
           styles/caverns/                   Cellular-automata caves.
             <passes>.ts, index.ts           5 passes + pipeline recipe.
             tests/                          per-pass + ca-correctness / integration / invariants / determinism / edge-cases.
-    scripts/          CLI utilities.
+    scripts/          CLI utilities (not benches — see per-module bench/ folders).
       preview-dungeon.ts                   ASCII preview of any (seed, style).
       preview-shrine.ts                    Demo of constraint-as-pass.
 packages/
