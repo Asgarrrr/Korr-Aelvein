@@ -42,3 +42,6 @@ yarn-error.log*
 
 # Local Claude Code config — user's own dev tooling, not project source
 .claude/
+
+# Bench aggregator output — regenerated per run, not source.
+apps/server/src/domain/ecs/bench/results.json
