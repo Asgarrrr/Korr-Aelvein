@@ -16,6 +16,10 @@ apps/
         rng/          Seeded sfc32 PRNG with serialisable state.
           index.ts, index.bench.ts          PRNG + microbench.
           tests/                            index.test.ts.
+        ecs/          Sparse-set ECS — see `apps/server/src/domain/ecs/README.md`.
+          *.ts                              world / query / forQuery / components / entity / system.
+          tests/                            world / query / forquery / system / determinism / stress.
+          bench/                            standard.bench.ts + mega.bench.ts.
         dungeon/      Procgen — see `docs/PROCGEN.md` for the full story.
           types.ts, grid.ts, index.ts       Level/Tile types, flat-array helpers, public surface.
           tests/                            grid / index / properties — foundation + adversarial.
@@ -106,12 +110,47 @@ Considered, deliberately not used. Re-read the rationale before challenging.
 - **PCG / wyrand** — need 64-bit arithmetic → BigInt → 10–60× slowdown in V8. Not viable for browser-side determinism.
 - **xoshiro128++** — known low-bit weakness, fails linear-complexity tests (Vigna's own docs).
 - **ChaCha8** — overkill (cryptographic) and ~10× slower than sfc32 in pure JS.
-- **ECS (bitecs, miniplex, koota), Redux, Zustand, effect-ts, Result/Either libs** — premature for our scale and turn-based loop. Will revisit if cross-cutting traits genuinely multiply.
+- **External ECS libs (bitecs, miniplex, koota), Redux, Zustand, effect-ts, Result/Either libs** — premature for our scale and turn-based loop. We ship our own minimal sparse-set ECS at `apps/server/src/domain/ecs/`; see its README + conventions below.
 - **Next.js, SSR, RSC** — client is and stays a Vite SPA targeting a Canvas/WebGL game.
 - **Database, ORM, persistence layer** — server state lives in memory only, until explicitly asked otherwise.
 - **`packages/game-core`** — not extracted preemptively. Trigger: same type duplicated between client and server. Until then, types live in `apps/server/src/domain/`.
 
 For the full rationale of any item: `~/.claude/projects/-Users-asgarrrr-Documents-Projects-korr-aelvein/memory/project_design_decisions.md`.
+
+## ECS conventions (`apps/server/src/domain/ecs/`)
+
+The home-grown ECS is sparse-set, AoS storage, parity-encoded liveness, with `with`/`without` filters, lifecycle buffers, and typed event channels. Three feature families were deliberately rejected — each has revisit criteria so we don't relitigate.
+
+### Relations (entity → entity) — convention, no native primitive
+
+Use a regular component whose value carries the target's `EntityId`:
+
+```ts
+type ChildOf = { readonly parent: EntityId };
+type OwnedBy = { readonly target: EntityId };
+```
+
+Inverse lookups (`who owns id X`?) iterate the relation column and filter — `O(N_relation)`, acceptable at N≤5000.
+
+Why not flecs-style native pairs:
+- Sparse-set AoS does not store archetype bitmasks; native pairs assume archetype indexing.
+- ~5–10 % overhead per add/remove (hashmap pair lookup) — unjustified at our scale.
+
+Revisit when **both** are true: a feature needs > 2 inverse lookups per tick at N≥1000, AND bench shows the convention costs > 5 % of the tick budget.
+
+### Archetypes / fragmented_iter — rejected
+
+Storage is one sparse-set column per component. Multi-key queries pivot on the smallest column and probe secondaries via `sparse.get`. Hot paths today are 1–2 keys (`[position]`, `[position, hp]`).
+
+Why not EnTT-style groups:
+- Owning groups reshuffle columns → breaks the "insertion order stable" invariant; complicates snapshot.
+- Non-owning groups (parallel `Set<EntityId>` of matching entities) add maintenance per add/remove for unclear win at our scale.
+
+Revisit when **both** are true: a 4+ key query appears in a real system (not hypothetical), AND bench shows it consumes > 5 % of the tick budget at N≥5000. Prefer non-owning groups (lightweight, no reshuffling).
+
+### Hooks (`onAdd` / `onRemove` callbacks) — rejected
+
+Sync component-lifecycle callbacks would break the pure-reducer model `(state, action) → state` and introduce reentrancy hazards (a callback that triggers `setComponent` re-enters the same code path). `drainEntered` / `drainExited` (lifecycle buffers) plus `defineEvent` / `emit` / `drain` cover every legitimate use case without these inconveniences. No revisit criteria — this one stays rejected.
 
 ## External references — canonical sources, 2026-05
 
