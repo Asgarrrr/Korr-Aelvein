@@ -23,14 +23,11 @@ export function seedCA(params: SeedCAParams = {}): Pass {
   return (level, rng) => {
     const { W, H, tiles, cap } = cloneTiles(level.grid);
 
-    // Sample every cell (including the border) so the number of RNG draws is
-    // exactly W*H — deterministic and independent of border width. Single flat
-    // pass over the typed array (no nested xy loop, no idx() function call):
-    // JSC's DFG specialises Uint8Array indexed stores on a counted loop.
+    // Sample every cell (including the border) so the RNG-draw count is
+    // exactly W*H — independent of border width, stable under determinism.
     for (let i = 0; i < cap; i++) {
       tiles[i] = rng.chance(wallProbability) ? TILE_WALL : TILE_FLOOR;
     }
-    // Border to WALL unconditionally, enclosing the cave.
     fillBorder(tiles, W, H, TILE_WALL);
 
     return { ...level, grid: { ...level.grid, tiles } };

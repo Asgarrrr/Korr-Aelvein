@@ -35,13 +35,9 @@ export function iterateCA(params: IterateCAParams = {}): Pass {
     );
   }
 
-  // State-transition lookup table. Indexed by `here * 9 + wallCount`, returns
-  // the next-state tile. Replaces a 2-branch ternary chain (~6 instructions)
-  // with a single typed-array load.
-  //
-  // Built once per pass instantiation, captured by the returned closure.
-  // Layout: LUT[0..8] = rules for currently-WALL cell (survival)
-  //         LUT[9..17] = rules for currently-FLOOR cell (birth)
+  // Lookup table indexed by `here * 9 + wallCount` → next-state tile.
+  // Replaces a 2-branch ternary chain with one typed-array load. Built once
+  // per pass instantiation, captured by the returned closure.
   const LUT = new Uint8Array(18);
   for (let wc = 0; wc <= 8; wc++) {
     LUT[TILE_WALL * 9 + wc] = wc >= survivalLimit ? TILE_WALL : TILE_FLOOR;
@@ -54,22 +50,13 @@ export function iterateCA(params: IterateCAParams = {}): Pass {
     let next = new Uint8Array(cap);
 
     for (let step = 0; step < iterations; step++) {
-      // Border-force is identity at every iteration (OOB-as-WALL + project
-      // requirement). Write WALL directly to all 4 edges so the inner loop
-      // can specialise to "interior only" — no bounds checks, no idx() call,
-      // 8 explicit neighbor reads against row-base locals.
+      // Force the border to WALL every step so the interior loop can skip
+      // bounds checks and idx() calls.
       fillBorder(next, W, H, TILE_WALL);
 
-      // Interior cells (1 ≤ x ≤ W-2, 1 ≤ y ≤ H-2): all 8 neighbors in bounds.
-      //
-      // Branch-free Moore count: TILE_WALL = 0, TILE_FLOOR = 1, so summing the
-      // 8 neighbor bytes gives the *floor* count, and wallCount = 8 - sum. All
-      // operands are guaranteed in {0, 1} during caverns pipeline (seedCA +
-      // prior iterateCA only write those two values). Replaces 8 compare+cmov
-      // with 7 adds — significant on the hot path.
-      //
-      // The combined undefined-guard narrows all 9 reads to `number` after the
-      // short-circuit, no per-read guard inside the inner loop.
+      // Branch-free Moore count: TILE_WALL=0, TILE_FLOOR=1, so summing the 8
+      // neighbour bytes gives the floor count and wallCount = 8 - sum.
+      // Replaces 8 compare+cmov with 7 adds.
       for (let y = 1; y < H - 1; y++) {
         const yBase = y * W;
         const yBaseAbove = yBase - W;

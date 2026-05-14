@@ -24,7 +24,7 @@ export const placeCavernStairs: Pass = (level) => {
 
   // Do not refactor the inner expansion to a `visit()` closure that mutates
   // `tail` — measured ~3.7× slower than this inline `for-k` body across all
-  // sizes (`scripts/bench-place-cavern-stairs.ts`). JSC won't inline aggressively
+  // sizes (`bench/place-cavern-stairs.bench.ts`). JSC won't inline aggressively
   // when the closure captures a mutable counter.
   while (head < tail) {
     const cx = queueX[head];

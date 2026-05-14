@@ -104,7 +104,6 @@ export function accreteRooms(params: AccreteRoomsParams = {}): Pass {
         newY = rng.int(doorY - nh + 1, doorY);
       }
 
-      // Bounds check: floor + 1-cell perimeter must all fit in the grid.
       if (
         !inBounds(newX - 1, newY - 1, level.grid) ||
         !inBounds(newX + nw, newY + nh, level.grid)
@@ -112,9 +111,8 @@ export function accreteRooms(params: AccreteRoomsParams = {}): Pass {
         continue;
       }
 
-      // Overlap check: every floor cell AND every perimeter cell must be
-      // TILE_WALL right now. Including the perimeter is what guarantees that
-      // two rooms can never share a wall — only a door tile.
+      // Including the perimeter cells in this check is what guarantees two
+      // rooms never share a wall — only a door tile.
       let blocked = false;
       for (let yy = newY - 1; yy <= newY + nh && !blocked; yy++) {
         for (let xx = newX - 1; xx <= newX + nw; xx++) {
@@ -126,7 +124,6 @@ export function accreteRooms(params: AccreteRoomsParams = {}): Pass {
       }
       if (blocked) continue;
 
-      // Commit: carve floor, place door, register room, mirror door on host.
       for (let yy = newY; yy < newY + nh; yy++) {
         for (let xx = newX; xx < newX + nw; xx++) {
           tiles[idx(xx, yy, W)] = TILE_FLOOR;
