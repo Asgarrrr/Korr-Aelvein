@@ -73,8 +73,7 @@ turbo.json            Build / dev / test / check-types tasks.
 
 ### `apps/server/src/domain/rng`
 
-- **Public API**: `createRng(seed: number)`, `fromRngState(state: RngState)`, `Rng`, `RngCore`, `RngState`.
-- **Free ops** (work on any `RngCore`): `nextInt(core, min, max)`, `nextPick(core, arr)`, `nextChance(core, p)`.
+- **Public API**: `createRng(seed: number)`, `fromRngState(state: RngState)`, `Rng`, `RngCore`, `RngState`. High-level ops (`int`/`pick`/`chance`/`split`) live as methods on the `Rng` wrapper.
 - **Lifecycle in reducers**: `const rng = fromRngState(state.rngState); … return { ...state, rngState: rng.state() };`.
 - **Algorithm**: sfc32 (128-bit state) + SplitMix32 expansion. Pure 32-bit JS arithmetic, no BigInt. Identical sequences across V8/Bun and any modern browser.
 - **Why this and not Mulberry32 / PCG / xoshiro / wyrand / ChaCha8**: see the docstring at the top of `index.ts` and `~/.claude/projects/-Users-asgarrrr-Documents-Projects-korr-aelvein/memory/project_design_decisions.md`.
