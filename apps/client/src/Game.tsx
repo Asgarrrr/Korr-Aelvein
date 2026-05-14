@@ -47,6 +47,11 @@ function Game() {
     game.on("close", () => setStatus("closed"));
 
     function handleKey(e: KeyboardEvent) {
+      if (e.key === "." || e.key === " ") {
+        e.preventDefault();
+        game.send({ type: "WAIT" });
+        return;
+      }
       const dir = KEY_DIR[e.key];
       if (dir === undefined) return;
       e.preventDefault();
