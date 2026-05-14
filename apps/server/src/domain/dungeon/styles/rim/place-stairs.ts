@@ -13,9 +13,6 @@ export const placeStairs: Pass = (level) => {
   }
   const [sx, sy] = level.spawn;
 
-  // Argmax over rooms by squared-Euclidean distance from spawn to the room's
-  // center. Track the room directly (instead of just an index) so we never
-  // need an unchecked indexed read afterwards.
   let best: Room | null = null;
   let bestDist = -1;
   for (const room of level.rooms) {

@@ -1,31 +1,24 @@
 import { cloneTiles, DX4, DY4 } from "../../grid";
 import { type Pass, TILE_FLOOR, TILE_WALL } from "../../types";
 
-// Connect every floor component into a single 4-connected region.
+// Connect every floor component into a single 4-connected region. Pass 1
+// flood-fills + labels components in scanline order, picking the largest as
+// anchor (strict `>` resolves ties to the first scanline-encountered one —
+// load-bearing for cross-runs determinism). Pass 2 is a multi-source BFS
+// from every anchor tile over the WHOLE grid (walls passable); the first
+// wave-arrival at a satellite carves a shortest 4-path through walls via
+// `parent[]`, by construction the shortest distance from that satellite to
+// the anchor.
 //
-// Pass 1 — labelComponents: single scanline pass that flood-fills each floor
-// component, writing `compIdx[i] = label` (1..N for floor cells, 0 for walls)
-// and tracking each component's `size`. Anchor = argmax-by-size with strict
-// `>` so ties resolve to the first-encountered (scanline) component — same
-// tiebreak the previous descending stable-sort produced.
-//
-// Pass 2 — multi-source BFS over the whole grid, seeded from every anchor
-// tile. Walls are passable; each tile is visited at most once → O(W·H). The
-// first time the wave reaches a not-yet-merged satellite, walk `parent[]`
-// back to an anchor seed, carving any walls on the path. The carve is — by
-// construction — the shortest 4-path from satellite to anchor.
-//
-// Assumes the input grid contains no TILE_DOOR (caverns is door-free). The
-// carve loop preserves doors via the `tiles[cur] === TILE_WALL` guard.
+// Assumes the input grid is door-free. The carve loop preserves any doors
+// it crosses via the `tiles[cur] === TILE_WALL` guard.
 export const connectComponents: Pass = (level) => {
   const { W, H, tiles, cap } = cloneTiles(level.grid);
 
-  // compIdx[i] = 0 for non-floor, 1..N for the component owning tile i.
-  // Component labels are emitted in scanline order. `sizes[label - 1]` is
-  // the size of component `label`. We only retain the (xs, ys) tile lists
-  // for the *current* anchor candidate — swap-out when a larger component
-  // is found. Order matters: the multi-source BFS below seeds in flood-fill
-  // order, and the pinned hashes lock that exact traversal sequence.
+  // We only retain the (xs, ys) tile lists for the CURRENT anchor candidate
+  // — swap-out when a larger component is found. The BFS in pass 2 must
+  // seed from these tiles in flood-fill order (not scanline) to keep the
+  // wavefront geometry deterministic.
   const compIdx = new Int32Array(cap);
   const sizes: number[] = [];
   let anchorLabel = 0;
@@ -33,10 +26,8 @@ export const connectComponents: Pass = (level) => {
   let anchorXs: number[] = [];
   let anchorYs: number[] = [];
 
-  // Flood-fill scratch — fresh xs/ys per component (cheap: ~N short-lived
-  // arrays per pass call, the JIT pools them well). Pre-allocating a single
-  // shared `Int32Array(cap)` queue was tested earlier and lost to `number[]`
-  // here because the average component is tiny relative to `cap`.
+  // A pre-allocated shared Int32Array queue was benched and lost to per-call
+  // `number[]` here — average component is tiny relative to `cap`.
   for (let y = 0; y < H; y++) {
     const yBase = y * W;
     for (let x = 0; x < W; x++) {
@@ -75,9 +66,9 @@ export const connectComponents: Pass = (level) => {
       }
       const size = xs.length;
       sizes.push(size);
-      // Strict `>` ⇒ first-scanline component wins on size ties — matches the
-      // previous descending stable-sort head exactly. Load-bearing: the
-      // 100-seed hash pins in `tests/determinism.test.ts` lock the anchor.
+      // Strict `>` ⇒ first-scanline component wins on size ties. Load-bearing
+      // for cross-runs determinism (the anchor choice cascades into the BFS
+      // wavefront geometry).
       if (size > anchorSize) {
         anchorSize = size;
         anchorLabel = label;
@@ -96,13 +87,10 @@ export const connectComponents: Pass = (level) => {
     return { ...level, grid: { ...level.grid, tiles } };
   }
 
-  // Per-component merged flag; anchor starts merged.
   const mergedComp = new Uint8Array(sizes.length + 1);
   mergedComp[anchorLabel] = 1;
   let satellitesRemaining = sizes.length - 1;
 
-  // BFS scratch — visited (1 byte/cell), parent (4 bytes/cell, self-parent
-  // for anchor seeds), and a flat-queue of (x, y) Int32Array pairs.
   const visited = new Uint8Array(cap);
   const parent = new Int32Array(cap).fill(-1);
   const queueX = new Int32Array(cap);
@@ -110,9 +98,7 @@ export const connectComponents: Pass = (level) => {
   let head = 0;
   let tail = 0;
 
-  // Seed: every anchor floor tile is a source, parent = self (loop sentinel).
-  // Iterate anchorXs/anchorYs (flood-fill order), not scanline — the BFS
-  // wavefront geometry depends on this order, and so do the pinned hashes.
+  // Anchor seeds have `parent[seed] === seed` — the carve loop's terminator.
   for (let i = 0; i < anchorXs.length; i++) {
     const ax = anchorXs[i];
     const ay = anchorYs[i];
@@ -162,9 +148,6 @@ export const connectComponents: Pass = (level) => {
         nci !== anchorLabel &&
         mergedComp[nci] === 0
       ) {
-        // First wave-arrival at a satellite. Walk parent[] back, carving any
-        // wall on the path. Anchor seeds have parent[seed] === seed; the loop
-        // terminates when we reach one.
         let cur = ni;
         while (parent[cur] !== cur) {
           if (tiles[cur] === TILE_WALL) {
@@ -188,11 +171,5 @@ export const connectComponents: Pass = (level) => {
     }
   }
 
-  // No defensive post-flood-fill: the algorithm is connected by construction.
-  // When the wavefront first touches a satellite, the shortest 4-path from
-  // anchor to that touched cell is carved via `parent[]`. Any other cell of
-  // the same satellite is 4-connected to the touched cell (definition of the
-  // flood-fill labelling), so it transitively connects to the anchor. The
-  // 38-seed invariant sweep in `tests/invariants.test.ts` is the canary.
   return { ...level, grid: { ...level.grid, tiles } };
 };

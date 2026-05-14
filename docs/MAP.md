@@ -64,7 +64,7 @@ turbo.json            Build / dev / test / check-types tasks.
 
 ### `apps/server/src/domain/dungeon`
 
-- **Public API**: `generateLevel(rng, w, h, style)`, `StyleId = "rim" | "caverns"`, `emptyLevel`, `runPipeline`, types (`Level`, `Tile`, `Grid`, `Room`, `Pass`, `Pipeline`), grid helpers (`idx`, `inBounds`, `getTile`, `setTile`, `DX4`/`DY4`).
+- **Public API**: `generateLevel(rng, w, h, style)`, `StyleId = "rim" | "caverns"`, `emptyLevel`, `runPipeline`, types (`Level`, `Tile`, `Grid`, `Room`, `Pass`, `Pipeline`), grid helpers (`idx`, `inBounds`, `getTile`, `DX4`/`DY4`).
 - **Architecture**: pipeline of pure passes `(Level, Rng) => Level`. Each style is a `Pipeline = ReadonlyArray<Pass>` recipe. Adding a style = adding a folder under `styles/`.
 - **Reproducibility**: same seed → byte-identical `Level`. 200 seed-runs pinned via FNV-1a hash regression (`styles/{rim,caverns}/tests/determinism.test.ts`).
 - **Perf**: rim ~0.03 ms, caverns ~2 ms at 300×150 (~95× speedup vs initial O(N²) algorithm).

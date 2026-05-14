@@ -7,7 +7,9 @@
 // narrow under `noUncheckedIndexedAccess`. Hot BFS sites read them via an
 // indexed `for (let k = 0; k < 4; k++)` loop; the per-iteration `undefined`
 // guard is the cost of the no-`!` / no-`as` project rule (a bench-rejected
-// `assertDefined` helper has its own write-up in project memory).
+// `assertDefined` helper has its own write-up in project memory; a
+// `for (const [dx, dy] of DIRS)` destructure pattern was also tried and lost
+// 2.2-2.4× to the indexed `for-k` form — `bench/place-cavern-stairs.bench.ts`).
 
 import {
   type Grid,
