@@ -1,19 +1,14 @@
-// Microbenchmark for the `placeCavernStairs` pass. Mirror of
-// `bench-connect-components.ts` — used to settle whether the `visit()`-closure
-// pattern in this file is actually slower than the inline `for-k` pattern
-// (which `connect-components.ts` claims by ~14%).
-//
-// Methodology:
-//   1. Pre-build a *connected* level once (seedCA + iterateCA + connect + spawn).
-//   2. Time `placeCavernStairs(level)` over N calls per batch, multiple batches.
-//   3. Report median + min + max ns/op.
-import { emptyLevel, runPipeline } from "../src/domain/dungeon/index";
-import { connectComponents } from "../src/domain/dungeon/styles/caverns/connect-components";
-import { iterateCA } from "../src/domain/dungeon/styles/caverns/iterate-ca";
-import { placeCavernSpawn } from "../src/domain/dungeon/styles/caverns/place-cavern-spawn";
-import { placeCavernStairs } from "../src/domain/dungeon/styles/caverns/place-cavern-stairs";
-import { seedCA } from "../src/domain/dungeon/styles/caverns/seed-ca";
-import { createRng } from "../src/domain/rng/index";
+// Microbenchmark for the `placeCavernStairs` pass. Pre-builds a connected
+// level once (seedCA + iterateCA + connect + spawn) then times the pass
+// over N calls per batch, R batches. Used to validate the inline `for-k`
+// BFS body over the bench-rejected `visit()`-closure alternative.
+import { createRng } from "../../rng/index";
+import { emptyLevel, runPipeline } from "../index";
+import { connectComponents } from "../styles/caverns/connect-components";
+import { iterateCA } from "../styles/caverns/iterate-ca";
+import { placeCavernSpawn } from "../styles/caverns/place-cavern-spawn";
+import { placeCavernStairs } from "../styles/caverns/place-cavern-stairs";
+import { seedCA } from "../styles/caverns/seed-ca";
 
 const SIZES: ReadonlyArray<readonly [number, number]> = [
   [80, 30],

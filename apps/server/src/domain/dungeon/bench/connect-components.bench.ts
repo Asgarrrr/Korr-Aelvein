@@ -1,19 +1,15 @@
 // Microbenchmark for the `connectComponents` pass. Run from `apps/server/`:
-//   bun run scripts/bench-connect-components.ts
+//   bun run src/domain/dungeon/bench/connect-components.bench.ts
 //
-// Methodology:
-//   1. Pre-generate a *fragmented* level once (seedCA + iterateCA only).
-//   2. Time `connectComponents(level, rng)` over N calls, warm the JIT first.
-//   3. Report median + min + max ns/op over R batches.
-//
-// `connectComponents` does not consult the RNG (its randomness is purely
-// structural), so calling it repeatedly with a frozen input gives a stable
-// per-call cost we can compare across refactors.
-import { emptyLevel, runPipeline } from "../src/domain/dungeon/index";
-import { connectComponents } from "../src/domain/dungeon/styles/caverns/connect-components";
-import { iterateCA } from "../src/domain/dungeon/styles/caverns/iterate-ca";
-import { seedCA } from "../src/domain/dungeon/styles/caverns/seed-ca";
-import { createRng } from "../src/domain/rng/index";
+// Pre-generates a fragmented level once (seedCA + iterateCA), then times
+// `connectComponents` over N calls per batch, R batches. Reports median
+// ± min/max ns/op. The pass doesn't consult the RNG, so a frozen input
+// gives a stable per-call cost comparable across refactors.
+import { createRng } from "../../rng/index";
+import { emptyLevel, runPipeline } from "../index";
+import { connectComponents } from "../styles/caverns/connect-components";
+import { iterateCA } from "../styles/caverns/iterate-ca";
+import { seedCA } from "../styles/caverns/seed-ca";
 
 const SIZES: ReadonlyArray<readonly [number, number]> = [
   [80, 30],
