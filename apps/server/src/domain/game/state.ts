@@ -3,6 +3,7 @@ import { generateLevel, type StyleId } from "../dungeon/index";
 import { type EntityHandle, emptyWorld, spawn, type World } from "../ecs/index";
 import type { RngState } from "../rng/index";
 import { createRng } from "../rng/index";
+import { emptyScheduler, type Scheduler, schedule } from "../scheduler/index";
 
 export type GameState = {
   readonly level: Level;
@@ -10,6 +11,8 @@ export type GameState = {
   // but `state.world` is the same reference before and after.
   readonly world: World;
   readonly playerId: EntityHandle;
+  // Same mutation model as `world`: replaced wrapper, same heap reference.
+  readonly scheduler: Scheduler;
   readonly rngState: RngState;
   readonly turn: number;
 };
@@ -27,10 +30,13 @@ export function newGame(seed: number, style: StyleId): GameState {
     actor: { glyph: "@", name: "you" },
     hp: { current: 10, max: 10 },
   });
+  const scheduler = emptyScheduler();
+  schedule(scheduler, 0, playerId);
   return {
     level,
     world,
     playerId,
+    scheduler,
     rngState: rng.state(),
     turn: 0,
   };

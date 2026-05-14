@@ -10,6 +10,7 @@ import {
   spawn,
 } from "../../ecs/index";
 import type { RngState } from "../../rng/index";
+import { emptyScheduler, schedule } from "../../scheduler/index";
 import type { GameState } from "../state";
 import { newGame } from "../state";
 import { tick } from "../tick";
@@ -40,7 +41,9 @@ function makeState(level: Level, x: number, y: number): GameState {
   const rngState: RngState = [1, 2, 3, 4];
   const world = emptyWorld();
   const playerId = spawn(world, { position: { x, y } });
-  return { level, world, playerId, rngState, turn: 0 };
+  const scheduler = emptyScheduler();
+  schedule(scheduler, 0, playerId);
+  return { level, world, playerId, scheduler, rngState, turn: 0 };
 }
 
 function playerPos(s: GameState): Position {
@@ -93,13 +96,14 @@ describe("tick: MOVE", () => {
     }
   });
 
-  test("valid move preserves level, rngState, world, playerId by reference", () => {
+  test("valid move preserves level, rngState, world, playerId, scheduler by reference", () => {
     const state = makeState(makeBoxLevel(), 2, 2);
     const next = tick(state, { type: "MOVE", dir: "e" });
     expect(next.level).toBe(state.level);
     expect(next.rngState).toBe(state.rngState);
-    // World is mutated in place — same reference, updated contents.
+    // World and scheduler are mutated in place — same reference, updated contents.
     expect(next.world).toBe(state.world);
+    expect(next.scheduler).toBe(state.scheduler);
     expect(next.playerId).toBe(state.playerId);
   });
 
@@ -127,6 +131,55 @@ describe("tick: MOVE", () => {
     state = tick(state, { type: "MOVE", dir: "w" }); // (2,2)
     expect(playerPos(state)).toEqual({ x: 2, y: 2 });
     expect(state.turn).toBe(4);
+  });
+
+  test("a valid move re-schedules the player one turn later", () => {
+    const state = makeState(makeBoxLevel(), 2, 2);
+    const next = tick(state, { type: "MOVE", dir: "n" });
+    // After tick: pop player@0 → now=0, schedule player@100.
+    expect(next.scheduler.now).toBe(0);
+    expect(next.scheduler.heap.length).toBe(1);
+    expect(next.scheduler.heap[0]?.time).toBe(100);
+    expect(next.scheduler.heap[0]?.handle).toEqual(state.playerId);
+  });
+
+  test("a refused move does not consume the player's turn slot", () => {
+    const state = makeState(makeBoxLevel(), 2, 1); // 2,1 is interior; (2,0) is wall
+    const before = state.scheduler.heap[0];
+    if (before === undefined) {
+      throw new Error("test setup: scheduler heap should not be empty");
+    }
+    const next = tick(state, { type: "MOVE", dir: "n" });
+    expect(next).toBe(state);
+    expect(state.scheduler.heap.length).toBe(1);
+    expect(state.scheduler.heap[0]).toEqual(before);
+  });
+});
+
+describe("tick: WAIT", () => {
+  test("WAIT leaves position untouched and increments turn", () => {
+    const state = makeState(makeBoxLevel(), 2, 2);
+    const next = tick(state, { type: "WAIT" });
+    expect(playerPos(next)).toEqual({ x: 2, y: 2 });
+    expect(next.turn).toBe(1);
+  });
+
+  test("WAIT re-schedules the player one turn later", () => {
+    const state = makeState(makeBoxLevel(), 2, 2);
+    const next = tick(state, { type: "WAIT" });
+    expect(next.scheduler.now).toBe(0);
+    expect(next.scheduler.heap.length).toBe(1);
+    expect(next.scheduler.heap[0]?.time).toBe(100);
+  });
+
+  test("consecutive WAITs advance scheduler.now by one turn each", () => {
+    let state = makeState(makeBoxLevel(), 2, 2);
+    state = tick(state, { type: "WAIT" });
+    expect(state.scheduler.now).toBe(0);
+    state = tick(state, { type: "WAIT" });
+    expect(state.scheduler.now).toBe(100);
+    state = tick(state, { type: "WAIT" });
+    expect(state.scheduler.now).toBe(200);
   });
 });
 

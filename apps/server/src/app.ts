@@ -16,6 +16,9 @@ const bodySchema = t.Union([
       t.Literal("w"),
     ]),
   }),
+  t.Object({
+    type: t.Literal("WAIT"),
+  }),
 ]);
 
 const responseSchema = t.Object({
