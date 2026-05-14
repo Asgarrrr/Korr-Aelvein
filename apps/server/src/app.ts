@@ -1,58 +1,8 @@
 import { Elysia, t } from "elysia";
+import { getComponent } from "./domain/ecs/index";
 import type { GameState } from "./domain/game/state";
 import { newGame } from "./domain/game/state";
 import { tick } from "./domain/game/tick";
-
-// Wire format for the full game state pushed to the client after every action.
-// Mirrors GameState but replaces Uint8Array / readonly tuples with plain,
-// JSON-serialisable types.
-type Snapshot = {
-  type: "state";
-  turn: number;
-  player: { x: number; y: number };
-  level: {
-    grid: { width: number; height: number; tiles: number[] };
-    spawn: [number, number] | null;
-    downStairs: [number, number] | null;
-    rooms: Array<{
-      x: number;
-      y: number;
-      w: number;
-      h: number;
-      doors: Array<[number, number]>;
-    }>;
-  };
-};
-
-function toPair(pt: readonly [number, number]): [number, number] {
-  const p: [number, number] = [pt[0], pt[1]];
-  return p;
-}
-
-function toSnapshot(state: GameState): Snapshot {
-  const { level, player, turn } = state;
-  return {
-    type: "state",
-    turn,
-    player: { x: player.x, y: player.y },
-    level: {
-      grid: {
-        width: level.grid.width,
-        height: level.grid.height,
-        tiles: Array.from(level.grid.tiles),
-      },
-      spawn: level.spawn === null ? null : toPair(level.spawn),
-      downStairs: level.downStairs === null ? null : toPair(level.downStairs),
-      rooms: level.rooms.map((r) => ({
-        x: r.x,
-        y: r.y,
-        w: r.w,
-        h: r.h,
-        doors: r.doors.map(toPair),
-      })),
-    },
-  };
-}
 
 const TCoords = t.Tuple([t.Number(), t.Number()]);
 
@@ -91,6 +41,44 @@ const responseSchema = t.Object({
     ),
   }),
 });
+
+// Single source of truth: the wire-format TS type is derived from the
+// TypeBox response schema (`typeof schema.static`). Schema and TS type
+// can no longer drift.
+type Snapshot = typeof responseSchema.static;
+
+function toPair(pt: readonly [number, number]): [number, number] {
+  return [pt[0], pt[1]];
+}
+
+function toSnapshot(state: GameState): Snapshot {
+  const { level, world, playerId, turn } = state;
+  const pos = getComponent(world, playerId, "position");
+  if (pos === undefined) {
+    throw new Error("toSnapshot: player entity has no position component");
+  }
+  return {
+    type: "state",
+    turn,
+    player: { x: pos.x, y: pos.y },
+    level: {
+      grid: {
+        width: level.grid.width,
+        height: level.grid.height,
+        tiles: Array.from(level.grid.tiles),
+      },
+      spawn: level.spawn === null ? null : toPair(level.spawn),
+      downStairs: level.downStairs === null ? null : toPair(level.downStairs),
+      rooms: level.rooms.map((r) => ({
+        x: r.x,
+        y: r.y,
+        w: r.w,
+        h: r.h,
+        doors: r.doors.map(toPair),
+      })),
+    },
+  };
+}
 
 export function createApp() {
   const sessions = new Map<string, GameState>();

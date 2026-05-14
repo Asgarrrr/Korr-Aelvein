@@ -62,7 +62,7 @@ turbo.json            Build / dev / test / check-types tasks.
 - **App builder**: `src/app.ts` — pure `createApp()` that returns the Elysia instance without listening. Use this from tests: `await createApp().handle(new Request(...))`.
 - **WebSocket**: `/game` with TypeBox `body` and `response` schemas. Inbound validation is the security boundary of the server-authoritative model.
 - **HTTP**: `/health` returns `{ ok: true }`.
-- **Port**: `3001` (override with `PORT` env var; declared in `turbo.json#globalEnv`).
+- **Port**: `3000` (override with `PORT` env var; declared in `turbo.json#globalEnv`).
 - **Game logic**: lives under `src/domain/`. Currently `rng/` (PRNG infra), `dungeon/` (procgen), and `game/` (tick loop).
 - **Public package exports** (`package.json#exports`): `./src/index.ts` for both `types` and `import` conditions — that's how the client pulls `App` via `import type { App } from "server"`.
 

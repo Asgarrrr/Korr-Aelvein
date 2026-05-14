@@ -1,4 +1,5 @@
 import { getTile, inBounds, TILE_WALL } from "../dungeon/index";
+import { getComponent, isLiveHandle, setComponent } from "../ecs/index";
 import type { GameState } from "./state";
 
 export type Dir = "n" | "e" | "s" | "w";
@@ -13,16 +14,20 @@ function dirDelta(dir: Dir): readonly [number, number] {
 
 export function tick(state: GameState, action: Action): GameState {
   if (action.type === "MOVE") {
+    if (!isLiveHandle(state.world, state.playerId)) {
+      throw new Error("tick: player handle is stale (entity despawned)");
+    }
+    const pos = getComponent(state.world, state.playerId, "position");
+    if (pos === undefined) {
+      throw new Error("tick: player entity is missing the position component");
+    }
     const [dx, dy] = dirDelta(action.dir);
-    const nx = state.player.x + dx;
-    const ny = state.player.y + dy;
+    const nx = pos.x + dx;
+    const ny = pos.y + dy;
     if (!inBounds(nx, ny, state.level.grid)) return state;
     if (getTile(state.level.grid, nx, ny) === TILE_WALL) return state;
-    return {
-      ...state,
-      player: { x: nx, y: ny },
-      turn: state.turn + 1,
-    };
+    setComponent(state.world, state.playerId, "position", { x: nx, y: ny });
+    return { ...state, turn: state.turn + 1 };
   }
   return state;
 }

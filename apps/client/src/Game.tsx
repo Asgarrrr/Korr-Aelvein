@@ -27,7 +27,22 @@ function Game() {
 
     game.on("open", () => setStatus("open"));
     game.subscribe(({ data }) => {
-      setSnapshot(JSON.stringify(data, null, 2));
+      const { width, height, tiles } = data.level.grid;
+      const { x: px, y: py } = data.player;
+      const rows: string[] = [];
+      for (let y = 0; y < height; y++) {
+        let row = "";
+        for (let x = 0; x < width; x++) {
+          if (x === px && y === py) {
+            row += "@";
+          } else {
+            const t = tiles[y * width + x] ?? 0;
+            row += t === 1 ? "." : t === 2 ? "+" : "#";
+          }
+        }
+        rows.push(row);
+      }
+      setSnapshot(`turn ${data.turn}\n\n${rows.join("\n")}`);
     });
     game.on("close", () => setStatus("closed"));
 

@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { Level } from "../../dungeon/index";
 import { getTile, TILE_FLOOR } from "../../dungeon/index";
+import {
+  despawn,
+  emptyWorld,
+  getComponent,
+  type Position,
+  removeComponent,
+  spawn,
+} from "../../ecs/index";
 import type { RngState } from "../../rng/index";
 import type { GameState } from "../state";
 import { newGame } from "../state";
@@ -30,21 +38,31 @@ function makeBoxLevel(): Level {
 
 function makeState(level: Level, x: number, y: number): GameState {
   const rngState: RngState = [1, 2, 3, 4];
-  return { level, player: { x, y }, rngState, turn: 0 };
+  const world = emptyWorld();
+  const playerId = spawn(world, { position: { x, y } });
+  return { level, world, playerId, rngState, turn: 0 };
+}
+
+function playerPos(s: GameState): Position {
+  const p = getComponent(s.world, s.playerId, "position");
+  if (p === undefined) {
+    throw new Error("test: player entity has no position");
+  }
+  return p;
 }
 
 describe("tick: MOVE", () => {
   test("moves the player to an adjacent floor tile and increments turn", () => {
     const state = makeState(makeBoxLevel(), 2, 2);
     const next = tick(state, { type: "MOVE", dir: "n" });
-    expect(next.player).toEqual({ x: 2, y: 1 });
+    expect(playerPos(next)).toEqual({ x: 2, y: 1 });
     expect(next.turn).toBe(1);
   });
 
   test("does not move into a wall, does not increment turn, returns same reference", () => {
     const state = makeState(makeBoxLevel(), 2, 1);
     const next = tick(state, { type: "MOVE", dir: "n" });
-    expect(next.player).toEqual({ x: 2, y: 1 });
+    expect(playerPos(next)).toEqual({ x: 2, y: 1 });
     expect(next.turn).toBe(0);
     expect(next).toBe(state);
   });
@@ -53,13 +71,12 @@ describe("tick: MOVE", () => {
     const tiles = new Uint8Array(9).fill(TILE_FLOOR);
     const state = makeState(makeLevel(3, 3, tiles), 0, 0);
     const next = tick(state, { type: "MOVE", dir: "n" });
-    expect(next.player).toEqual({ x: 0, y: 0 });
+    expect(playerPos(next)).toEqual({ x: 0, y: 0 });
     expect(next.turn).toBe(0);
     expect(next).toBe(state);
   });
 
   test("all four directions move correctly from center", () => {
-    const level = makeBoxLevel();
     const cases: Array<{ dir: "n" | "e" | "s" | "w"; x: number; y: number }> = [
       { dir: "n", x: 2, y: 1 },
       { dir: "e", x: 3, y: 2 },
@@ -67,18 +84,39 @@ describe("tick: MOVE", () => {
       { dir: "w", x: 1, y: 2 },
     ];
     for (const { dir, x, y } of cases) {
-      const state = makeState(level, 2, 2);
+      // Fresh state per case — the world is mutated by tick, so we can't
+      // reuse a single level/state across iterations.
+      const state = makeState(makeBoxLevel(), 2, 2);
       const next = tick(state, { type: "MOVE", dir });
-      expect(next.player).toEqual({ x, y });
+      expect(playerPos(next)).toEqual({ x, y });
       expect(next.turn).toBe(1);
     }
   });
 
-  test("valid move preserves level and rngState by reference", () => {
+  test("valid move preserves level, rngState, world, playerId by reference", () => {
     const state = makeState(makeBoxLevel(), 2, 2);
     const next = tick(state, { type: "MOVE", dir: "e" });
     expect(next.level).toBe(state.level);
     expect(next.rngState).toBe(state.rngState);
+    // World is mutated in place — same reference, updated contents.
+    expect(next.world).toBe(state.world);
+    expect(next.playerId).toBe(state.playerId);
+  });
+
+  test("throws specifically about missing position when the component was removed", () => {
+    const state = makeState(makeBoxLevel(), 2, 2);
+    removeComponent(state.world, state.playerId, "position");
+    expect(() => tick(state, { type: "MOVE", dir: "n" })).toThrow(
+      /missing the position component/,
+    );
+  });
+
+  test("throws specifically about a stale handle when the player has been despawned", () => {
+    const state = makeState(makeBoxLevel(), 2, 2);
+    despawn(state.world, state.playerId);
+    expect(() => tick(state, { type: "MOVE", dir: "n" })).toThrow(
+      /player handle is stale/,
+    );
   });
 
   test("consecutive moves accumulate turn count correctly", () => {
@@ -87,7 +125,7 @@ describe("tick: MOVE", () => {
     state = tick(state, { type: "MOVE", dir: "e" }); // (3,1)
     state = tick(state, { type: "MOVE", dir: "s" }); // (3,2)
     state = tick(state, { type: "MOVE", dir: "w" }); // (2,2)
-    expect(state.player).toEqual({ x: 2, y: 2 });
+    expect(playerPos(state)).toEqual({ x: 2, y: 2 });
     expect(state.turn).toBe(4);
   });
 });
@@ -95,11 +133,12 @@ describe("tick: MOVE", () => {
 describe("newGame", () => {
   test("places the player at the spawn point", () => {
     const state = newGame(42, "rim");
-    const spawn = state.level.spawn;
-    expect(spawn).not.toBeNull();
-    if (spawn !== null) {
-      expect(state.player.x).toBe(spawn[0]);
-      expect(state.player.y).toBe(spawn[1]);
+    const spawnPt = state.level.spawn;
+    expect(spawnPt).not.toBeNull();
+    if (spawnPt !== null) {
+      const pos = playerPos(state);
+      expect(pos.x).toBe(spawnPt[0]);
+      expect(pos.y).toBe(spawnPt[1]);
     }
   });
 
@@ -112,8 +151,9 @@ describe("newGame", () => {
     for (const seed of [0, 1, 42, 0xdead, 0xbeef]) {
       const styles: Array<"rim" | "caverns"> = ["rim", "caverns"];
       for (const style of styles) {
-        const { level, player } = newGame(seed, style);
-        expect(getTile(level.grid, player.x, player.y)).toBe(TILE_FLOOR);
+        const state = newGame(seed, style);
+        const pos = playerPos(state);
+        expect(getTile(state.level.grid, pos.x, pos.y)).toBe(TILE_FLOOR);
       }
     }
   });
@@ -124,5 +164,13 @@ describe("newGame", () => {
     expect(Array.from(a.level.grid.tiles)).not.toEqual(
       Array.from(b.level.grid.tiles),
     );
+  });
+
+  test("player entity carries actor and hp components", () => {
+    const state = newGame(42, "rim");
+    const actor = getComponent(state.world, state.playerId, "actor");
+    const hp = getComponent(state.world, state.playerId, "hp");
+    expect(actor).toEqual({ glyph: "@", name: "you" });
+    expect(hp).toEqual({ current: 10, max: 10 });
   });
 });

@@ -10,7 +10,7 @@ Turn-based, single-player roguelike with a **server-authoritative** architecture
 
 - **Runtime / package manager**: Bun (lockfile is `bun.lock`).
 - **Monorepo**: Turborepo. Workspaces: `apps/*`, `packages/*`.
-- **Server** (`apps/server`): Bun + **Elysia**. Endpoints: WS `/game`, HTTP `/health`. Default port `3001` (override with `PORT`).
+- **Server** (`apps/server`): Bun + **Elysia**. Endpoints: WS `/game`, HTTP `/health`. Default port `3000` (override with `PORT`).
 - **Client** (`apps/client`): **Vite + React 19** SPA. Dev port `5173`. Targeting a 2D tilemap (Canvas / WebGL).
 - **Shared**: `packages/typescript-config` only (`base.json`, `react-library.json`).
 - **Quality tooling**: **Biome 2** (`biome.json` at the root) — single tool for lint + format + organize-imports. No ESLint, no Prettier.
