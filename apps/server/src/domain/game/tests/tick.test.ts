@@ -57,7 +57,7 @@ function makeState(level: Level, x: number, y: number): GameState {
     actor: playerId,
   });
   const zones = new Map<ZoneId, ZoneStatus>();
-  zones.set(DONJON_ZONE, { world, level });
+  zones.set(DONJON_ZONE, { kind: "active", world, level });
   return {
     zones,
     activeZone: DONJON_ZONE,
@@ -264,12 +264,17 @@ describe("newGame", () => {
     expect(hp).toEqual({ current: 10, max: 10 });
   });
 
-  test("activeZone is the only zone in the map and exposes a world+level", () => {
+  test("zones map holds donjon (active) + village (dormant); activeZone is donjon", () => {
     const state = newGame(42, "rim");
-    expect(state.zones.size).toBe(1);
-    const zone = state.zones.get(state.activeZone);
-    expect(zone).toBeDefined();
-    expect(zone?.world).toBeDefined();
-    expect(zone?.level).toBeDefined();
+    expect(state.zones.size).toBe(2);
+    const donjon = state.zones.get(state.activeZone);
+    expect(donjon?.kind).toBe("active");
+    // The village id (1) is implementation-private; iterate the map to find
+    // the non-active zone rather than hard-coding it.
+    let dormantCount = 0;
+    for (const z of state.zones.values()) {
+      if (z.kind === "dormant") dormantCount += 1;
+    }
+    expect(dormantCount).toBe(1);
   });
 });

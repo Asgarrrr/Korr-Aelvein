@@ -26,29 +26,75 @@ export type ZoneId = number;
 export type Time = number;
 
 /**
- * Per-zone state. Phase 3 only ever has active zones, so `ZoneStatus` is a
- * single shape with no discriminant. Phase 4 will introduce the discriminator
- * and a `dormant` variant — that shape (whether it keeps `World` or replaces
- * it with an actor summary) will be decided from real evidence then, not
- * pre-committed here.
+ * Per-zone state. Phase 4 introduces the discriminator with two arms:
+ *
+ * - `active`: the zone the player is currently in. Fine-grain tick, AI runs
+ *   at action granularity, full ECS world hot.
+ * - `dormant`: any other zone. The world is still resident (tiles, items,
+ *   NPC components survive) but per-actor turns are *not* on the
+ *   `globalScheduler` heap. Instead, those NPCs schedule themselves via
+ *   `GlobalEvent.schedule` events that fire on a coarser cadence; the
+ *   abstract resolver in `game/abstract.ts` mutates the dormant world's
+ *   columns directly without spawning fine-grain AI.
+ *
+ * `lastSimAt` is the game-time of the last `schedule` event that fired for
+ * this zone. Phase 5+ zone-entry catchup will rebase from here.
+ *
+ * The "summary" alternative (drop `world`, keep only an actor digest) is
+ * deliberately not taken yet — at this scale the resident world cost is
+ * negligible, and the active/dormant transition stays a no-op on the
+ * component data.
  */
-export type ZoneStatus = {
-  readonly world: World;
-  readonly level: Level;
-};
+export type ZoneStatus =
+  | {
+      readonly kind: "active";
+      readonly world: World;
+      readonly level: Level;
+    }
+  | {
+      readonly kind: "dormant";
+      readonly world: World;
+      readonly level: Level;
+      /**
+       * Game-time of the last `GlobalEvent.schedule` that fired against this
+       * zone. Mutated in place by `drainNonPlayer` whenever an applied event
+       * succeeds. Phase 6 zone-entry catchup will use this as the rebase
+       * point — drain only events whose `time > lastSimAt` to bring the
+       * dormant world up to game-`time` on concretization.
+       *
+       * Mutable by deliberate exception to the surrounding `readonly` so the
+       * map value's identity stays stable across ticks (same pattern as
+       * `World.nextId`).
+       */
+      lastSimAt: Time;
+    };
 
 /**
- * Discriminated union of every event class on the global timeline. Phase 3
- * carries a single variant — actor turns. Phase 4 will extend it with
- * `schedule` (abstract NPC activity) and `world` (weather, time-of-day,
- * etc.). The drain dispatch uses a `never` exhaustiveness sentinel so new
- * variants force a compile-error on dispatch sites that haven't caught up.
+ * Discriminated union of every event class on the global timeline.
+ *
+ * - `actor`: a fine-grain turn for an in-bubble actor in the active zone.
+ *   Drained through `runAi`. Phase 1-3 had this only.
+ * - `schedule`: a coarse-grain trigger for a dormant-zone NPC. Drained
+ *   through the abstract resolver in `game/abstract.ts`, which mutates the
+ *   dormant zone's world columns and reschedules the next tick.
+ *
+ * Future: `world` (weather, time-of-day) lands when a use case appears.
+ *
+ * The drain dispatch uses a `never` exhaustiveness sentinel so any new
+ * variant forces a compile error on every dispatch site that hasn't caught
+ * up.
  */
-export type GlobalEvent = {
-  readonly kind: "actor";
-  readonly zone: ZoneId;
-  readonly actor: EntityHandle;
-};
+export type GlobalEvent =
+  | {
+      readonly kind: "actor";
+      readonly zone: ZoneId;
+      readonly actor: EntityHandle;
+    }
+  | {
+      readonly kind: "schedule";
+      readonly zone: ZoneId;
+      readonly entity: EntityHandle;
+    };
 
 /**
  * GameState — the multi-zone shape.
@@ -82,7 +128,16 @@ export type GameState = {
 };
 
 const DONJON_ZONE: ZoneId = 0;
+const VILLAGE_ZONE: ZoneId = 1;
 const WANDERER_COUNT = 2;
+/**
+ * Cadence at which the village shopkeeper's schedule fires. One application
+ * = one waypoint transition (e.g. home → counter). Picked at 5× the basic
+ * action cost so a player WAIT-spamming through it sees the position toggle
+ * every 5 turns — enough to make the abstract pipeline observable in tests
+ * without flooding the heap.
+ */
+const VILLAGE_SCHEDULE_PERIOD = 500;
 
 export function newGame(seed: number, style: StyleId): GameState {
   const rng = createRng(seed);
@@ -124,7 +179,14 @@ export function newGame(seed: number, style: StyleId): GameState {
   }
 
   const zones = new Map<ZoneId, ZoneStatus>();
-  zones.set(DONJON_ZONE, { world, level });
+  zones.set(DONJON_ZONE, { kind: "active", world, level });
+
+  // Village zone — dormant from the start. The villager NPC schedules its
+  // own position transitions through `GlobalEvent.schedule` events on the
+  // global heap; the abstract resolver mutates this world's columns
+  // without spawning fine-grain AI. Phase 5+ will let the player travel
+  // here and concretise the zone.
+  spawnVillageZone(rng, zones, globalScheduler);
 
   return {
     zones,
@@ -135,6 +197,52 @@ export function newGame(seed: number, style: StyleId): GameState {
     time: 0,
     turn: 0,
   };
+}
+
+function spawnVillageZone(
+  rng: Rng,
+  zones: Map<ZoneId, ZoneStatus>,
+  globalScheduler: Scheduler<GlobalEvent>,
+): void {
+  const villageLevel = generateLevel(rng, 40, 20, "rim");
+  const villageWorld = emptyWorld();
+  const floors = listFloorCells(villageLevel);
+  if (floors.length < 2) {
+    throw new Error(
+      "spawnVillageZone: village level has fewer than 2 floor cells",
+    );
+  }
+  // Two distinct floor cells: home and counter. Picking sequentially with
+  // an exclusion set keeps RNG consumption constant in the seed and avoids
+  // the rejection-sampling determinism trap.
+  const homeCell = rng.pick(floors);
+  const counterCandidates = floors.filter(
+    ([x, y]) => x !== homeCell[0] || y !== homeCell[1],
+  );
+  const counterCell = rng.pick(counterCandidates);
+  const villager = spawn(villageWorld, {
+    position: { x: homeCell[0], y: homeCell[1] },
+    actor: { glyph: "v", name: "shopkeeper" },
+    // `nextIndex = 1` means the next schedule event moves the villager to
+    // waypoints[1] (the counter). After that it cycles back to 0 and the
+    // following event moves them home.
+    schedule: {
+      waypoints: [homeCell, counterCell],
+      nextIndex: 1,
+      period: VILLAGE_SCHEDULE_PERIOD,
+    },
+  });
+  schedule(globalScheduler, VILLAGE_SCHEDULE_PERIOD, {
+    kind: "schedule",
+    zone: VILLAGE_ZONE,
+    entity: villager,
+  });
+  zones.set(VILLAGE_ZONE, {
+    kind: "dormant",
+    world: villageWorld,
+    level: villageLevel,
+    lastSimAt: 0,
+  });
 }
 
 function cellKey(x: number, y: number): string {
@@ -178,9 +286,21 @@ export function getZone(state: GameState, id: ZoneId): ZoneStatus {
   return z;
 }
 
-/** Resolve the active zone. Throws if `activeZone` is missing from `zones`. */
-export function activeZoneStatus(state: GameState): ZoneStatus {
-  return getZone(state, state.activeZone);
+/**
+ * Resolve the active zone, asserting the discriminant. Throws if the zone
+ * the GameState says is active is in fact dormant — that's a state-machine
+ * bug (zone transitions are atomic), not a recoverable condition.
+ */
+export function activeZoneStatus(state: GameState): ZoneStatus & {
+  kind: "active";
+} {
+  const z = getZone(state, state.activeZone);
+  if (z.kind !== "active") {
+    throw new Error(
+      `activeZoneStatus: zone ${state.activeZone} is ${z.kind}, not active`,
+    );
+  }
+  return z;
 }
 
 export function activeWorld(state: GameState): World {

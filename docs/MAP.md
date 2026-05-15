@@ -24,11 +24,12 @@ apps/
         scheduler/    Min-heap turn scheduler — see `docs/GAME-LOOP.md`.
           index.ts                          emptyScheduler / schedule / peek / pop / size.
           tests/                            index + properties (heap invariants, ties, sort-drain).
-        game/         Turn-based game loop — see `docs/GAME-LOOP.md`.
-          state.ts                          GameState + newGame + cellBlocked.
-          tick.ts                           Action + tick reducer + drainNonPlayer.
-          ai.ts                             runAi dispatcher + per-kind handlers (wanderer).
-          tests/                            tick + wanderer.
+        game/         Turn-based game loop — see `docs/GAME-LOOP.md` (Phase 1-2) and `docs/LIVING-WORLD.md` (Phase 3-4+).
+          state.ts                          GameState + newGame + zones/ZoneStatus + GlobalEvent + active* helpers + cellBlocked.
+          tick.ts                           Action + tick reducer + drainNonPlayer (dispatch on GlobalEvent.kind).
+          ai.ts                             runAi dispatcher (in-bubble) + per-kind handlers (wanderer).
+          abstract.ts                       applyAbstract (off-zone NPC schedules — Phase 4).
+          tests/                            tick + wanderer + village.
         dungeon/      Procgen — see `docs/PROCGEN.md` for the full story.
           types.ts, grid.ts, index.ts       Level/Tile types, flat-array helpers, public surface.
           tests/                            grid / index / properties — foundation + adversarial.
@@ -98,12 +99,13 @@ turbo.json            Build / dev / test / check-types tasks.
 
 ### `apps/server/src/domain/game`
 
-- **Public API**: `newGame(seed, style)`, `tick(state, action)`, `cellBlocked(state, x, y)`, `runAi(state, rng, handle)`, types `GameState` / `Action` / `Dir` / `Ai`.
+- **Public API**: `newGame(seed, style)`, `tick(state, action)`, `cellBlocked(world, x, y)`, `runAi(state, rng, handle)`, `applyAbstract(state, ev)`, `getZone / activeZoneStatus / activeWorld / activeLevel`, types `GameState` / `Action` / `Dir` / `ZoneId` / `ZoneStatus` / `GlobalEvent` / `Time` / `Ai`.
+- **Multi-zone shape**: `GameState.zones: Map<ZoneId, ZoneStatus>` with one `active` zone and zero or more `dormant` zones. `globalScheduler: Scheduler<GlobalEvent>` carries actor turns *and* schedule events on a single timeline.
 - **Loop shape**: pure-ish reducer `(state, action) → state`. RNG is hydrated once per tick from `state.rngState`, threaded through the action and the drain loop, persisted back to the returned wrapper.
-- **Drain loop**: `drainNonPlayer` pops every non-player event up to the next player slot. Stale handles are skipped lazily; entities whose `ai` was stripped drop out of the heap rather than zombie-cycle.
-- **AI dispatch**: discriminated-union `Ai` + `switch(ai.kind)` with a `never` exhaustiveness sentinel. Adding a new variant without its handler is a compile error.
+- **Drain dispatch**: `drainNonPlayer` switches on `GlobalEvent.kind` — `actor` runs `runAi` (in-bubble AI), `schedule` runs `applyAbstract` (off-zone NPC). A `never` exhaustiveness sentinel forces new variants to land alongside their dispatcher.
+- **AI dispatch (in-bubble)**: discriminated-union `Ai` + `switch(ai.kind)` with the same `never` sentinel.
 - **Refused-action contract**: if `MOVE` fails validation (bounds / wall / occupancy), `tick` returns `state` by reference. No `pop`, no reschedule, no turn cost.
-- **Full story** (data shapes, determinism contract, accepted trade-offs, rejected alternatives, the multi-zone roadmap): `docs/GAME-LOOP.md` and `docs/LIVING-WORLD.md`.
+- **Full story** (data shapes, determinism contract, accepted trade-offs, rejected alternatives, the multi-zone roadmap): `docs/GAME-LOOP.md` (Phase 1-2 deep-dive) and `docs/LIVING-WORLD.md` (Phase 3-4+).
 
 ### `apps/client`
 

@@ -7,6 +7,7 @@ import type {
   Components,
   HP,
   Position,
+  Schedule,
 } from "./components";
 import type { EntityHandle, EntityId, Generation } from "./entity";
 
@@ -36,6 +37,7 @@ type LifecycleBuffers = {
   actor: EntityHandle[];
   hp: EntityHandle[];
   ai: EntityHandle[];
+  schedule: EntityHandle[];
 };
 
 // Event channel storage. Keyed by channel.name; values are the raw event
@@ -48,6 +50,7 @@ export type World = {
   readonly actor: ComponentColumn<Actor>;
   readonly hp: ComponentColumn<HP>;
   readonly ai: ComponentColumn<Ai>;
+  readonly schedule: ComponentColumn<Schedule>;
   // Parity-encoded liveness: even gen ⇒ live, odd gen ⇒ slot despawned and
   // ready for reuse. Bounded by 2× peak entity count, never compacts.
   readonly generations: Map<EntityId, Generation>;
@@ -64,11 +67,12 @@ export function emptyWorld(): World {
     actor: { dense: [], sparse: new Map() },
     hp: { dense: [], sparse: new Map() },
     ai: { dense: [], sparse: new Map() },
+    schedule: { dense: [], sparse: new Map() },
     generations: new Map(),
     nextId: 0,
     recycled: [],
-    added: { position: [], actor: [], hp: [], ai: [] },
-    removed: { position: [], actor: [], hp: [], ai: [] },
+    added: { position: [], actor: [], hp: [], ai: [], schedule: [] },
+    removed: { position: [], actor: [], hp: [], ai: [], schedule: [] },
     events: new Map(),
   };
 }
@@ -128,6 +132,39 @@ function cloneAi(v: Ai): Ai {
     throw new Error(`cloneAi: unknown ai kind "${v.kind}"`);
   }
   return { kind: v.kind };
+}
+
+function cloneAndValidateSchedule(v: Schedule): Schedule {
+  if (!Array.isArray(v.waypoints) || v.waypoints.length === 0) {
+    throw new Error("schedule.waypoints: must be a non-empty array");
+  }
+  if (!Number.isInteger(v.period) || v.period <= 0) {
+    throw new Error(
+      `schedule.period: expected positive integer, got ${v.period}`,
+    );
+  }
+  if (
+    !Number.isInteger(v.nextIndex) ||
+    v.nextIndex < 0 ||
+    v.nextIndex >= v.waypoints.length
+  ) {
+    throw new Error(
+      `schedule.nextIndex: expected integer in [0, ${v.waypoints.length}), got ${v.nextIndex}`,
+    );
+  }
+  const cloned: Array<readonly [number, number]> = [];
+  for (const [i, pt] of v.waypoints.entries()) {
+    if (!Array.isArray(pt) || pt.length !== 2) {
+      throw new Error(
+        `schedule.waypoints[${i}]: expected [number, number] tuple`,
+      );
+    }
+    const [x, y] = pt;
+    assertFinite(`schedule.waypoints[${i}].x`, x);
+    assertFinite(`schedule.waypoints[${i}].y`, y);
+    cloned.push([x, y]);
+  }
+  return { waypoints: cloned, nextIndex: v.nextIndex, period: v.period };
 }
 
 function assertSafeGeneration(id: EntityId, gen: Generation): void {
@@ -201,6 +238,7 @@ const columnReaders: ColumnReaders = {
   actor: (w, id) => readFromColumn(w.actor, id),
   hp: (w, id) => readFromColumn(w.hp, id),
   ai: (w, id) => readFromColumn(w.ai, id),
+  schedule: (w, id) => readFromColumn(w.schedule, id),
 };
 
 type ColumnWriters = {
@@ -217,6 +255,8 @@ const columnWriters: ColumnWriters = {
   actor: (w, id, v) => setInColumn(w.actor, id, cloneActor(v)),
   hp: (w, id, v) => setInColumn(w.hp, id, cloneAndValidateHP(v)),
   ai: (w, id, v) => setInColumn(w.ai, id, cloneAi(v)),
+  schedule: (w, id, v) =>
+    setInColumn(w.schedule, id, cloneAndValidateSchedule(v)),
 };
 
 type ColumnRemovers = {
@@ -228,6 +268,7 @@ const columnRemovers: ColumnRemovers = {
   actor: (w, id) => removeFromColumn(w.actor, id),
   hp: (w, id) => removeFromColumn(w.hp, id),
   ai: (w, id) => removeFromColumn(w.ai, id),
+  schedule: (w, id) => removeFromColumn(w.schedule, id),
 };
 
 type ColumnSizes = { [K in ComponentKey]: (w: World) => number };
@@ -237,6 +278,7 @@ const columnSizes: ColumnSizes = {
   actor: (w) => w.actor.dense.length,
   hp: (w) => w.hp.dense.length,
   ai: (w) => w.ai.dense.length,
+  schedule: (w) => w.schedule.dense.length,
 };
 
 type ColumnHas = { [K in ComponentKey]: (w: World, id: EntityId) => boolean };
@@ -248,6 +290,7 @@ const columnHas: ColumnHas = {
   actor: (w, id) => w.actor.sparse.has(id),
   hp: (w, id) => w.hp.sparse.has(id),
   ai: (w, id) => w.ai.sparse.has(id),
+  schedule: (w, id) => w.schedule.sparse.has(id),
 };
 
 // SoA single-pass snapshot of (id, gen) pairs in dense order. Used by
@@ -293,6 +336,7 @@ const columnSnapshots: ColumnSnapshot = {
   actor: (w) => snapshotColumn(w.actor.dense, w.generations),
   hp: (w) => snapshotColumn(w.hp.dense, w.generations),
   ai: (w) => snapshotColumn(w.ai.dense, w.generations),
+  schedule: (w) => snapshotColumn(w.schedule.dense, w.generations),
 };
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -333,6 +377,10 @@ export function spawn(world: World, c: Components): EntityHandle {
     columnWriters.ai(world, id, c.ai);
     world.added.ai.push(handle);
   }
+  if (c.schedule !== undefined) {
+    columnWriters.schedule(world, id, c.schedule);
+    world.added.schedule.push(handle);
+  }
   return handle;
 }
 
@@ -355,10 +403,14 @@ export function despawn(world: World, handle: EntityHandle): void {
   if (columnHas.ai(world, handle.id)) {
     world.removed.ai.push(handle);
   }
+  if (columnHas.schedule(world, handle.id)) {
+    world.removed.schedule.push(handle);
+  }
   removeFromColumn(world.position, handle.id);
   removeFromColumn(world.actor, handle.id);
   removeFromColumn(world.hp, handle.id);
   removeFromColumn(world.ai, handle.id);
+  removeFromColumn(world.schedule, handle.id);
   // Bump to odd ⇒ marks slot as dead under the parity encoding.
   world.generations.set(handle.id, handle.gen + 1);
   world.recycled.push(handle.id);
@@ -473,6 +525,7 @@ export type SerializableLifecycle = {
   readonly actor: ReadonlyArray<readonly [EntityId, Generation]>;
   readonly hp: ReadonlyArray<readonly [EntityId, Generation]>;
   readonly ai: ReadonlyArray<readonly [EntityId, Generation]>;
+  readonly schedule: ReadonlyArray<readonly [EntityId, Generation]>;
 };
 
 // Serialized event channels: array of [channelName, eventList] pairs.
@@ -488,6 +541,7 @@ export type SerializableWorld = {
   readonly actor: ReadonlyArray<readonly [EntityId, Actor]>;
   readonly hp: ReadonlyArray<readonly [EntityId, HP]>;
   readonly ai: ReadonlyArray<readonly [EntityId, Ai]>;
+  readonly schedule: ReadonlyArray<readonly [EntityId, Schedule]>;
   readonly generations: ReadonlyArray<readonly [EntityId, Generation]>;
   readonly nextId: EntityId;
   readonly recycled: readonly EntityId[];
@@ -505,6 +559,10 @@ export function snapshot(world: World): SerializableWorld {
     actor: world.actor.dense.map((e) => [e.id, cloneActor(e.v)]),
     hp: world.hp.dense.map((e) => [e.id, cloneAndValidateHP(e.v)]),
     ai: world.ai.dense.map((e) => [e.id, cloneAi(e.v)]),
+    schedule: world.schedule.dense.map((e) => [
+      e.id,
+      cloneAndValidateSchedule(e.v),
+    ]),
     generations: Array.from(world.generations.entries()),
     nextId: world.nextId,
     recycled: [...world.recycled],
@@ -513,12 +571,14 @@ export function snapshot(world: World): SerializableWorld {
       actor: world.added.actor.map((h) => [h.id, h.gen]),
       hp: world.added.hp.map((h) => [h.id, h.gen]),
       ai: world.added.ai.map((h) => [h.id, h.gen]),
+      schedule: world.added.schedule.map((h) => [h.id, h.gen]),
     },
     removed: {
       position: world.removed.position.map((h) => [h.id, h.gen]),
       actor: world.removed.actor.map((h) => [h.id, h.gen]),
       hp: world.removed.hp.map((h) => [h.id, h.gen]),
       ai: world.removed.ai.map((h) => [h.id, h.gen]),
+      schedule: world.removed.schedule.map((h) => [h.id, h.gen]),
     },
     // Empty buckets are dropped: snapshot stays tight when channels have
     // been drained, and prevents bucket-name accumulation from bloating
@@ -556,18 +616,25 @@ export function restore(s: SerializableWorld): World {
   for (const [id, v] of s.actor) columnWriters.actor(w, id, v);
   for (const [id, v] of s.hp) columnWriters.hp(w, id, v);
   for (const [id, v] of s.ai) columnWriters.ai(w, id, v);
+  for (const [id, v] of s.schedule) columnWriters.schedule(w, id, v);
   w.nextId = s.nextId;
   for (const id of s.recycled) w.recycled.push(id);
   for (const [id, gen] of s.added.position) w.added.position.push({ id, gen });
   for (const [id, gen] of s.added.actor) w.added.actor.push({ id, gen });
   for (const [id, gen] of s.added.hp) w.added.hp.push({ id, gen });
   for (const [id, gen] of s.added.ai) w.added.ai.push({ id, gen });
+  for (const [id, gen] of s.added.schedule) {
+    w.added.schedule.push({ id, gen });
+  }
   for (const [id, gen] of s.removed.position) {
     w.removed.position.push({ id, gen });
   }
   for (const [id, gen] of s.removed.actor) w.removed.actor.push({ id, gen });
   for (const [id, gen] of s.removed.hp) w.removed.hp.push({ id, gen });
   for (const [id, gen] of s.removed.ai) w.removed.ai.push({ id, gen });
+  for (const [id, gen] of s.removed.schedule) {
+    w.removed.schedule.push({ id, gen });
+  }
   for (const [k, v] of s.events) w.events.set(k, [...v]);
   return w;
 }
