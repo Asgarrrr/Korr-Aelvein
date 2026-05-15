@@ -12,7 +12,7 @@ import { runAi } from "./ai";
 import {
   activeLevel,
   activeWorld,
-  cellBlocked,
+  entityAt,
   type GameState,
   type GlobalEvent,
   getZone,
@@ -54,8 +54,23 @@ function isPlayerTurn(
   return (
     p.kind === "actor" &&
     p.zone === state.activeZone &&
-    sameHandle(p.actor, state.playerId)
+    sameHandle(p.entity, state.playerId)
   );
+}
+
+/**
+ * Pop the player's current heap entry and reschedule a fresh one
+ * `ACTION_COST` later. Called by every accepted player action — MOVE and
+ * WAIT today, ATTACK in Phase 5. Centralises the pop+schedule pair so a
+ * new action kind only has to declare its validation and world mutation.
+ */
+function consumeTurn(state: GameState): void {
+  pop(state.globalScheduler);
+  schedule(state.globalScheduler, ACTION_COST, {
+    kind: "actor",
+    zone: state.activeZone,
+    entity: state.playerId,
+  });
 }
 
 export function tick(state: GameState, action: Action): GameState {
@@ -82,35 +97,36 @@ export function tick(state: GameState, action: Action): GameState {
   // guarantees a single source of truth for replay determinism).
   const rng = fromRngState(state.rngState);
 
-  if (action.type === "MOVE") {
-    const pos = getComponent(world, state.playerId, "position");
-    if (pos === undefined) {
-      throw new Error("tick: player entity is missing the position component");
+  switch (action.type) {
+    case "MOVE": {
+      const pos = getComponent(world, state.playerId, "position");
+      if (pos === undefined) {
+        throw new Error(
+          "tick: player entity is missing the position component",
+        );
+      }
+      const [dx, dy] = dirDelta(action.dir);
+      const nx = pos.x + dx;
+      const ny = pos.y + dy;
+      // Refused inputs do not consume the player's turn: keep heap, world,
+      // time, and turn untouched; return the same wrapper for fast-eq.
+      if (!inBounds(nx, ny, level.grid)) return state;
+      if (getTile(level.grid, nx, ny) === TILE_WALL) return state;
+      // Phase 5 (bump-combat) will turn this branch into an ATTACK against
+      // the returned handle instead of refusing the move.
+      if (entityAt(world, nx, ny) !== undefined) return state;
+      setComponent(world, state.playerId, "position", { x: nx, y: ny });
+      consumeTurn(state);
+      break;
     }
-    const [dx, dy] = dirDelta(action.dir);
-    const nx = pos.x + dx;
-    const ny = pos.y + dy;
-    // Refused inputs do not consume the player's turn: keep heap, world,
-    // time, and turn untouched; return the same wrapper for fast-eq.
-    if (!inBounds(nx, ny, level.grid)) return state;
-    if (getTile(level.grid, nx, ny) === TILE_WALL) return state;
-    // Phase 5 (bump-combat) will replace this branch with an ATTACK action.
-    if (cellBlocked(world, nx, ny)) return state;
-    pop(state.globalScheduler);
-    setComponent(world, state.playerId, "position", { x: nx, y: ny });
-    schedule(state.globalScheduler, ACTION_COST, {
-      kind: "actor",
-      zone: state.activeZone,
-      actor: state.playerId,
-    });
-  } else {
-    // WAIT — no validation can refuse it; spend the turn.
-    pop(state.globalScheduler);
-    schedule(state.globalScheduler, ACTION_COST, {
-      kind: "actor",
-      zone: state.activeZone,
-      actor: state.playerId,
-    });
+    case "WAIT": {
+      consumeTurn(state);
+      break;
+    }
+    default: {
+      const _exhaustive: never = action;
+      throw new Error(`tick: unhandled action ${JSON.stringify(_exhaustive)}`);
+    }
   }
 
   drainNonPlayer(state, rng);
@@ -160,13 +176,13 @@ function drainNonPlayer(state: GameState, rng: Rng): void {
           );
         }
         const world = activeWorld(state);
-        if (!isLiveHandle(world, ev.actor)) continue;
-        const acted = runAi(state, rng, ev.actor);
+        if (!isLiveHandle(world, ev.entity)) continue;
+        const acted = runAi(state, rng, ev.entity);
         if (acted) {
           schedule(state.globalScheduler, ACTION_COST, {
             kind: "actor",
             zone: ev.zone,
-            actor: ev.actor,
+            entity: ev.entity,
           });
         }
         break;

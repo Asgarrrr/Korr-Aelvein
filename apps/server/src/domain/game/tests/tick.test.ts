@@ -54,7 +54,7 @@ function makeState(level: Level, x: number, y: number): GameState {
   schedule(globalScheduler, 0, {
     kind: "actor",
     zone: DONJON_ZONE,
-    actor: playerId,
+    entity: playerId,
   });
   const zones = new Map<ZoneId, ZoneStatus>();
   zones.set(DONJON_ZONE, { kind: "active", world, level });
@@ -170,7 +170,7 @@ describe("tick: MOVE", () => {
     expect(head?.time).toBe(100);
     expect(head?.payload.kind).toBe("actor");
     if (head?.payload.kind === "actor") {
-      expect(head.payload.actor).toEqual(state.playerId);
+      expect(head.payload.entity).toEqual(state.playerId);
       expect(head.payload.zone).toBe(state.activeZone);
     }
   });
@@ -276,5 +276,18 @@ describe("newGame", () => {
       if (z.kind === "dormant") dormantCount += 1;
     }
     expect(dormantCount).toBe(1);
+  });
+
+  test("`state.zones` is intentionally not JSON-safe (regression pin)", () => {
+    // `Map` round-trips through JSON as `{}`. A naive `JSON.stringify(state)`
+    // for save/replay would lose every zone. Phase 5+ save API must use
+    // `Array.from(state.zones)` and reconstruct with `new Map(entries)`.
+    // This test exists to make the failure mode visible in code rather
+    // than discovering it the day the save bug ships.
+    const state = newGame(42, "rim");
+    const roundTripped = JSON.parse(JSON.stringify(state));
+    expect(roundTripped.zones).toEqual({});
+    const explicit = Array.from(state.zones.entries());
+    expect(explicit.length).toBe(state.zones.size);
   });
 });
