@@ -79,6 +79,30 @@ schedule(scheduler, 30, handle);  // follow-up
 
 Both pop before another actor at delay ≥ 60 gets a slot. No special case in the heap.
 
+## Performance
+
+`bun run bench:scheduler` (single-run) and `bun run bench:scheduler:agg` (30-run aggregate, median + p95 + CV) from `apps/server/`. Numbers below are 30-run medians on Apple Silicon + Bun 1.3.12, CV ≤ 6 % on every scenario.
+
+| Scenario | N=50 | N=500 | N=5000 |
+|---|---:|---:|---:|
+| `schedule+pop` cycle (heap stays at N) | 46 ns | 54 ns | 83 ns |
+| `peek` | 1.4 ns | 3.4 ns | 2.3 ns |
+| `drain N` (schedule N then pop N) | 1.4 µs | 19 µs | 310 µs |
+| `removeWhere` @ 50 % match | 458 ns | 5.6 µs | 56 µs |
+
+Two optimizations land on top of the textbook binary-heap layout — measured against a per-variant baseline in `bench/variants.bench.ts`, kept only because the aggregate ran them inside the noise floor (CV-bracketed):
+
+- **Inlined `(time, seq)` comparator** in `bubbleUp` / `bubbleDown`. A free `lessThan` helper was readable but V8 didn't reliably inline it across the hot path. Floyd heapify after `removeWhere` calls `bubbleDown` N/2 times, so every saved call counts — the inline form lands `removeWhere @ N=5000` ~20 % under the helper-call baseline.
+- **In-place compact in `removeWhere`** instead of "build a new survivor array, reassign `s.heap`". Skips both the allocation and the per-survivor `Array.push` resize check. Independently worth −12 to −15 % at N=5000, compounds with the inlined comparator.
+
+### Bench-rejected patterns (don't re-try)
+
+| Pattern | Bench result | Why |
+|---|---|---|
+| SoA storage (parallel `times[]` / `seqs[]` / `payloads[]`) | `schedule+pop` cycle +13 % SLOWER @ N=500 | 3× write cost on every heap swap. Cache-friendliness on linear scans didn't compensate at our scale. Revisit only if heap regularly exceeds N=10 000 AND profile shows the AoS push as dominant alloc. |
+| Inlined comparator alone (without in-place compact) | Marginal everywhere on cycle / drain | Wins only on `removeWhere` because Floyd compounds it. Kept paired with in-place compact in the adopted version. |
+| Drop the helper-call comparator without inlining | — | Would gain readability but the bench shows the inline form costs the same in `bubbleUp` (one comparison per iter) and pays back in `bubbleDown` × Floyd. Net: inline is the better trade. |
+
 ## Tests
 
 - `tests/index.test.ts` — surface-level coverage of every export, plus `scheduleAt` time validation and `removeWhere` heap-order preservation.
