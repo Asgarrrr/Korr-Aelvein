@@ -21,6 +21,8 @@
     "bench:ecs:find-first": "bun run src/domain/ecs/bench/find-first.bench.ts",
     "bench:dungeon:connect": "bun run src/domain/dungeon/bench/connect-components.bench.ts",
     "bench:dungeon:stairs": "bun run src/domain/dungeon/bench/place-cavern-stairs.bench.ts",
+    "bench:snapshot": "bun run src/bench/snapshot.bench.ts",
+    "bench:snapshot:agg": "bun run src/bench/snapshot.agg.bench.ts",
     "preview": "bun run scripts/preview-dungeon.ts",
     "preview-shrine": "bun run scripts/preview-shrine.ts",
     "check-types": "tsc --noEmit"
