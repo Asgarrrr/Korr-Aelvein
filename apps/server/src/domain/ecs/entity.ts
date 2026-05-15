@@ -23,3 +23,12 @@ export type EntityHandle = {
   readonly id: EntityId;
   readonly gen: Generation;
 };
+
+/**
+ * Structural equality on handles — same id AND same generation. Crossing
+ * generations means a despawn-respawn cycle reused the slot; the second
+ * handle is not the first, even though the id matches.
+ */
+export function sameHandle(a: EntityHandle, b: EntityHandle): boolean {
+  return a.id === b.id && a.gen === b.gen;
+}
