@@ -96,15 +96,17 @@ describe("tick: MOVE", () => {
     }
   });
 
-  test("valid move preserves level, rngState, world, playerId, scheduler by reference", () => {
+  test("valid move preserves level, world, scheduler, playerId by reference; rngState value-equal when no rolls happen", () => {
     const state = makeState(makeBoxLevel(), 2, 2);
     const next = tick(state, { type: "MOVE", dir: "e" });
     expect(next.level).toBe(state.level);
-    expect(next.rngState).toBe(state.rngState);
     // World and scheduler are mutated in place — same reference, updated contents.
     expect(next.world).toBe(state.world);
     expect(next.scheduler).toBe(state.scheduler);
     expect(next.playerId).toBe(state.playerId);
+    // rngState is re-snapshotted every tick (fresh tuple), so identity drifts,
+    // but value stays equal in Phase 1 where MOVE doesn't roll.
+    expect(next.rngState).toEqual(state.rngState);
   });
 
   test("throws specifically about missing position when the component was removed", () => {

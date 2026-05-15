@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { getComponent } from "./domain/ecs/index";
+import { forQuery, getComponent } from "./domain/ecs/index";
 import type { GameState } from "./domain/game/state";
 import { newGame } from "./domain/game/state";
 import { tick } from "./domain/game/tick";
@@ -25,6 +25,13 @@ const responseSchema = t.Object({
   type: t.Literal("state"),
   turn: t.Number(),
   player: t.Object({ x: t.Number(), y: t.Number() }),
+  mobs: t.Array(
+    t.Object({
+      x: t.Number(),
+      y: t.Number(),
+      glyph: t.String(),
+    }),
+  ),
   level: t.Object({
     grid: t.Object({
       width: t.Number(),
@@ -60,10 +67,20 @@ function toSnapshot(state: GameState): Snapshot {
   if (pos === undefined) {
     throw new Error("toSnapshot: player entity has no position component");
   }
+  const mobs: Array<{ x: number; y: number; glyph: string }> = [];
+  // `ai` filter excludes the player (who has no AI component) — no need
+  // for an explicit "not the player" check.
+  forQuery(world, ["position", "actor", "ai"], (_handle, view) => {
+    const p = view.position;
+    const a = view.actor;
+    if (p === undefined || a === undefined) return;
+    mobs.push({ x: p.x, y: p.y, glyph: a.glyph });
+  });
   return {
     type: "state",
     turn,
     player: { x: pos.x, y: pos.y },
+    mobs,
     level: {
       grid: {
         width: level.grid.width,

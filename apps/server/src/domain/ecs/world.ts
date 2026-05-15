@@ -2,6 +2,7 @@
 
 import type {
   Actor,
+  Ai,
   ComponentKey,
   Components,
   HP,
@@ -34,6 +35,7 @@ type LifecycleBuffers = {
   position: EntityHandle[];
   actor: EntityHandle[];
   hp: EntityHandle[];
+  ai: EntityHandle[];
 };
 
 // Event channel storage. Keyed by channel.name; values are the raw event
@@ -45,6 +47,7 @@ export type World = {
   readonly position: ComponentColumn<Position>;
   readonly actor: ComponentColumn<Actor>;
   readonly hp: ComponentColumn<HP>;
+  readonly ai: ComponentColumn<Ai>;
   // Parity-encoded liveness: even gen ⇒ live, odd gen ⇒ slot despawned and
   // ready for reuse. Bounded by 2× peak entity count, never compacts.
   readonly generations: Map<EntityId, Generation>;
@@ -60,11 +63,12 @@ export function emptyWorld(): World {
     position: { dense: [], sparse: new Map() },
     actor: { dense: [], sparse: new Map() },
     hp: { dense: [], sparse: new Map() },
+    ai: { dense: [], sparse: new Map() },
     generations: new Map(),
     nextId: 0,
     recycled: [],
-    added: { position: [], actor: [], hp: [] },
-    removed: { position: [], actor: [], hp: [] },
+    added: { position: [], actor: [], hp: [], ai: [] },
+    removed: { position: [], actor: [], hp: [], ai: [] },
     events: new Map(),
   };
 }
@@ -113,6 +117,17 @@ function cloneAndValidateHP(v: HP): HP {
   assertFinite("hp.current", v.current);
   assertFinite("hp.max", v.max);
   return { current: v.current, max: v.max };
+}
+
+function cloneAi(v: Ai): Ai {
+  // The discriminant string IS the payload — a corrupt snapshot with
+  // `{kind:"garbage"}` would silently restore and dead-end in `runAi`'s
+  // exhaustive switch. Validate at the boundary, same policy as the
+  // numeric cloners reject NaN/Infinity.
+  if (v.kind !== "wanderer") {
+    throw new Error(`cloneAi: unknown ai kind "${v.kind}"`);
+  }
+  return { kind: v.kind };
 }
 
 function assertSafeGeneration(id: EntityId, gen: Generation): void {
@@ -185,6 +200,7 @@ const columnReaders: ColumnReaders = {
   position: (w, id) => readFromColumn(w.position, id),
   actor: (w, id) => readFromColumn(w.actor, id),
   hp: (w, id) => readFromColumn(w.hp, id),
+  ai: (w, id) => readFromColumn(w.ai, id),
 };
 
 type ColumnWriters = {
@@ -200,6 +216,7 @@ const columnWriters: ColumnWriters = {
     setInColumn(w.position, id, cloneAndValidatePosition(v)),
   actor: (w, id, v) => setInColumn(w.actor, id, cloneActor(v)),
   hp: (w, id, v) => setInColumn(w.hp, id, cloneAndValidateHP(v)),
+  ai: (w, id, v) => setInColumn(w.ai, id, cloneAi(v)),
 };
 
 type ColumnRemovers = {
@@ -210,6 +227,7 @@ const columnRemovers: ColumnRemovers = {
   position: (w, id) => removeFromColumn(w.position, id),
   actor: (w, id) => removeFromColumn(w.actor, id),
   hp: (w, id) => removeFromColumn(w.hp, id),
+  ai: (w, id) => removeFromColumn(w.ai, id),
 };
 
 type ColumnSizes = { [K in ComponentKey]: (w: World) => number };
@@ -218,6 +236,7 @@ const columnSizes: ColumnSizes = {
   position: (w) => w.position.dense.length,
   actor: (w) => w.actor.dense.length,
   hp: (w) => w.hp.dense.length,
+  ai: (w) => w.ai.dense.length,
 };
 
 type ColumnHas = { [K in ComponentKey]: (w: World, id: EntityId) => boolean };
@@ -228,6 +247,7 @@ const columnHas: ColumnHas = {
   position: (w, id) => w.position.sparse.has(id),
   actor: (w, id) => w.actor.sparse.has(id),
   hp: (w, id) => w.hp.sparse.has(id),
+  ai: (w, id) => w.ai.sparse.has(id),
 };
 
 // SoA single-pass snapshot of (id, gen) pairs in dense order. Used by
@@ -272,6 +292,7 @@ const columnSnapshots: ColumnSnapshot = {
   position: (w) => snapshotColumn(w.position.dense, w.generations),
   actor: (w) => snapshotColumn(w.actor.dense, w.generations),
   hp: (w) => snapshotColumn(w.hp.dense, w.generations),
+  ai: (w) => snapshotColumn(w.ai.dense, w.generations),
 };
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -308,6 +329,10 @@ export function spawn(world: World, c: Components): EntityHandle {
     columnWriters.hp(world, id, c.hp);
     world.added.hp.push(handle);
   }
+  if (c.ai !== undefined) {
+    columnWriters.ai(world, id, c.ai);
+    world.added.ai.push(handle);
+  }
   return handle;
 }
 
@@ -327,9 +352,13 @@ export function despawn(world: World, handle: EntityHandle): void {
   if (columnHas.hp(world, handle.id)) {
     world.removed.hp.push(handle);
   }
+  if (columnHas.ai(world, handle.id)) {
+    world.removed.ai.push(handle);
+  }
   removeFromColumn(world.position, handle.id);
   removeFromColumn(world.actor, handle.id);
   removeFromColumn(world.hp, handle.id);
+  removeFromColumn(world.ai, handle.id);
   // Bump to odd ⇒ marks slot as dead under the parity encoding.
   world.generations.set(handle.id, handle.gen + 1);
   world.recycled.push(handle.id);
@@ -443,6 +472,7 @@ export type SerializableLifecycle = {
   readonly position: ReadonlyArray<readonly [EntityId, Generation]>;
   readonly actor: ReadonlyArray<readonly [EntityId, Generation]>;
   readonly hp: ReadonlyArray<readonly [EntityId, Generation]>;
+  readonly ai: ReadonlyArray<readonly [EntityId, Generation]>;
 };
 
 // Serialized event channels: array of [channelName, eventList] pairs.
@@ -457,6 +487,7 @@ export type SerializableWorld = {
   readonly position: ReadonlyArray<readonly [EntityId, Position]>;
   readonly actor: ReadonlyArray<readonly [EntityId, Actor]>;
   readonly hp: ReadonlyArray<readonly [EntityId, HP]>;
+  readonly ai: ReadonlyArray<readonly [EntityId, Ai]>;
   readonly generations: ReadonlyArray<readonly [EntityId, Generation]>;
   readonly nextId: EntityId;
   readonly recycled: readonly EntityId[];
@@ -473,6 +504,7 @@ export function snapshot(world: World): SerializableWorld {
     ]),
     actor: world.actor.dense.map((e) => [e.id, cloneActor(e.v)]),
     hp: world.hp.dense.map((e) => [e.id, cloneAndValidateHP(e.v)]),
+    ai: world.ai.dense.map((e) => [e.id, cloneAi(e.v)]),
     generations: Array.from(world.generations.entries()),
     nextId: world.nextId,
     recycled: [...world.recycled],
@@ -480,11 +512,13 @@ export function snapshot(world: World): SerializableWorld {
       position: world.added.position.map((h) => [h.id, h.gen]),
       actor: world.added.actor.map((h) => [h.id, h.gen]),
       hp: world.added.hp.map((h) => [h.id, h.gen]),
+      ai: world.added.ai.map((h) => [h.id, h.gen]),
     },
     removed: {
       position: world.removed.position.map((h) => [h.id, h.gen]),
       actor: world.removed.actor.map((h) => [h.id, h.gen]),
       hp: world.removed.hp.map((h) => [h.id, h.gen]),
+      ai: world.removed.ai.map((h) => [h.id, h.gen]),
     },
     // Empty buckets are dropped: snapshot stays tight when channels have
     // been drained, and prevents bucket-name accumulation from bloating
@@ -521,16 +555,19 @@ export function restore(s: SerializableWorld): World {
   for (const [id, v] of s.position) columnWriters.position(w, id, v);
   for (const [id, v] of s.actor) columnWriters.actor(w, id, v);
   for (const [id, v] of s.hp) columnWriters.hp(w, id, v);
+  for (const [id, v] of s.ai) columnWriters.ai(w, id, v);
   w.nextId = s.nextId;
   for (const id of s.recycled) w.recycled.push(id);
   for (const [id, gen] of s.added.position) w.added.position.push({ id, gen });
   for (const [id, gen] of s.added.actor) w.added.actor.push({ id, gen });
   for (const [id, gen] of s.added.hp) w.added.hp.push({ id, gen });
+  for (const [id, gen] of s.added.ai) w.added.ai.push({ id, gen });
   for (const [id, gen] of s.removed.position) {
     w.removed.position.push({ id, gen });
   }
   for (const [id, gen] of s.removed.actor) w.removed.actor.push({ id, gen });
   for (const [id, gen] of s.removed.hp) w.removed.hp.push({ id, gen });
+  for (const [id, gen] of s.removed.ai) w.removed.ai.push({ id, gen });
   for (const [k, v] of s.events) w.events.set(k, [...v]);
   return w;
 }

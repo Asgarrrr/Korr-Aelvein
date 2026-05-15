@@ -29,16 +29,23 @@ function Game() {
     game.subscribe(({ data }) => {
       const { width, height, tiles } = data.level.grid;
       const { x: px, y: py } = data.player;
+      const mobByCell = new Map<string, string>();
+      for (const m of data.mobs) mobByCell.set(`${m.x},${m.y}`, m.glyph);
       const rows: string[] = [];
       for (let y = 0; y < height; y++) {
         let row = "";
         for (let x = 0; x < width; x++) {
           if (x === px && y === py) {
             row += "@";
-          } else {
-            const t = tiles[y * width + x] ?? 0;
-            row += t === 1 ? "." : t === 2 ? "+" : "#";
+            continue;
           }
+          const mob = mobByCell.get(`${x},${y}`);
+          if (mob !== undefined) {
+            row += mob;
+            continue;
+          }
+          const t = tiles[y * width + x] ?? 0;
+          row += t === 1 ? "." : t === 2 ? "+" : "#";
         }
         rows.push(row);
       }
