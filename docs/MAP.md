@@ -13,7 +13,7 @@ apps/
       index.ts        Listener: `createApp().listen(PORT)`, re-exports `type App`.
       tests/          app.test.ts (/health + factory).
       domain/         Pure game logic. No imports from transport/.
-        rng/          Seeded sfc32 PRNG with serialisable state.
+        rng/          Seeded sfc32 PRNG with serialisable state — see `apps/server/src/domain/rng/README.md`.
           index.ts                          PRNG public surface.
           tests/                            index.test.ts.
           bench/                            main.bench.ts.
@@ -21,10 +21,10 @@ apps/
           *.ts                              world / query / forQuery / components / entity / system.
           tests/                            world / query / forquery / system / determinism / stress.
           bench/                            standard.bench.ts + mega.bench.ts.
-        scheduler/    Min-heap turn scheduler — see `docs/GAME-LOOP.md`.
-          index.ts                          emptyScheduler / schedule / peek / pop / size.
+        scheduler/    Min-heap turn scheduler — see `apps/server/src/domain/scheduler/README.md` and `docs/GAME-LOOP.md`.
+          index.ts                          emptyScheduler / schedule / scheduleAt / peek / pop / size / removeWhere.
           tests/                            index + properties (heap invariants, ties, sort-drain).
-        game/         Turn-based game loop — see `docs/GAME-LOOP.md` (Phase 1-2) and `docs/LIVING-WORLD.md` (Phase 3-6+).
+        game/         Turn-based game loop — see `apps/server/src/domain/game/README.md`, `docs/GAME-LOOP.md` (Phase 1-2) and `docs/LIVING-WORLD.md` (Phase 3-6+).
           index.ts                          public barrel.
           types.ts                          ZoneId / Time / ZoneStatus / GlobalEvent / GameState / Action / Dir.
           newGame.ts                        newGame + spawnDonjonZone + spawnVillageZone.
@@ -35,7 +35,7 @@ apps/
           combat.ts                         attack (Phase 5 bump-combat, pure-on-world).
           transition.ts                     parkActiveZone + concretize + enterZone (Phase 6 zone transitions).
           tests/                            tick + wanderer + village + combat + transition.
-        dungeon/      Procgen — see `docs/PROCGEN.md` for the full story.
+        dungeon/      Procgen — see `apps/server/src/domain/dungeon/README.md` (entry point) and `docs/PROCGEN.md` (full story).
           types.ts, grid.ts, index.ts       Level/Tile types, flat-array helpers, public surface.
           tests/                            grid / index / properties — foundation + adversarial.
           bench/                            connect-components.bench.ts + place-cavern-stairs.bench.ts.
