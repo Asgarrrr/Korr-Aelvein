@@ -27,6 +27,7 @@ import { applyAbstract } from "./abstract";
 import { runAi } from "./ai";
 import { attack } from "./combat";
 import { activeLevel, activeWorld, entityAt, getZone } from "./state";
+import { enterZone } from "./transition";
 import type { Action, Dir, GameState, GlobalEvent } from "./types";
 
 /**
@@ -112,6 +113,12 @@ export function tick(state: GameState, action: Action): GameState {
   // guarantees a single source of truth for replay determinism).
   const rng = fromRngState(state.rngState);
 
+  // ENTER_ZONE is the only action that rotates `activeZone` and `playerId`;
+  // every other path keeps the same wrapper fields and just mutates the
+  // shared heap / world. `working` therefore starts as `state` and only
+  // diverges in the ENTER_ZONE arm.
+  let working: GameState = state;
+
   switch (action.type) {
     case "MOVE": {
       const pos = getComponent(world, state.playerId, "position");
@@ -144,20 +151,28 @@ export function tick(state: GameState, action: Action): GameState {
       consumeTurn(state);
       break;
     }
+    case "ENTER_ZONE": {
+      const next = enterZone(state, action.zone, ACTION_COST);
+      // Same-zone target = silent refusal (mirrors the MOVE-into-wall
+      // contract: same wrapper, no turn cost, no RNG advance).
+      if (next === state) return state;
+      working = next;
+      break;
+    }
     default: {
       const _exhaustive: never = action;
       throw new Error(`tick: unhandled action ${JSON.stringify(_exhaustive)}`);
     }
   }
 
-  drainNonPlayer(state, rng);
+  drainNonPlayer(working, rng);
 
   return {
-    ...state,
+    ...working,
     rngState: rng.state(),
-    time: state.globalScheduler.now,
-    turn: state.turn + 1,
-    gameOver: playerIsDead(state),
+    time: working.globalScheduler.now,
+    turn: working.turn + 1,
+    gameOver: playerIsDead(working),
   };
 }
 

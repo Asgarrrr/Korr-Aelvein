@@ -96,7 +96,13 @@ export type Dir = "n" | "e" | "s" | "w";
 /**
  * Inbound action from the player. The reducer dispatches on `type` with a
  * `never` exhaustiveness sentinel.
+ *
+ * `ENTER_ZONE` is the Phase 6 cross-zone teleport — the only action that
+ * rotates `state.activeZone` and `state.playerId`. Reachability is currently
+ * unrestricted; later phases will gate it on the player standing on a
+ * stair / portal tile.
  */
 export type Action =
   | { readonly type: "MOVE"; readonly dir: Dir }
-  | { readonly type: "WAIT" };
+  | { readonly type: "WAIT" }
+  | { readonly type: "ENTER_ZONE"; readonly zone: ZoneId };

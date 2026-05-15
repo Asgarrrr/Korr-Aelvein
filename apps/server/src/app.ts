@@ -23,12 +23,18 @@ const bodySchema = t.Union([
   t.Object({
     type: t.Literal("WAIT"),
   }),
+  t.Object({
+    type: t.Literal("ENTER_ZONE"),
+    zone: t.Number(),
+  }),
 ]);
 
 const responseSchema = t.Object({
   type: t.Literal("state"),
   turn: t.Number(),
   gameOver: t.Boolean(),
+  activeZone: t.Number(),
+  zones: t.Array(t.Number()),
   player: t.Object({
     x: t.Number(),
     y: t.Number(),
@@ -95,6 +101,8 @@ function toSnapshot(state: GameState): Snapshot {
     type: "state",
     turn,
     gameOver,
+    activeZone: state.activeZone,
+    zones: Array.from(state.zones.keys()),
     player: { x: pos.x, y: pos.y, hp: { current: hp.current, max: hp.max } },
     mobs,
     level: {

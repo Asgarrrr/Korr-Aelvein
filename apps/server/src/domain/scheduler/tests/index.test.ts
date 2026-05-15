@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { EntityHandle } from "../../ecs/index";
-import { emptyScheduler, peek, pop, schedule, size } from "../index";
+import {
+  emptyScheduler,
+  peek,
+  pop,
+  removeWhere,
+  schedule,
+  scheduleAt,
+  size,
+} from "../index";
 
 function h(id: number, gen = 0): EntityHandle {
   return { id, gen };
@@ -174,5 +182,115 @@ describe("scheduler — `now` semantics", () => {
     schedule(s, 10, h(2));
     // h(2) should be at time 60, not 10.
     expect(peek(s)?.time).toBe(60);
+  });
+});
+
+describe("scheduler — scheduleAt (absolute time)", () => {
+  test("schedules at the requested absolute time, ignoring delay arithmetic", () => {
+    const s = emptyScheduler<EntityHandle>();
+    schedule(s, 30, h(1));
+    pop(s); // now = 30
+    scheduleAt(s, 100, h(2));
+    expect(peek(s)?.time).toBe(100);
+  });
+
+  test("equal-time tiebreak is FIFO across schedule and scheduleAt mixed", () => {
+    const s = emptyScheduler<EntityHandle>();
+    schedule(s, 50, h(1)); // seq 0, time 50
+    scheduleAt(s, 50, h(2)); // seq 1, time 50
+    schedule(s, 50, h(3)); // seq 2, time 50
+    expect(pop(s)?.payload).toEqual(h(1));
+    expect(pop(s)?.payload).toEqual(h(2));
+    expect(pop(s)?.payload).toEqual(h(3));
+  });
+
+  test("scheduleAt at exactly now is permitted (fires this turn)", () => {
+    const s = emptyScheduler<EntityHandle>();
+    schedule(s, 50, h(1));
+    pop(s); // now = 50
+    scheduleAt(s, 50, h(2));
+    expect(peek(s)?.time).toBe(50);
+  });
+
+  test("scheduleAt in the past throws", () => {
+    const s = emptyScheduler<EntityHandle>();
+    schedule(s, 100, h(1));
+    pop(s); // now = 100
+    expect(() => scheduleAt(s, 50, h(2))).toThrow(/past/);
+  });
+
+  test("scheduleAt consumes a fresh seq even on the same time as a prior event", () => {
+    const s = emptyScheduler<EntityHandle>();
+    scheduleAt(s, 10, h(1));
+    expect(s.nextSeq).toBe(1);
+    scheduleAt(s, 10, h(2));
+    expect(s.nextSeq).toBe(2);
+  });
+});
+
+describe("scheduler — removeWhere", () => {
+  test("removes every matching event, keeps non-matching", () => {
+    const s = emptyScheduler<EntityHandle>();
+    schedule(s, 10, h(1));
+    schedule(s, 20, h(2));
+    schedule(s, 30, h(3));
+    schedule(s, 40, h(4));
+    removeWhere(s, (ev) => ev.payload.id % 2 === 0);
+    expect(size(s)).toBe(2);
+    expect(pop(s)?.payload).toEqual(h(1));
+    expect(pop(s)?.payload).toEqual(h(3));
+    expect(pop(s)).toBeUndefined();
+  });
+
+  test("removeWhere preserves heap order for survivors", () => {
+    const s = emptyScheduler<EntityHandle>();
+    // Insert in non-monotonic order so a naive "keep array order" approach
+    // would corrupt the heap.
+    const inserts: ReadonlyArray<readonly [number, number]> = [
+      [100, 1],
+      [10, 2],
+      [50, 3],
+      [5, 4],
+      [200, 5],
+      [25, 6],
+    ];
+    for (const [delay, id] of inserts) {
+      schedule(s, delay, h(id));
+    }
+    // Drop entities 2 and 5.
+    removeWhere(s, (ev) => ev.payload.id === 2 || ev.payload.id === 5);
+    const order: number[] = [];
+    while (true) {
+      const ev = pop(s);
+      if (ev === undefined) break;
+      order.push(ev.time);
+    }
+    expect(order).toEqual([5, 25, 50, 100]);
+  });
+
+  test("removeWhere on empty heap is a no-op", () => {
+    const s = emptyScheduler<EntityHandle>();
+    removeWhere(s, () => true);
+    expect(size(s)).toBe(0);
+  });
+
+  test("removeWhere matching nothing leaves the heap intact", () => {
+    const s = emptyScheduler<EntityHandle>();
+    schedule(s, 10, h(1));
+    schedule(s, 20, h(2));
+    removeWhere(s, () => false);
+    expect(pop(s)?.payload).toEqual(h(1));
+    expect(pop(s)?.payload).toEqual(h(2));
+  });
+
+  test("removeWhere does not reset seq counter — future events keep monotonic seq", () => {
+    const s = emptyScheduler<EntityHandle>();
+    schedule(s, 10, h(1)); // seq 0
+    schedule(s, 20, h(2)); // seq 1
+    removeWhere(s, (ev) => ev.payload.id === 1);
+    expect(s.nextSeq).toBe(2);
+    schedule(s, 30, h(3)); // seq 2
+    pop(s); // h(2), seq 1
+    expect(peek(s)?.seq).toBe(2);
   });
 });

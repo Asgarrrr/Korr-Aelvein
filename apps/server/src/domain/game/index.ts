@@ -22,6 +22,7 @@ export {
   getZone,
 } from "./state";
 export { tick } from "./tick";
+export { concretize, enterZone, parkActiveZone } from "./transition";
 export type {
   Action,
   Dir,

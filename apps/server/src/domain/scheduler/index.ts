@@ -117,6 +117,52 @@ export function schedule<T>(s: Scheduler<T>, delay: number, payload: T): void {
   bubbleUp(s.heap, s.heap.length - 1);
 }
 
+/**
+ * Schedule `payload` to fire at an absolute `time`. Companion to `schedule`;
+ * mirrors its determinism contract (fresh `seq` per call, FIFO tiebreak on
+ * equal times). `time` must be `>= s.now` so events never fire in the past.
+ *
+ * Phase 6 zone transitions pre-compute the player's next-turn time *before*
+ * the transition's catchup mutates `s.now`. Using a relative `delay` after
+ * catchup would shift the player's next slot by the catchup's drained time;
+ * `scheduleAt` keeps the slot pinned to the original turn-cost target.
+ */
+export function scheduleAt<T>(s: Scheduler<T>, time: number, payload: T): void {
+  if (time < s.now) {
+    throw new Error(`scheduleAt: time=${time} is in the past (now=${s.now})`);
+  }
+  const ev: ScheduledEvent<T> = { time, seq: s.nextSeq, payload };
+  s.nextSeq += 1;
+  s.heap.push(ev);
+  bubbleUp(s.heap, s.heap.length - 1);
+}
+
+/**
+ * Drop every event whose payload matches `predicate`. Linear filter then
+ * bottom-up Floyd heapify — `O(n)` total, leaving the heap in a valid state.
+ *
+ * Used by Phase 6 zone transitions to evict `actor` events for a zone being
+ * parked and `schedule` events for a zone being concretised — both are
+ * one-shot batch deletes, not the hot path. The alternative (lazy-skip on
+ * pop, like stale entity handles) would let dropped events accumulate
+ * forever since nothing else evicts them.
+ */
+export function removeWhere<T>(
+  s: Scheduler<T>,
+  predicate: (event: ScheduledEvent<T>) => boolean,
+): void {
+  const kept: ScheduledEvent<T>[] = [];
+  for (const ev of s.heap) {
+    if (!predicate(ev)) kept.push(ev);
+  }
+  s.heap = kept;
+  // Floyd's heapify: starting from the last non-leaf, sift each subtree root
+  // down. O(n), not O(n log n).
+  for (let i = (kept.length >> 1) - 1; i >= 0; i--) {
+    bubbleDown(s.heap, i);
+  }
+}
+
 /** Earliest scheduled event without mutating the heap. */
 export function peek<T>(s: Scheduler<T>): ScheduledEvent<T> | undefined {
   return s.heap[0];
