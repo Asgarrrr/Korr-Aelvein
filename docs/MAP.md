@@ -25,7 +25,7 @@ apps/
           index.ts                          emptyScheduler / schedule / peek / pop / size.
           tests/                            index + properties (heap invariants, ties, sort-drain).
         game/         Turn-based game loop — see `docs/GAME-LOOP.md` (Phase 1-2) and `docs/LIVING-WORLD.md` (Phase 3-4+).
-          state.ts                          GameState + newGame + zones/ZoneStatus + GlobalEvent + active* helpers + cellBlocked.
+          state.ts                          GameState + newGame + zones/ZoneStatus + GlobalEvent + active* helpers + entityAt.
           tick.ts                           Action + tick reducer + drainNonPlayer (dispatch on GlobalEvent.kind).
           ai.ts                             runAi dispatcher (in-bubble) + per-kind handlers (wanderer).
           abstract.ts                       applyAbstract (off-zone NPC schedules — Phase 4).
@@ -99,7 +99,7 @@ turbo.json            Build / dev / test / check-types tasks.
 
 ### `apps/server/src/domain/game`
 
-- **Public API**: `newGame(seed, style)`, `tick(state, action)`, `cellBlocked(world, x, y)`, `runAi(state, rng, handle)`, `applyAbstract(state, ev)`, `getZone / activeZoneStatus / activeWorld / activeLevel`, types `GameState` / `Action` / `Dir` / `ZoneId` / `ZoneStatus` / `GlobalEvent` / `Time` / `Ai`.
+- **Public API**: `newGame(seed, style)`, `tick(state, action)`, `entityAt(world, x, y)`, `runAi(state, rng, handle)`, `applyAbstract(zone, entity)`, `getZone / activeZoneStatus / activeWorld / activeLevel`, types `GameState` / `Action` / `Dir` / `ZoneId` / `ZoneStatus` / `GlobalEvent` / `Time` / `Ai` / `Schedule`.
 - **Multi-zone shape**: `GameState.zones: Map<ZoneId, ZoneStatus>` with one `active` zone and zero or more `dormant` zones. `globalScheduler: Scheduler<GlobalEvent>` carries actor turns *and* schedule events on a single timeline.
 - **Loop shape**: pure-ish reducer `(state, action) → state`. RNG is hydrated once per tick from `state.rngState`, threaded through the action and the drain loop, persisted back to the returned wrapper.
 - **Drain dispatch**: `drainNonPlayer` switches on `GlobalEvent.kind` — `actor` runs `runAi` (in-bubble AI), `schedule` runs `applyAbstract` (off-zone NPC). A `never` exhaustiveness sentinel forces new variants to land alongside their dispatcher.

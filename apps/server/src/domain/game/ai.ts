@@ -1,7 +1,7 @@
 import { DX4, DY4, getTile, inBounds, TILE_WALL } from "../dungeon/index";
 import { type EntityHandle, getComponent, setComponent } from "../ecs/index";
 import type { Rng } from "../rng/index";
-import { activeLevel, activeWorld, cellBlocked, type GameState } from "./state";
+import { activeLevel, activeWorld, entityAt, type GameState } from "./state";
 
 /**
  * Resolve one turn for `handle` based on its `ai` component. Mutates the
@@ -53,6 +53,6 @@ function runWanderer(state: GameState, rng: Rng, handle: EntityHandle): void {
   const ny = pos.y + dy;
   if (!inBounds(nx, ny, level.grid)) return;
   if (getTile(level.grid, nx, ny) === TILE_WALL) return;
-  if (cellBlocked(world, nx, ny)) return;
+  if (entityAt(world, nx, ny) !== undefined) return;
   setComponent(world, handle, "position", { x: nx, y: ny });
 }

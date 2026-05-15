@@ -80,6 +80,11 @@ export type ZoneStatus =
  *
  * Future: `world` (weather, time-of-day) lands when a use case appears.
  *
+ * Every variant carries an `entity: EntityHandle` field — the entity this
+ * event concerns. The `kind` discriminator narrows behaviour at dispatch,
+ * but the payload shape stays uniform so Phase 6 zone-park can flip
+ * `kind` without renaming fields per payload.
+ *
  * The drain dispatch uses a `never` exhaustiveness sentinel so any new
  * variant forces a compile error on every dispatch site that hasn't caught
  * up.
@@ -88,7 +93,7 @@ export type GlobalEvent =
   | {
       readonly kind: "actor";
       readonly zone: ZoneId;
-      readonly actor: EntityHandle;
+      readonly entity: EntityHandle;
     }
   | {
       readonly kind: "schedule";
@@ -118,6 +123,14 @@ export type GlobalEvent =
  * `World` columns, and `globalScheduler.heap` are mutated in place.
  */
 export type GameState = {
+  /**
+   * Per-zone state, keyed by `ZoneId`. **Not JSON-safe** — `JSON.stringify`
+   * produces `"zones": {}` for a `Map`. The future `snapshotGameState`
+   * (Phase 5+ save / replay) must explicitly serialise via
+   * `Array.from(state.zones)` and reconstruct via `new Map(entries)` on
+   * restore. The `Map` shape is kept so the inner mutation model stays
+   * identical to `World` (reference-stable, mutated in place).
+   */
   readonly zones: Map<ZoneId, ZoneStatus>;
   readonly activeZone: ZoneId;
   readonly playerId: EntityHandle;
@@ -158,7 +171,7 @@ export function newGame(seed: number, style: StyleId): GameState {
   schedule(globalScheduler, 0, {
     kind: "actor",
     zone: DONJON_ZONE,
-    actor: playerId,
+    entity: playerId,
   });
 
   const floors = listFloorCells(level);
@@ -173,7 +186,7 @@ export function newGame(seed: number, style: StyleId): GameState {
     schedule(globalScheduler, 0, {
       kind: "actor",
       zone: DONJON_ZONE,
-      actor: wanderer,
+      entity: wanderer,
     });
     taken.add(cellKey(wx, wy));
   }
@@ -312,21 +325,25 @@ export function activeLevel(state: GameState): Level {
 }
 
 /**
- * True if any live entity with `position + actor` occupies `(x, y)` in
- * `world`. Used by tick (player MOVE refusal) and ai (wanderer step
- * refusal) to enforce "one actor per tile". Takes `world` directly rather
- * than `GameState` so Phase 4 abstract resolvers can run it against a
- * dormant zone's columns.
+ * Live entity with `position + actor` occupying `(x, y)` in `world`, or
+ * `undefined` if the cell is free. Used by tick (player MOVE refusal /
+ * Phase 5 bump-combat) and ai (wanderer step refusal) — the boolean
+ * "is this cell blocked?" is the `=== undefined` check; the handle is
+ * what bump-combat needs to identify the target without a second scan.
  *
  * O(n) over `position + actor` entities. Fine below ~1000 actors per zone
  * (audited 2026-05); the planned upgrade is a `Map<cellKey, EntityHandle>`
  * maintained in `setComponent("position")` once bump-combat or actor count
  * forces it.
  */
-export function cellBlocked(world: World, x: number, y: number): boolean {
-  for (const [_handle, view] of query(world, ["position", "actor"])) {
+export function entityAt(
+  world: World,
+  x: number,
+  y: number,
+): EntityHandle | undefined {
+  for (const [handle, view] of query(world, ["position", "actor"])) {
     const p = view.position;
-    if (p !== undefined && p.x === x && p.y === y) return true;
+    if (p !== undefined && p.x === x && p.y === y) return handle;
   }
-  return false;
+  return undefined;
 }

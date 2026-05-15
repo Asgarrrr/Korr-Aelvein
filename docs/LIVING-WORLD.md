@@ -72,7 +72,7 @@ type GameState = {
 };
 
 type GlobalEvent =
-  | { kind: "actor";    zone: ZoneId; actor: EntityHandle }
+  | { kind: "actor";    zone: ZoneId; entity: EntityHandle }
   | { kind: "schedule"; zone: ZoneId; entity: EntityHandle }
   // Future arm — lands when a use case appears:
   // | { kind: "world"; effect: WorldEffectId }
@@ -130,7 +130,7 @@ trivially testable in isolation.
   guarantees deterministic replay across zones. No per-zone or per-NPC
   RNG split.
 - **`World` per zone.** Same column-store, just N of them in a `Map`.
-- **`runAi`, `cellBlocked`, drain loop.** Unchanged for the active zone.
+- **`runAi`, `entityAt`, drain loop.** Unchanged for the active zone.
 - **The reducer signature `(state, action) → state`.** Unchanged.
 
 ### What's new

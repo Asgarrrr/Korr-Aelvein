@@ -73,7 +73,7 @@ describe("newGame: wanderer spawn", () => {
     expect(head?.time).toBe(0);
     expect(head?.payload.kind).toBe("actor");
     if (head?.payload.kind === "actor") {
-      expect(head.payload.actor).toEqual(state.playerId);
+      expect(head.payload.entity).toEqual(state.playerId);
       expect(head.payload.zone).toBe(state.activeZone);
     }
   });
@@ -195,7 +195,7 @@ describe("tick: occupancy refusal", () => {
     schedule(globalScheduler, 0, {
       kind: "actor",
       zone: DONJON_ZONE,
-      actor: playerId,
+      entity: playerId,
     });
     for (const [wx, wy] of wanderers) {
       const w = spawn(world, {
@@ -206,7 +206,7 @@ describe("tick: occupancy refusal", () => {
       schedule(globalScheduler, 0, {
         kind: "actor",
         zone: DONJON_ZONE,
-        actor: w,
+        entity: w,
       });
     }
     const zones = new Map<ZoneId, ZoneStatus>();

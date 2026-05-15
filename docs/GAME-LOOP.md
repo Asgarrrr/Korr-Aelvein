@@ -135,7 +135,7 @@ Algorithm:
    fired — fresh tuple identity, value-equal when nothing rolled. Single
    source of truth, no "did the rng roll?" branch.
 3. Resolve the action:
-   - `MOVE`: validate bounds → wall → occupancy (`cellBlocked`). On
+   - `MOVE`: validate bounds → wall → occupancy (`entityAt`). On
      refusal, return `state` by reference. **No `pop`, no reschedule, no
      turn cost.**
    - `WAIT`: always accepted.
@@ -205,18 +205,20 @@ wanderer without a `position` is a defensive no-op (silent skip).
 
 ## Occupancy
 
-`cellBlocked(state, x, y)` in `state.ts` iterates `query(["position",
-"actor"])` and returns true on first match. `O(n)` per call.
+`entityAt(world, x, y)` in `state.ts` iterates `query(["position",
+"actor"])` and returns the first matching handle, or `undefined` if the
+cell is free. `O(n)` per call.
 
 The 2026 audit found this fine below ~1000 actors. Per-zone we sit at
 ≤100. The migration trigger is **either** per-zone actor count ≥ ~500
-**or** bump-combat hot-path needing `entityAt(x, y)` — the planned swap is
-a `Map<cellKey, EntityHandle>` maintained in `setComponent("position")`.
+**or** Phase 5 bump-combat profile data showing the scan is hot — the
+planned swap is a `Map<cellKey, EntityHandle>` maintained in
+`setComponent("position")`.
 
 The "one actor per tile" invariant is structural — enforced uniformly by
-player MOVE refusal **and** wanderer step refusal. Phase 3 bump-combat
-will replace the player's refusal branch with an `ATTACK` action; the
-wanderer's stays.
+player MOVE refusal **and** wanderer step refusal. Phase 5 bump-combat
+will replace the player's refusal branch with an `ATTACK` against the
+handle `entityAt` already returns; the wanderer's branch stays a refusal.
 
 ## RNG threading
 
@@ -248,7 +250,7 @@ byte-identical `GameState` sequence.
 
 ## Trade-offs accepted
 
-- **`O(n)` `cellBlocked`** — fine per-zone at our scale; migration only
+- **`O(n)` `entityAt`** — fine per-zone at our scale; migration only
   on confirmed hot path.
 - **Single RNG stream** — every roll across every actor consumes the same
   stream in heap order. Solo + serial tick + `(time, seq)` total ordering
