@@ -7,6 +7,7 @@ export type {
   Position,
 } from "./components";
 export type { EntityHandle, EntityId, Generation } from "./entity";
+export { sameHandle } from "./entity";
 export {
   defineEvent,
   drain,

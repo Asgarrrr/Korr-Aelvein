@@ -1,27 +1,31 @@
+/**
+ * The tick reducer. One player action in, one new `GameState` out, every
+ * non-player event up to the next player turn drained in between.
+ *
+ * Companion modules:
+ *  - `./ai.ts` — in-bubble AI dispatch (`runAi`).
+ *  - `./abstract.ts` — out-of-bubble NPC resolver (`applyAbstract`).
+ *  - `./state.ts` — runtime accessors (`activeWorld`, `activeLevel`,
+ *    `entityAt`, `getZone`).
+ *
+ * The detailed story (mutation model, drain semantics, refused-action
+ * contract) lives in `docs/GAME-LOOP.md`; the multi-zone backbone in
+ * `docs/LIVING-WORLD.md`.
+ */
+
 import { getTile, inBounds, TILE_WALL } from "../dungeon/index";
 import {
-  type EntityHandle,
   getComponent,
   isLiveHandle,
+  sameHandle,
   setComponent,
 } from "../ecs/index";
 import { fromRngState, type Rng } from "../rng/index";
 import { peek, pop, type ScheduledEvent, schedule } from "../scheduler/index";
 import { applyAbstract } from "./abstract";
 import { runAi } from "./ai";
-import {
-  activeLevel,
-  activeWorld,
-  entityAt,
-  type GameState,
-  type GlobalEvent,
-  getZone,
-} from "./state";
-
-export type Dir = "n" | "e" | "s" | "w";
-export type Action =
-  | { readonly type: "MOVE"; readonly dir: Dir }
-  | { readonly type: "WAIT" };
+import { activeLevel, activeWorld, entityAt, getZone } from "./state";
+import type { Action, Dir, GameState, GlobalEvent } from "./types";
 
 /**
  * Base cost of a basic action in scheduler ticks. 1 "turn" = 100 ticks; speed
@@ -31,14 +35,20 @@ export type Action =
 const ACTION_COST = 100;
 
 function dirDelta(dir: Dir): readonly [number, number] {
-  if (dir === "n") return [0, -1];
-  if (dir === "e") return [1, 0];
-  if (dir === "s") return [0, 1];
-  return [-1, 0]; // "w"
-}
-
-function sameHandle(a: EntityHandle, b: EntityHandle): boolean {
-  return a.id === b.id && a.gen === b.gen;
+  switch (dir) {
+    case "n":
+      return [0, -1];
+    case "e":
+      return [1, 0];
+    case "s":
+      return [0, 1];
+    case "w":
+      return [-1, 0];
+    default: {
+      const _exhaustive: never = dir;
+      throw new Error(`dirDelta: unhandled direction ${String(_exhaustive)}`);
+    }
+  }
 }
 
 /**
@@ -198,7 +208,7 @@ function drainNonPlayer(state: GameState, rng: Rng): void {
         if (period === undefined) continue;
         // Record that the dormant zone has just been simulated up to this
         // event's time. Phase 6 zone-entry catchup uses `lastSimAt` to
-        // skip already-applied events on concretization.
+        // skip already-applied events on concretisation.
         zone.lastSimAt = next.time;
         schedule(state.globalScheduler, period, {
           kind: "schedule",
