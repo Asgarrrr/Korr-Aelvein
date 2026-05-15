@@ -1,8 +1,12 @@
 import { Elysia, t } from "elysia";
 import { forQuery, getComponent } from "./domain/ecs/index";
-import type { GameState } from "./domain/game/state";
-import { activeLevel, activeWorld, newGame } from "./domain/game/state";
-import { tick } from "./domain/game/tick";
+import {
+  activeLevel,
+  activeWorld,
+  type GameState,
+  newGame,
+  tick,
+} from "./domain/game/index";
 
 const TCoords = t.Tuple([t.Number(), t.Number()]);
 

@@ -17,10 +17,10 @@ import {
   type GameState,
   type GlobalEvent,
   newGame,
+  tick,
   type ZoneId,
   type ZoneStatus,
-} from "../state";
-import { tick } from "../tick";
+} from "../index";
 
 const DONJON_ZONE: ZoneId = 0;
 

@@ -10,10 +10,10 @@ import { size } from "../../scheduler/index";
 import {
   type GameState,
   newGame,
+  tick,
   type ZoneId,
   type ZoneStatus,
-} from "../state";
-import { tick } from "../tick";
+} from "../index";
 
 type Pos = { x: number; y: number };
 

@@ -1,7 +1,8 @@
 import { DX4, DY4, getTile, inBounds, TILE_WALL } from "../dungeon/index";
 import { type EntityHandle, getComponent, setComponent } from "../ecs/index";
 import type { Rng } from "../rng/index";
-import { activeLevel, activeWorld, entityAt, type GameState } from "./state";
+import { activeLevel, activeWorld, entityAt } from "./state";
+import type { GameState } from "./types";
 
 /**
  * Resolve one turn for `handle` based on its `ai` component. Mutates the
