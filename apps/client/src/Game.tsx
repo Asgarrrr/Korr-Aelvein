@@ -1,6 +1,7 @@
 import { treaty } from "@elysia/eden";
 import { useEffect, useState } from "react";
 import type { App } from "server";
+import { renderGrid } from "./render";
 
 const SERVER_URL = "http://localhost:3000";
 const client = treaty<App>(SERVER_URL);
@@ -39,35 +40,20 @@ function Game() {
 
     game.on("open", () => setStatus("open"));
     game.subscribe(({ data }) => {
-      const { width, height, tiles } = data.level.grid;
-      const { x: px, y: py } = data.player;
-      const mobByCell = new Map<string, string>();
-      for (const m of data.mobs) mobByCell.set(`${m.x},${m.y}`, m.glyph);
-      const rows: string[] = [];
-      for (let y = 0; y < height; y++) {
-        let row = "";
-        for (let x = 0; x < width; x++) {
-          if (x === px && y === py) {
-            row += "@";
-            continue;
-          }
-          const mob = mobByCell.get(`${x},${y}`);
-          if (mob !== undefined) {
-            row += mob;
-            continue;
-          }
-          const t = tiles[y * width + x] ?? 0;
-          row += t === 1 ? "." : t === 2 ? "+" : "#";
-        }
-        rows.push(row);
-      }
+      const grid = renderGrid({
+        width: data.level.grid.width,
+        height: data.level.grid.height,
+        tiles: data.level.grid.tiles,
+        player: { x: data.player.x, y: data.player.y },
+        mobs: data.mobs,
+      });
       const next: Snapshot = {
         turn: data.turn,
         gameOver: data.gameOver,
         activeZone: data.activeZone,
         zones: data.zones,
         hp: data.player.hp,
-        grid: rows.join("\n"),
+        grid,
       };
       latest = next;
       setSnapshot(next);
