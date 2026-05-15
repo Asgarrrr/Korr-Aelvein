@@ -65,8 +65,10 @@ describe("newGame: wanderer spawn", () => {
 
   test("player is scheduled before wanderers on turn 1 (seq tiebreak)", () => {
     const state = newGame(42, "rim");
-    // Heap: 1 player + 2 wanderers, all at time 0; player's seq must be lowest.
-    expect(size(state.globalScheduler)).toBe(3);
+    // Heap: 1 player + 2 wanderers all at time 0, plus the village schedule
+    // event at time = VILLAGE_SCHEDULE_PERIOD. The player's seq must be the
+    // lowest among the time-0 events.
+    expect(size(state.globalScheduler)).toBe(4);
     const head = state.globalScheduler.heap[0];
     expect(head?.time).toBe(0);
     expect(head?.payload.kind).toBe("actor");
@@ -82,11 +84,13 @@ describe("tick: drain loop runs wanderers", () => {
     const state = newGame(42, "rim");
     const before = mobPositions(state);
     const next = tick(state, { type: "WAIT" });
-    // After one tick: heap should hold 3 actors again (player + 2 wanderers),
-    // every entry scheduled at time 100.
-    expect(size(next.globalScheduler)).toBe(3);
+    // After one tick: heap holds 4 events (player + 2 wanderers all
+    // rescheduled at time 100, plus the unchanged village schedule).
+    expect(size(next.globalScheduler)).toBe(4);
     for (const ev of next.globalScheduler.heap) {
-      expect(ev.time).toBe(100);
+      if (ev.payload.kind === "actor") {
+        expect(ev.time).toBe(100);
+      }
     }
     // Mobs that had a free neighbour should have moved; the others held still.
     // We only assert positions are still legal cells (no out-of-bounds, no
@@ -139,9 +143,9 @@ describe("tick: stale-handle lazy skip", () => {
     expect(() => tick(state, { type: "WAIT" })).not.toThrow();
     // After the tick, the despawned handle is unambiguously gone.
     expect(isLiveHandle(activeWorld(state), victim)).toBe(false);
-    // Only the player + the surviving wanderer remain on the heap.
+    // Heap: player + surviving wanderer + village schedule = 3.
     const next = tick(state, { type: "WAIT" });
-    expect(size(next.globalScheduler)).toBe(2);
+    expect(size(next.globalScheduler)).toBe(3);
   });
 
   test("removing a wanderer's `ai` component drops it from the heap on next pop", () => {
@@ -156,9 +160,9 @@ describe("tick: stale-handle lazy skip", () => {
     // 5 ticks later, the de-AI'd entity must NOT be cycling in the heap.
     let s = state;
     for (let i = 0; i < 5; i++) s = tick(s, { type: "WAIT" });
-    // Heap should have: player + the surviving wanderer = 2. If the
-    // de-AI'd entity were being re-scheduled, size would still be 3.
-    expect(size(s.globalScheduler)).toBe(2);
+    // Heap: player + surviving wanderer + village schedule = 3. If the
+    // de-AI'd entity were being re-scheduled, size would be 4.
+    expect(size(s.globalScheduler)).toBe(3);
   });
 });
 
@@ -207,6 +211,7 @@ describe("tick: occupancy refusal", () => {
     }
     const zones = new Map<ZoneId, ZoneStatus>();
     zones.set(DONJON_ZONE, {
+      kind: "active",
       world,
       level: corridorLevel(),
     });

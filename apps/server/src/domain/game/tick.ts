@@ -7,6 +7,7 @@ import {
 } from "../ecs/index";
 import { fromRngState, type Rng } from "../rng/index";
 import { peek, pop, type ScheduledEvent, schedule } from "../scheduler/index";
+import { applyAbstract } from "./abstract";
 import { runAi } from "./ai";
 import {
   activeLevel,
@@ -14,6 +15,7 @@ import {
   cellBlocked,
   type GameState,
   type GlobalEvent,
+  getZone,
 } from "./state";
 
 export type Dir = "n" | "e" | "s" | "w";
@@ -125,12 +127,23 @@ export function tick(state: GameState, action: Action): GameState {
  * Pop every non-player event up to (but not including) the player's next
  * turn. Stale entries are skipped lazily — they advance `scheduler.now` to
  * their `time` (game-time invariant) but are not dispatched or rescheduled.
- * Entities whose `ai` component has been stripped (despawn race, future
- * status effects) drop out of the heap rather than zombie-cycle forever.
+ * Entities whose dispatch-relevant component has been stripped (`ai` for
+ * active-zone actors, `schedule` for dormant NPCs) drop out of the heap
+ * rather than zombie-cycle forever.
  *
- * Phase 3: only the `actor` event variant exists, and only for the active
- * zone (no dormant zones yet). The `default` branch's `never` sentinel
- * forces Phase 4 to grow the dispatch alongside any new `GlobalEvent` kind.
+ * Dispatch by event kind:
+ *  - `actor`: fine-grain turn for an active-zone NPC. Run `runAi`. If the
+ *    entity is still alive and acted, reschedule one `ACTION_COST` later.
+ *    An `actor` event whose zone is not active is a state-machine bug —
+ *    fail loud, as active-zone NPCs must be on the heap only while their
+ *    zone is active.
+ *  - `schedule`: coarse-grain trigger for a dormant-zone NPC. Run the
+ *    abstract resolver; if it applied, reschedule at the entity's current
+ *    `schedule.period`. A `schedule` event whose zone is active means a
+ *    zone transition mis-converted entries — fail loud there too.
+ *
+ * The `default` branch's `never` sentinel forces any new `GlobalEvent`
+ * variant to add its dispatch here at compile time.
  */
 function drainNonPlayer(state: GameState, rng: Rng): void {
   while (true) {
@@ -142,9 +155,6 @@ function drainNonPlayer(state: GameState, rng: Rng): void {
     switch (ev.kind) {
       case "actor": {
         if (ev.zone !== state.activeZone) {
-          // Phase 4 turns this branch into the abstract-resolver dispatch —
-          // do not change it to `continue` without implementing the resolver,
-          // or the event will be silently dropped.
           throw new Error(
             `drainNonPlayer: actor event for non-active zone ${ev.zone}`,
           );
@@ -161,10 +171,30 @@ function drainNonPlayer(state: GameState, rng: Rng): void {
         }
         break;
       }
+      case "schedule": {
+        const zone = getZone(state, ev.zone);
+        if (zone.kind !== "dormant") {
+          throw new Error(
+            `drainNonPlayer: schedule event for ${zone.kind} zone ${ev.zone}`,
+          );
+        }
+        const period = applyAbstract(zone, ev.entity);
+        if (period === undefined) continue;
+        // Record that the dormant zone has just been simulated up to this
+        // event's time. Phase 6 zone-entry catchup uses `lastSimAt` to
+        // skip already-applied events on concretization.
+        zone.lastSimAt = next.time;
+        schedule(state.globalScheduler, period, {
+          kind: "schedule",
+          zone: ev.zone,
+          entity: ev.entity,
+        });
+        break;
+      }
       default: {
-        const _exhaustive: never = ev.kind;
+        const _exhaustive: never = ev;
         throw new Error(
-          `drainNonPlayer: unhandled event kind ${String(_exhaustive)}`,
+          `drainNonPlayer: unhandled event ${JSON.stringify(_exhaustive)}`,
         );
       }
     }

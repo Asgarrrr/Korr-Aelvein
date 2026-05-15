@@ -30,11 +30,12 @@ describe("restore: generation safety", () => {
       actor: [],
       hp: [],
       ai: [],
+      schedule: [],
       generations: [[0, 2 ** 31]],
       nextId: 1,
       recycled: [],
-      added: { position: [], actor: [], hp: [], ai: [] },
-      removed: { position: [], actor: [], hp: [], ai: [] },
+      added: { position: [], actor: [], hp: [], ai: [], schedule: [] },
+      removed: { position: [], actor: [], hp: [], ai: [], schedule: [] },
       events: [],
     };
     expect(() => restore(s)).toThrow(/generation/);
@@ -46,11 +47,12 @@ describe("restore: generation safety", () => {
       actor: [],
       hp: [],
       ai: [],
+      schedule: [],
       generations: [[0, Number.POSITIVE_INFINITY]],
       nextId: 1,
       recycled: [],
-      added: { position: [], actor: [], hp: [], ai: [] },
-      removed: { position: [], actor: [], hp: [], ai: [] },
+      added: { position: [], actor: [], hp: [], ai: [], schedule: [] },
+      removed: { position: [], actor: [], hp: [], ai: [], schedule: [] },
       events: [],
     };
     expect(() => restore(s)).toThrow(/generation/);
@@ -62,11 +64,12 @@ describe("restore: generation safety", () => {
       actor: [],
       hp: [],
       ai: [],
+      schedule: [],
       generations: [[0, -1]],
       nextId: 1,
       recycled: [],
-      added: { position: [], actor: [], hp: [], ai: [] },
-      removed: { position: [], actor: [], hp: [], ai: [] },
+      added: { position: [], actor: [], hp: [], ai: [], schedule: [] },
+      removed: { position: [], actor: [], hp: [], ai: [], schedule: [] },
       events: [],
     };
     expect(() => restore(s)).toThrow(/generation/);
@@ -78,11 +81,12 @@ describe("restore: generation safety", () => {
       actor: [],
       hp: [],
       ai: [],
+      schedule: [],
       generations: [[0, 1.5]],
       nextId: 1,
       recycled: [],
-      added: { position: [], actor: [], hp: [], ai: [] },
-      removed: { position: [], actor: [], hp: [], ai: [] },
+      added: { position: [], actor: [], hp: [], ai: [], schedule: [] },
+      removed: { position: [], actor: [], hp: [], ai: [], schedule: [] },
       events: [],
     };
     expect(() => restore(s)).toThrow(/generation/);
@@ -94,6 +98,7 @@ describe("restore: generation safety", () => {
       actor: [],
       hp: [],
       ai: [],
+      schedule: [],
       generations: [
         [0, 0],
         [1, 2],
@@ -101,8 +106,8 @@ describe("restore: generation safety", () => {
       ],
       nextId: 3,
       recycled: [1],
-      added: { position: [], actor: [], hp: [], ai: [] },
-      removed: { position: [], actor: [], hp: [], ai: [] },
+      added: { position: [], actor: [], hp: [], ai: [], schedule: [] },
+      removed: { position: [], actor: [], hp: [], ai: [], schedule: [] },
       events: [],
     };
     expect(() => restore(s)).not.toThrow();
@@ -186,11 +191,12 @@ describe("component fields: finite numbers only", () => {
       actor: [],
       hp: [],
       ai: [],
+      schedule: [],
       generations: [[0, 0]],
       nextId: 1,
       recycled: [],
-      added: { position: [], actor: [], hp: [], ai: [] },
-      removed: { position: [], actor: [], hp: [], ai: [] },
+      added: { position: [], actor: [], hp: [], ai: [], schedule: [] },
+      removed: { position: [], actor: [], hp: [], ai: [], schedule: [] },
       events: [],
     };
     expect(() => restore(s)).toThrow(/finite/);
@@ -204,11 +210,12 @@ describe("component fields: finite numbers only", () => {
       actor: [],
       hp: [],
       ai: [[0, { kind: "garbage" }]],
+      schedule: [],
       generations: [[0, 0]],
       nextId: 1,
       recycled: [],
-      added: { position: [], actor: [], hp: [], ai: [] },
-      removed: { position: [], actor: [], hp: [], ai: [] },
+      added: { position: [], actor: [], hp: [], ai: [], schedule: [] },
+      removed: { position: [], actor: [], hp: [], ai: [], schedule: [] },
       events: [],
     };
     // The `ai` literal is intentionally outside the known union — we want to
@@ -217,5 +224,142 @@ describe("component fields: finite numbers only", () => {
     // trip (no `as` in test code per project rules).
     const corrupted: SerializableWorld = JSON.parse(JSON.stringify(s));
     expect(() => restore(corrupted)).toThrow(/unknown ai kind/);
+  });
+});
+
+// ─── Schedule component: structural validation ──────────────────────────────
+//
+// Schedule carries an NPC's cyclic abstract behaviour: a list of waypoints,
+// the next-waypoint index, and the period between applications. Each of
+// these has a tight invariant the abstract resolver depends on (non-empty
+// waypoints, nextIndex ∈ [0, len), positive integer period). A corrupt
+// snapshot that plants e.g. `nextIndex = -1` or `waypoints = []` would
+// silently load and dead-end inside the resolver.
+
+describe("component fields: schedule structural invariants", () => {
+  test("spawn rejects empty waypoints", () => {
+    const w = emptyWorld();
+    expect(() =>
+      spawn(w, { schedule: { waypoints: [], nextIndex: 0, period: 100 } }),
+    ).toThrow(/waypoints/);
+  });
+
+  test("spawn rejects non-integer period", () => {
+    const w = emptyWorld();
+    expect(() =>
+      spawn(w, {
+        schedule: { waypoints: [[0, 0]], nextIndex: 0, period: 1.5 },
+      }),
+    ).toThrow(/period/);
+  });
+
+  test("spawn rejects zero or negative period", () => {
+    const w = emptyWorld();
+    expect(() =>
+      spawn(w, {
+        schedule: { waypoints: [[0, 0]], nextIndex: 0, period: 0 },
+      }),
+    ).toThrow(/period/);
+    expect(() =>
+      spawn(w, {
+        schedule: { waypoints: [[0, 0]], nextIndex: 0, period: -5 },
+      }),
+    ).toThrow(/period/);
+  });
+
+  test("spawn rejects nextIndex out of range", () => {
+    const w = emptyWorld();
+    expect(() =>
+      spawn(w, {
+        schedule: {
+          waypoints: [
+            [0, 0],
+            [1, 1],
+          ],
+          nextIndex: 2,
+          period: 100,
+        },
+      }),
+    ).toThrow(/nextIndex/);
+    expect(() =>
+      spawn(w, {
+        schedule: { waypoints: [[0, 0]], nextIndex: -1, period: 100 },
+      }),
+    ).toThrow(/nextIndex/);
+  });
+
+  test("spawn rejects non-finite waypoint coordinate", () => {
+    const w = emptyWorld();
+    expect(() =>
+      spawn(w, {
+        schedule: {
+          waypoints: [[Number.NaN, 0]],
+          nextIndex: 0,
+          period: 100,
+        },
+      }),
+    ).toThrow(/finite/);
+  });
+
+  test("restore rejects a corrupted schedule", () => {
+    const s = {
+      position: [],
+      actor: [],
+      hp: [],
+      ai: [],
+      // `nextIndex = -1` is outside the valid range.
+      schedule: [[0, { waypoints: [[0, 0]], nextIndex: -1, period: 100 }]],
+      generations: [[0, 0]],
+      nextId: 1,
+      recycled: [],
+      added: { position: [], actor: [], hp: [], ai: [], schedule: [] },
+      removed: { position: [], actor: [], hp: [], ai: [], schedule: [] },
+      events: [],
+    };
+    const corrupted: SerializableWorld = JSON.parse(JSON.stringify(s));
+    expect(() => restore(corrupted)).toThrow(/nextIndex/);
+  });
+
+  test("setComponent rejects updating to an out-of-range nextIndex", () => {
+    const w = emptyWorld();
+    const h = spawn(w, {
+      schedule: {
+        waypoints: [
+          [0, 0],
+          [1, 1],
+        ],
+        nextIndex: 0,
+        period: 100,
+      },
+    });
+    expect(() =>
+      setComponent(w, h, "schedule", {
+        waypoints: [
+          [0, 0],
+          [1, 1],
+        ],
+        nextIndex: 5,
+        period: 100,
+      }),
+    ).toThrow(/nextIndex/);
+  });
+
+  test("snapshot/restore round-trips a valid schedule byte-equal", () => {
+    const w = emptyWorld();
+    spawn(w, {
+      schedule: {
+        waypoints: [
+          [0, 0],
+          [5, 3],
+          [7, 1],
+        ],
+        nextIndex: 1,
+        period: 250,
+      },
+    });
+    const s = snapshot(w);
+    const r = restore(s);
+    const s2 = snapshot(r);
+    expect(s2).toEqual(s);
   });
 });

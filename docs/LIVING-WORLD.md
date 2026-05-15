@@ -73,18 +73,53 @@ type GameState = {
 
 type GlobalEvent =
   | { kind: "actor";    zone: ZoneId; actor: EntityHandle }
-  // Phase 4+ variants — not yet implemented, listed so the discriminator's
-  // exhaustiveness story is clear:
-  // | { kind: "schedule"; zone: ZoneId; npc: EntityHandle; activity: ActivityId }
-  // | { kind: "world";    effect: WorldEffectId }
+  | { kind: "schedule"; zone: ZoneId; entity: EntityHandle }
+  // Future arm — lands when a use case appears:
+  // | { kind: "world"; effect: WorldEffectId }
   ;
 ```
 
-**Phase 3 ships only the `actor` variant** of `GlobalEvent` and a single-
-shape `ZoneStatus` (no `active` / `dormant` discriminator yet). Phase 4
-adds both: a new `GlobalEvent` arm for off-zone NPC schedules, *and* the
-`ZoneStatus` discriminator with a `dormant` shape derived from real abstract-
-resolver evidence.
+**Phase 3 shipped** the multi-zone skeleton with a single-shape `ZoneStatus`
+(no discriminator) and a single `GlobalEvent.actor` variant. **Phase 4
+shipped** the `active` / `dormant` discriminator, the `GlobalEvent.schedule`
+variant, the abstract resolver pipeline (`game/abstract.ts`), and a first
+dormant village zone with a shopkeeper NPC oscillating between home and
+counter on a fixed period.
+
+### The NPC `Schedule` component
+
+```ts
+type Schedule = {
+  readonly waypoints: ReadonlyArray<readonly [number, number]>;
+  readonly nextIndex: number; // next waypoint to apply, in [0, waypoints.length)
+  readonly period: number;    // game-ticks between consecutive transitions
+};
+```
+
+Lives on the NPC entity itself (plumbed through `ecs/components.ts` + the
+column dispatch tables in `ecs/world.ts`). Carries the persistent state
+that survives despawn/respawn and JSON snapshot/restore; the global heap
+carries only the trigger (`GlobalEvent.schedule { zone, entity }`).
+
+Boundary validation in `cloneAndValidateSchedule` rejects empty waypoints,
+non-positive periods, out-of-range `current`, non-finite coordinates —
+same boundary defence as `cloneAi` rejects unknown ai kinds.
+
+### Abstract resolver (`game/abstract.ts`)
+
+```ts
+applyAbstract(zone: ZoneStatus & { kind: "dormant" }, entity: EntityHandle):
+  number | undefined
+```
+
+Takes the already-narrowed dormant zone and the entity handle. Mutates the
+zone's `position` column to `waypoints[nextIndex]`, advances `nextIndex`
+modulo `waypoints.length`. Returns the schedule's `period` (so the caller
+can reschedule the next event without a second `getComponent` lookup),
+or `undefined` if the entity is stale or has lost its `Schedule`.
+
+The drain loop owns rescheduling — `applyAbstract` is pure-on-zone and
+trivially testable in isolation.
 
 ### What survives Phases 1-2 intact
 
@@ -142,10 +177,11 @@ entities)`. Sparse-wakeup workload fits the heap exactly.
 |---|---|---|
 | 1 | Min-heap scheduler + `WAIT` action | done (PR #7) |
 | 2 | Wanderer mob + drain loop + first AI | done (PR #8) |
-| 3 | Multi-zone `GameState` shape, **single zone for now** (the donjon) — no village, no abstract events yet | done |
-| 4 | First scheduled NPC abstract (shopkeeper open/close) — validates the abstract-resolver pipeline end-to-end | planned |
-| 5 | Bump-combat (`MOVE` into actor → `ATTACK`, hp damage via `rng.int`, despawn on hp ≤ 0, `gameOver` in snapshot) | planned, orthogonal to Phase 4 |
-| later | Village zone, weather / world events, time-of-day, multi-floor descent | planned |
+| 3 | Multi-zone `GameState` shape, **single zone for now** (the donjon) — no village, no abstract events yet | done (PR #10) |
+| 4 | First scheduled NPC abstract (shopkeeper home / counter oscillation) + `active` / `dormant` discriminator + abstract-resolver pipeline validated end-to-end | done |
+| 5 | Bump-combat (`MOVE` into actor → `ATTACK`, hp damage via `rng.int`, despawn on hp ≤ 0, `gameOver` in snapshot) | planned |
+| 6 | Zone transition: player travels donjon ↔ village. Concretise on entry, park on exit (the `parkActiveZone` / `concretize` sketch above). | planned |
+| later | More NPC variants, weather / world events, time-of-day, multi-floor descent | planned |
 
 **Phase 3 is structural-only.** Get the shape (`zones: Map`,
 `globalScheduler`, `time`) right so Phase 4 only adds branches to
