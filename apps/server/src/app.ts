@@ -29,7 +29,7 @@ const bodySchema = t.Union([
   }),
 ]);
 
-const responseSchema = t.Object({
+export const responseSchema = t.Object({
   type: t.Literal("state"),
   turn: t.Number(),
   gameOver: t.Boolean(),
@@ -70,13 +70,13 @@ const responseSchema = t.Object({
 // Single source of truth: the wire-format TS type is derived from the
 // TypeBox response schema (`typeof schema.static`). Schema and TS type
 // can no longer drift.
-type Snapshot = typeof responseSchema.static;
+export type Snapshot = typeof responseSchema.static;
 
 function toPair(pt: readonly [number, number]): [number, number] {
   return [pt[0], pt[1]];
 }
 
-function toSnapshot(state: GameState): Snapshot {
+export function toSnapshot(state: GameState): Snapshot {
   const { playerId, turn, gameOver } = state;
   const world = activeWorld(state);
   const level = activeLevel(state);
