@@ -81,6 +81,13 @@ export type GameState = {
    */
   readonly time: Time;
   readonly turn: number;
+  /**
+   * `true` once the player's HP has hit zero. `tick` refuses to process
+   * actions in that state; the snapshot exposes the flag so the client can
+   * render the end-of-run banner. A later phase may add `gameWon` for
+   * cleared objectives; today the flag is binary "the run ended".
+   */
+  readonly gameOver: boolean;
 };
 
 /** Cardinal direction taken by `MOVE` actions. */

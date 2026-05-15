@@ -15,6 +15,7 @@
 
 import { getTile, inBounds, TILE_WALL } from "../dungeon/index";
 import {
+  despawn,
   getComponent,
   isLiveHandle,
   sameHandle,
@@ -24,6 +25,7 @@ import { fromRngState, type Rng } from "../rng/index";
 import { peek, pop, type ScheduledEvent, schedule } from "../scheduler/index";
 import { applyAbstract } from "./abstract";
 import { runAi } from "./ai";
+import { attack } from "./combat";
 import { activeLevel, activeWorld, entityAt, getZone } from "./state";
 import type { Action, Dir, GameState, GlobalEvent } from "./types";
 
@@ -70,8 +72,8 @@ function isPlayerTurn(
 
 /**
  * Pop the player's current heap entry and reschedule a fresh one
- * `ACTION_COST` later. Called by every accepted player action — MOVE and
- * WAIT today, ATTACK in Phase 5. Centralises the pop+schedule pair so a
+ * `ACTION_COST` later. Called by every accepted player action — MOVE
+ * (bump or step) and WAIT today. Centralises the pop+schedule pair so a
  * new action kind only has to declare its validation and world mutation.
  */
 function consumeTurn(state: GameState): void {
@@ -84,6 +86,9 @@ function consumeTurn(state: GameState): void {
 }
 
 export function tick(state: GameState, action: Action): GameState {
+  if (state.gameOver) {
+    throw new Error("tick: the run is over (player died); no further actions");
+  }
   const world = activeWorld(state);
   const level = activeLevel(state);
   if (!isLiveHandle(world, state.playerId)) {
@@ -122,10 +127,16 @@ export function tick(state: GameState, action: Action): GameState {
       // time, and turn untouched; return the same wrapper for fast-eq.
       if (!inBounds(nx, ny, level.grid)) return state;
       if (getTile(level.grid, nx, ny) === TILE_WALL) return state;
-      // Phase 5 (bump-combat) will turn this branch into an ATTACK against
-      // the returned handle instead of refusing the move.
-      if (entityAt(world, nx, ny) !== undefined) return state;
-      setComponent(world, state.playerId, "position", { x: nx, y: ny });
+      // Bump-combat: stepping into an occupied tile resolves as an attack
+      // against the occupant instead of a refusal. Killed targets are
+      // despawned; their pending heap entry will be lazy-skipped on pop.
+      const target = entityAt(world, nx, ny);
+      if (target !== undefined) {
+        const result = attack(world, rng, target);
+        if (result.killed) despawn(world, target);
+      } else {
+        setComponent(world, state.playerId, "position", { x: nx, y: ny });
+      }
       consumeTurn(state);
       break;
     }
@@ -146,7 +157,19 @@ export function tick(state: GameState, action: Action): GameState {
     rngState: rng.state(),
     time: state.globalScheduler.now,
     turn: state.turn + 1,
+    gameOver: playerIsDead(state),
   };
+}
+
+/**
+ * Player death detection. Returns `true` iff the player's hp has hit zero.
+ * The player entity is never despawned — keeping it in the world lets the
+ * snapshot still report its last position next to the `gameOver` banner.
+ */
+function playerIsDead(state: GameState): boolean {
+  const hp = getComponent(activeWorld(state), state.playerId, "hp");
+  if (hp === undefined) return true;
+  return hp.current <= 0;
 }
 
 /**
@@ -173,6 +196,11 @@ export function tick(state: GameState, action: Action): GameState {
  */
 function drainNonPlayer(state: GameState, rng: Rng): void {
   while (true) {
+    // The drain finishes its timestamp regardless of the player's HP —
+    // every event the heap promised at the current `time` runs, in
+    // `(time, seq)` order. `attack` on a dead player is a clamped no-op,
+    // not a corruption. `gameOver` is computed once at the end of `tick`
+    // from the player's final HP.
     const next = peek(state.globalScheduler);
     if (next === undefined) return;
     if (isPlayerTurn(next, state)) return;
