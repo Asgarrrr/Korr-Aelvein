@@ -254,18 +254,39 @@ describe("tick: ENTER_ZONE — transition", () => {
     expect(hp).toEqual({ current: 4, max: 10 });
   });
 
-  test("schedules the player's next actor event at originalTime + ACTION_COST, immune to catchup", () => {
+  test("schedules the player's next actor event at popped + ACTION_COST on a fresh game", () => {
     const state = newGame(42, "rim");
     const target = dormantId(state);
-    // state.time = 0; ACTION_COST = 100. After ENTER_ZONE the player's next
-    // event must fire at time = 100, even if catchup-processing of dormant
-    // schedule events advanced scheduler.now in the middle.
+    // Tick 0 with newGame at seed=42: the player's current actor event is
+    // at time=0 (FIFO seq=0). pop advances scheduler.now to 0. New event
+    // scheduled at 0 + ACTION_COST = 100.
     const next = tick(state, { type: "ENTER_ZONE", zone: target });
     const pev = playerActorEvent(next);
     expect(pev).toBeDefined();
     if (pev !== undefined) {
       expect(pev.zone).toBe(target);
       expect(pev.time).toBe(100);
+    }
+  });
+
+  test("schedules the player's next event at popped + ACTION_COST when ENTER_ZONE follows a WAIT", () => {
+    // Regression: `playerNextTime` was originally computed *before* the
+    // player's pop, which is wrong for any tick where the previous tick's
+    // drain stopped at a `scheduler.now` strictly less than the player's
+    // current event time. WAIT → ENTER_ZONE is the minimal repro: after
+    // WAIT, scheduler.now = 0 (drain ends on the wanderers at time=0),
+    // but the player's current event is at time=100. Pre-pop arithmetic
+    // would give 0+100=100 (same time as the just-popped event, zero turn
+    // cost); post-pop arithmetic gives 100+100=200 (one ACTION_COST later,
+    // matching MOVE/WAIT semantics).
+    let s = newGame(42, "rim");
+    s = tick(s, { type: "WAIT" });
+    const target = dormantId(s);
+    s = tick(s, { type: "ENTER_ZONE", zone: target });
+    const pev = playerActorEvent(s);
+    expect(pev).toBeDefined();
+    if (pev !== undefined) {
+      expect(pev.time).toBe(200);
     }
   });
 });

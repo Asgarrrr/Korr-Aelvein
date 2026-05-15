@@ -166,10 +166,9 @@ function catchupDormant(
 /**
  * Orchestrate one zone transition. Pops the player's current actor event,
  * parks the current zone, concretizes the target, spawns the player in the
- * new world, schedules the player's next actor event at the original turn-
- * cost target (immune to catchup-induced `scheduler.now` advance), and
- * returns a rotated `GameState` wrapper with the new `activeZone` and
- * `playerId`.
+ * new world, schedules the player's next actor event one `actionCost`
+ * after the just-popped event's time, and returns a rotated `GameState`
+ * wrapper with the new `activeZone` and `playerId`.
  *
  * Returns the same `state` reference (no turn cost, no RNG advance) for
  * gameplay refusals: same-zone target, *and* unknown zone id — the latter
@@ -181,6 +180,14 @@ function catchupDormant(
  *
  * Hp is the only persistent player state carried across today. Future
  * inventory / xp / status effects extend this list in one place.
+ *
+ * **Turn-cost timing.** `playerNextTime` is captured *after* the player's
+ * `pop` — at that point `scheduler.now` equals the popped event's `time`,
+ * so `now + actionCost` is the same `T + actionCost` MOVE/WAIT would
+ * schedule. Park, concretize, and `scheduleAt` never advance
+ * `scheduler.now` (removeWhere + schedule(_, 0, _) are both push-only or
+ * filter-only), so this captured value stays correct through the rest of
+ * `enterZone`.
  *
  * **Atomicity note.** `findPlayerSpawnCell` runs *before* `parkActiveZone`
  * / `concretize` so a level-degeneracy throw can't poison the session's
@@ -209,8 +216,8 @@ export function enterZone(
     throw new Error("enterZone: player has no hp component");
   }
   const spawnCell = findPlayerSpawnCell(targetZone.level, targetZone.world);
-  const playerNextTime = state.globalScheduler.now + actionCost;
   pop(state.globalScheduler);
+  const playerNextTime = state.globalScheduler.now + actionCost;
   parkActiveZone(state, state.activeZone);
   concretize(state, target);
 
