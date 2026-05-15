@@ -133,6 +133,14 @@ function spawnVillageZone(
     );
   }
   const taken = new Set<string>();
+  // Reserve `level.spawn` for the arriving player. `enterZone`
+  // pre-computes the player's spawn cell *before* `concretize` runs
+  // catchupDormant — if a Schedule waypoint included `level.spawn`,
+  // catchup could move an NPC onto the pre-computed cell and the player
+  // would land on top of them on entry.
+  if (level.spawn !== null) {
+    taken.add(cellKey(level.spawn[0], level.spawn[1]));
+  }
   const homeCell = pickFreeFloor(rng, floors, taken);
   taken.add(cellKey(homeCell[0], homeCell[1]));
   const counterCell = pickFreeFloor(rng, floors, taken);

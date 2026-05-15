@@ -84,7 +84,9 @@ type GlobalEvent =
 shipped** the `active` / `dormant` discriminator, the `GlobalEvent.schedule`
 variant, the abstract resolver pipeline (`game/abstract.ts`), and a first
 dormant village zone with a shopkeeper NPC oscillating between home and
-counter on a fixed period.
+counter on a fixed period. **Phase 6 shipped** the zone-transition primitives
+(`parkActiveZone` / `concretize` / `enterZone`) and the `Action.ENTER_ZONE`
+inbound action that ties them to the tick reducer.
 
 ### The NPC `Schedule` component
 
@@ -146,30 +148,95 @@ trivially testable in isolation.
    pattern degenerates into either CDDA's missing-offstage-AI bug class or
    into full simulation in disguise.
 
-2. **`parkActiveZone` / `concretize`** — transitions between active and
-   dormant. Leaving a zone: convert each in-flight actor turn into a
-   `schedule`-kind global event. Entering a zone: drain due events,
-   re-hydrate per-actor turn entries on a fresh per-zone scheduler.
+2. **`parkActiveZone` / `concretize` / `enterZone`** — transitions between
+   active and dormant. Live in `apps/server/src/domain/game/transition.ts`.
+   See the "Zone transitions (Phase 6)" section below for the actual shape.
 
 3. **Global `time`.** `state.time` is the monotonic clock all events
    reference. `scheduler.now` becomes a local heap detail.
 
-### Zone-entry catchup (sketch)
+### Zone transitions (Phase 6)
+
+`game/transition.ts` exports three primitives:
 
 ```ts
-function enterZone(s: GameState, next: ZoneId): GameState {
-  parkActiveZone(s);
-  while (peekDueFor(s.globalScheduler, next, s.time)) {
-    const evt = pop(s.globalScheduler);
-    applyAbstract(s, evt); // pure; persists rngState through s
-  }
-  concretize(s, next);
-  return s;
-}
+parkActiveZone(state: GameState, id: ZoneId): void
+concretize(state: GameState, id: ZoneId): void
+enterZone(state: GameState, target: ZoneId, actionCost: number): GameState
 ```
 
-The drain is `O(events due for next since lastSimAt)` — **not** `O(time ×
-entities)`. Sparse-wakeup workload fits the heap exactly.
+The orchestrator is `enterZone`; `parkActiveZone` and `concretize` are
+exported so each lifecycle half can be tested in isolation.
+
+**`parkActiveZone(state, id)`** — `id` must currently be `active`:
+
+1. Despawn the player from the parked world (caller has already read any
+   persistent components like `hp` it needs to carry across).
+2. Drop every `actor` event for `id` from the global heap (player's and
+   in-bubble NPCs').
+3. For every entity in `id`'s world that carries a `Schedule`, push a
+   fresh `schedule` event at `state.time + period`. This is what lets the
+   shopkeeper resume cycling once the village goes dormant again.
+4. Flip the status to `{ kind: "dormant", world, level, lastSimAt: state.time }`.
+
+Active-zone NPCs without a `Schedule` (today: wanderers) **freeze** — no
+events, world state preserved. NPCs with a `Schedule` resume on a fresh
+`period`-tick clock; partial-period carry-over from the in-bubble phase is
+not tracked.
+
+**`concretize(state, id)`** — `id` must currently be `dormant`:
+
+1. Catchup: pop every `schedule` event for `id` with `time <= state.time`
+   in `(time, seq)` order, apply each via `applyAbstract`, advance
+   `lastSimAt` to the highest applied time.
+2. Drop remaining `schedule` events for `id` from the heap (they would
+   throw in `drainNonPlayer` once the zone is active).
+3. Flip the status to `{ kind: "active", world, level }`.
+4. For every entity in `id`'s world with an `Ai` component, push an
+   `actor` event at `state.time` (resume in-bubble ticking).
+
+Catchup is mostly defensive in the current architecture: `drainNonPlayer`
+processes dormant `schedule` events continuously, so `lastSimAt` for the
+soon-to-be-active zone is typically already `state.time`. Pinning the
+contract keeps the design safe under future drain refactors.
+
+NPCs with only a `Schedule` (today: shopkeeper) become **inert** when their
+zone is active — schedule events dropped, no actor events added, world
+state preserved.
+
+**`enterZone(state, target, actionCost)`** — full transition:
+
+1. Refuse silently (return the same `state` reference) when `target ===
+   state.activeZone`.
+2. Throw when `target` is unknown or not dormant.
+3. Read `hp` off the player in the old world (the only persistent player
+   component carried today).
+4. Record `playerNextTime = scheduler.now + actionCost` *before* any heap
+   mutation — catchup advances `scheduler.now`, so a relative `delay`
+   computed afterwards would shift the player's next slot.
+5. `pop` the player's current actor event off the heap.
+6. `parkActiveZone(state, state.activeZone)`.
+7. `concretize(state, target)`.
+8. `spawn` the player in the target world at `level.spawn` (or the first
+   free floor cell if a frozen NPC happens to be standing on it), with the
+   carried `hp`.
+9. `scheduleAt(scheduler, playerNextTime, …)` — the player's actor event
+   at the original turn-cost target, immune to catchup-induced
+   `scheduler.now` advance.
+10. Rotate the wrapper: `{ ...state, activeZone: target, playerId: newId }`.
+
+The drain in `tick` then runs on the rotated wrapper and re-establishes the
+"player on heap top" invariant before returning.
+
+### Heap invariants after a transition
+
+- No `actor` event references a dormant zone.
+- No `schedule` event references an active zone.
+- The player's actor event sits at `time = previousTime + ACTION_COST`
+  regardless of how many catchup events fired in between.
+
+The first two are pinned by `parkActiveZone` and `concretize` respectively;
+`drainNonPlayer` enforces them at runtime by throwing on a violation.
 
 ## Phasing
 
@@ -180,7 +247,7 @@ entities)`. Sparse-wakeup workload fits the heap exactly.
 | 3 | Multi-zone `GameState` shape, **single zone for now** (the donjon) — no village, no abstract events yet | done (PR #10) |
 | 4 | First scheduled NPC abstract (shopkeeper home / counter oscillation) + `active` / `dormant` discriminator + abstract-resolver pipeline validated end-to-end | done |
 | 5 | Bump-combat (`MOVE` into actor → `ATTACK`, hp damage via `rng.int`, despawn on hp ≤ 0, `gameOver` in snapshot) | done |
-| 6 | Zone transition: player travels donjon ↔ village. Concretise on entry, park on exit (the `parkActiveZone` / `concretize` sketch above). | planned |
+| 6 | Zone transition: player travels donjon ↔ village. `parkActiveZone` / `concretize` / `enterZone` orchestrator + `Action.ENTER_ZONE` wired through tick. | done |
 | later | More NPC variants, weather / world events, time-of-day, multi-floor descent | planned |
 
 **Phase 3 is structural-only.** Get the shape (`zones: Map`,

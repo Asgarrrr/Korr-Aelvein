@@ -115,16 +115,22 @@ the heap.
 
 ## The tick reducer (Phase 2)
 
-`tick(state, action)` lives in `apps/server/src/domain/game/tick.ts`. Two
+`tick(state, action)` lives in `apps/server/src/domain/game/tick.ts`. Three
 action variants today:
 
 ```ts
 type Action =
   | { readonly type: "MOVE"; readonly dir: "n" | "e" | "s" | "w" }
-  | { readonly type: "WAIT" };
+  | { readonly type: "WAIT" }
+  | { readonly type: "ENTER_ZONE"; readonly zone: ZoneId };
 
 const ACTION_COST = 100; // 1 "turn" = 100 ticks; speed variants land as smaller / larger costs
 ```
+
+`ENTER_ZONE` is the only action that rotates `state.activeZone` and
+`state.playerId`. Its semantics — park the current zone, concretize the
+target, teleport the player — live in `game/transition.ts`; see
+`docs/LIVING-WORLD.md` § "Zone transitions (Phase 6)" for the contract.
 
 Algorithm:
 

@@ -24,7 +24,7 @@ apps/
         scheduler/    Min-heap turn scheduler — see `docs/GAME-LOOP.md`.
           index.ts                          emptyScheduler / schedule / peek / pop / size.
           tests/                            index + properties (heap invariants, ties, sort-drain).
-        game/         Turn-based game loop — see `docs/GAME-LOOP.md` (Phase 1-2) and `docs/LIVING-WORLD.md` (Phase 3-5+).
+        game/         Turn-based game loop — see `docs/GAME-LOOP.md` (Phase 1-2) and `docs/LIVING-WORLD.md` (Phase 3-6+).
           index.ts                          public barrel.
           types.ts                          ZoneId / Time / ZoneStatus / GlobalEvent / GameState / Action / Dir.
           newGame.ts                        newGame + spawnDonjonZone + spawnVillageZone.
@@ -33,7 +33,8 @@ apps/
           ai.ts                             runAi dispatcher (in-bubble) + per-kind handlers (wanderer).
           abstract.ts                       applyAbstract (off-zone NPC schedules — Phase 4).
           combat.ts                         attack (Phase 5 bump-combat, pure-on-world).
-          tests/                            tick + wanderer + village + combat.
+          transition.ts                     parkActiveZone + concretize + enterZone (Phase 6 zone transitions).
+          tests/                            tick + wanderer + village + combat + transition.
         dungeon/      Procgen — see `docs/PROCGEN.md` for the full story.
           types.ts, grid.ts, index.ts       Level/Tile types, flat-array helpers, public surface.
           tests/                            grid / index / properties — foundation + adversarial.
@@ -94,7 +95,7 @@ turbo.json            Build / dev / test / check-types tasks.
 
 ### `apps/server/src/domain/scheduler`
 
-- **Public API**: `emptyScheduler()`, `schedule(s, delay, handle)`, `peek(s)`, `pop(s)`, `size(s)`, types `Scheduler` / `ScheduledEvent`.
+- **Public API**: `emptyScheduler()`, `schedule(s, delay, payload)`, `scheduleAt(s, time, payload)`, `peek(s)`, `pop(s)`, `size(s)`, `removeWhere(s, predicate)`, types `Scheduler` / `ScheduledEvent`. `scheduleAt` and `removeWhere` land with Phase 6 zone transitions — absolute-time scheduling so the player's next-turn slot survives catchup-induced `now` advance, and a one-shot batch delete for events tied to a parking / concretising zone.
 - **Algorithm**: binary min-heap keyed on `(time, seq)`. Insertion-order `seq` (owned by the scheduler, not derived from `World` column layout) breaks `time` ties deterministically.
 - **Mutation model**: mirrors `World`. `Scheduler` is mutated in place; the surrounding `GameState` wrapper rotates per tick.
 - **Stale handles**: lazy skip on pop. `pop` always advances `now` to the popped event's `time`, even when the event is stale. Eager removal would be O(n) in a binary heap and isn't worth it at our entity scale.
@@ -103,7 +104,7 @@ turbo.json            Build / dev / test / check-types tasks.
 
 ### `apps/server/src/domain/game`
 
-- **Public API**: `newGame(seed, style)`, `tick(state, action)`, `attack(world, rng, target)`, `entityAt(world, x, y)`, `runAi(state, rng, handle)`, `applyAbstract(zone, entity)`, `getZone / activeZoneStatus / activeWorld / activeLevel`, types `GameState` / `Action` / `Dir` / `ZoneId` / `ZoneStatus` / `GlobalEvent` / `Time` / `AttackResult`. `Ai` and `Schedule` are component types — import from `domain/ecs/index` (only `Ai` is re-exported there today; `Schedule` lives on the component but isn't surfaced until a caller needs it).
+- **Public API**: `newGame(seed, style)`, `tick(state, action)`, `attack(world, rng, target)`, `entityAt(world, x, y)`, `runAi(state, rng, handle)`, `applyAbstract(zone, entity)`, `parkActiveZone(state, id)`, `concretize(state, id)`, `enterZone(state, target, actionCost)`, `getZone / activeZoneStatus / activeWorld / activeLevel`, types `GameState` / `Action` / `Dir` / `ZoneId` / `ZoneStatus` / `GlobalEvent` / `Time` / `AttackResult`. `Ai` and `Schedule` are component types — import from `domain/ecs/index` (only `Ai` is re-exported there today; `Schedule` lives on the component but isn't surfaced until a caller needs it).
 - **Multi-zone shape**: `GameState.zones: Map<ZoneId, ZoneStatus>` with one `active` zone and zero or more `dormant` zones. `globalScheduler: Scheduler<GlobalEvent>` carries actor turns *and* schedule events on a single timeline.
 - **Loop shape**: pure-ish reducer `(state, action) → state`. RNG is hydrated once per tick from `state.rngState`, threaded through the action and the drain loop, persisted back to the returned wrapper.
 - **Drain dispatch**: `drainNonPlayer` switches on `GlobalEvent.kind` — `actor` runs `runAi` (in-bubble AI), `schedule` runs `applyAbstract` (off-zone NPC). A `never` exhaustiveness sentinel forces new variants to land alongside their dispatcher.
