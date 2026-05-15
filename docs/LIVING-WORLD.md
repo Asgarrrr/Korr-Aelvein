@@ -179,7 +179,7 @@ entities)`. Sparse-wakeup workload fits the heap exactly.
 | 2 | Wanderer mob + drain loop + first AI | done (PR #8) |
 | 3 | Multi-zone `GameState` shape, **single zone for now** (the donjon) — no village, no abstract events yet | done (PR #10) |
 | 4 | First scheduled NPC abstract (shopkeeper home / counter oscillation) + `active` / `dormant` discriminator + abstract-resolver pipeline validated end-to-end | done |
-| 5 | Bump-combat (`MOVE` into actor → `ATTACK`, hp damage via `rng.int`, despawn on hp ≤ 0, `gameOver` in snapshot) | planned |
+| 5 | Bump-combat (`MOVE` into actor → `ATTACK`, hp damage via `rng.int`, despawn on hp ≤ 0, `gameOver` in snapshot) | done |
 | 6 | Zone transition: player travels donjon ↔ village. Concretise on entry, park on exit (the `parkActiveZone` / `concretize` sketch above). | planned |
 | later | More NPC variants, weather / world events, time-of-day, multi-floor descent | planned |
 

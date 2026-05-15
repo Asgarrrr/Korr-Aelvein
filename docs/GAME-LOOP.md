@@ -215,10 +215,13 @@ The 2026 audit found this fine below ~1000 actors. Per-zone we sit at
 planned swap is a `Map<cellKey, EntityHandle>` maintained in
 `setComponent("position")`.
 
-The "one actor per tile" invariant is structural — enforced uniformly by
-player MOVE refusal **and** wanderer step refusal. Phase 5 bump-combat
-will replace the player's refusal branch with an `ATTACK` against the
-handle `entityAt` already returns; the wanderer's branch stays a refusal.
+The "one actor per tile" invariant becomes a bump-combat trigger as of
+Phase 5: the player's MOVE branch attacks the occupant instead of
+refusing, and a wanderer that rolls into the player's tile attacks
+instead of stepping. Wanderer-vs-wanderer still refuses (no factions yet).
+Combat lives in `game/combat.ts` (`attack(world, rng, target) → {damage,
+killed}`); `gameOver` is computed at end of each tick from the player's
+HP and surfaced through the WS snapshot.
 
 ## RNG threading
 

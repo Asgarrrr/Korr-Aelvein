@@ -8,9 +8,10 @@ import {
   getComponent,
   isLiveHandle,
   removeComponent,
+  setComponent,
   spawn,
 } from "../../ecs/index";
-import type { RngState } from "../../rng/index";
+import { createRng, type RngState } from "../../rng/index";
 import { emptyScheduler, schedule, size } from "../../scheduler/index";
 import {
   activeWorld,
@@ -190,6 +191,7 @@ describe("tick: occupancy refusal", () => {
     const playerId = spawn(world, {
       position: { x: playerXY[0], y: playerXY[1] },
       actor: { glyph: "@", name: "you" },
+      hp: { current: 10, max: 10 },
     });
     const globalScheduler = emptyScheduler<GlobalEvent>();
     schedule(globalScheduler, 0, {
@@ -202,6 +204,7 @@ describe("tick: occupancy refusal", () => {
         position: { x: wx, y: wy },
         actor: { glyph: "r", name: "wanderer" },
         ai: { kind: "wanderer" },
+        hp: { current: 3, max: 3 },
       });
       schedule(globalScheduler, 0, {
         kind: "actor",
@@ -223,23 +226,41 @@ describe("tick: occupancy refusal", () => {
       rngState,
       time: 0,
       turn: 0,
+      gameOver: false,
     };
   }
 
-  test("player MOVE into a wanderer's tile is refused (same reference, no turn cost)", () => {
+  test("player MOVE into a wanderer's tile attacks the wanderer (no position change, turn consumed)", () => {
     const state = makeCorridorState([2, 1], [[3, 1]], [1, 2, 3, 4]);
-    const next = tick(state, { type: "MOVE", dir: "e" });
-    expect(next).toBe(state);
-    expect(
-      getComponent(activeWorld(state), state.playerId, "position"),
-    ).toEqual({
-      x: 2,
-      y: 1,
+    let wandererHandle: { id: number; gen: number } | undefined;
+    forQuery(activeWorld(state), ["ai"], (handle) => {
+      if (wandererHandle === undefined) {
+        wandererHandle = { id: handle.id, gen: handle.gen };
+      }
     });
+    if (wandererHandle === undefined) {
+      throw new Error("test: wanderer not found");
+    }
+    const next = tick(state, { type: "MOVE", dir: "e" });
+    // Bump-combat: the player's tile is unchanged, but the wanderer took
+    // damage and the player's turn was consumed (turn ticks +1).
+    expect(getComponent(activeWorld(next), state.playerId, "position")).toEqual(
+      { x: 2, y: 1 },
+    );
+    expect(next.turn).toBe(1);
+    const hp = getComponent(activeWorld(next), wandererHandle, "hp");
+    expect(hp).toBeDefined();
+    if (hp !== undefined) {
+      expect(hp.current).toBeLessThan(3);
+    }
   });
 
   test("two wanderers in a 3-cell corridor never end up co-located", () => {
     // Player off to one side, two wanderers in the middle three cells.
+    // The corridor is narrow enough that wanderers can reach the player,
+    // and Phase 5 bump-combat would normally let them attack — give the
+    // player invulnerably high HP so the wanderer-vs-wanderer collision
+    // assertion below runs uninterrupted by a game-over.
     let s = makeCorridorState(
       [1, 1],
       [
@@ -248,6 +269,10 @@ describe("tick: occupancy refusal", () => {
       ],
       [9, 8, 7, 6],
     );
+    setComponent(activeWorld(s), s.playerId, "hp", {
+      current: 10_000,
+      max: 10_000,
+    });
     // Capture the two wanderer handles before any tick mutates the world.
     const wanderers: Array<{ id: number; gen: number }> = [];
     forQuery(activeWorld(s), ["ai"], (handle) => {
@@ -274,4 +299,47 @@ describe("tick: occupancy refusal", () => {
       expect(`${p1.x},${p1.y}`).not.toBe(`${p2.x},${p2.y}`);
     }
   });
+
+  test("a wanderer adjacent to the player attacks on the first west roll", () => {
+    // Deterministic setup: player at (1, 1), wanderer at (2, 1). The
+    // wanderer's only walkable directions are E (step to x=3) and W
+    // (player tile = attack). The first WAIT consumes exactly one
+    // `rng.int(0, 3)` inside `runWanderer`; if the roll points west the
+    // attack lands and the player's HP drops by 1-3 in a single tick.
+    //
+    // We find a seed whose first roll is W rather than asserting over a
+    // statistical loop — every other RNG-touching test in this codebase
+    // is deterministic, and a `(0.75)^N → 0` argument is not the right
+    // standard for a determinism-first reducer.
+    const seed = findFirstWestSeed();
+    const s = makeCorridorState([1, 1], [[2, 1]], createRng(seed).state());
+    expect(getComponent(activeWorld(s), s.playerId, "hp")?.current).toBe(10);
+    const next = tick(s, { type: "WAIT" });
+    const hpAfter = getComponent(activeWorld(next), s.playerId, "hp")?.current;
+    expect(hpAfter).toBeLessThan(10);
+    expect(hpAfter).toBeGreaterThanOrEqual(10 - 3);
+  });
+
+  /**
+   * Iterate small integer seeds until one makes the wanderer at (2, 1)
+   * bump the player at (1, 1) on the first tick. Searched at test time
+   * rather than baked as a magic literal so the search re-converges if
+   * the upstream RNG ever changes instead of silently returning a stale
+   * seed.
+   */
+  function findFirstWestSeed(): number {
+    for (let seed = 1; seed < 10_000; seed++) {
+      const state = makeCorridorState(
+        [1, 1],
+        [[2, 1]],
+        createRng(seed).state(),
+      );
+      const next = tick(state, { type: "WAIT" });
+      const hp = getComponent(activeWorld(next), state.playerId, "hp")?.current;
+      if (hp !== undefined && hp < 10) return seed;
+    }
+    throw new Error(
+      "findFirstWestSeed: no seed in [1, 10000) triggers a wanderer attack on tick 1",
+    );
+  }
 });

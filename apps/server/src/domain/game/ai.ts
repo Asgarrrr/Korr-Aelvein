@@ -1,6 +1,12 @@
 import { DX4, DY4, getTile, inBounds, TILE_WALL } from "../dungeon/index";
-import { type EntityHandle, getComponent, setComponent } from "../ecs/index";
+import {
+  type EntityHandle,
+  getComponent,
+  sameHandle,
+  setComponent,
+} from "../ecs/index";
 import type { Rng } from "../rng/index";
+import { attack } from "./combat";
 import { activeLevel, activeWorld, entityAt } from "./state";
 import type { GameState } from "./types";
 
@@ -54,6 +60,18 @@ function runWanderer(state: GameState, rng: Rng, handle: EntityHandle): void {
   const ny = pos.y + dy;
   if (!inBounds(nx, ny, level.grid)) return;
   if (getTile(level.grid, nx, ny) === TILE_WALL) return;
-  if (entityAt(world, nx, ny) !== undefined) return;
+  const target = entityAt(world, nx, ny);
+  if (target !== undefined) {
+    // Bump-combat with restricted scope: a wanderer attacks only the
+    // player. Wanderer-vs-wanderer (and, when concretised village NPCs
+    // arrive, wanderer-vs-shopkeeper) stays a step refusal — no faction
+    // or hostility component yet, so unprompted infighting would look
+    // like a bug. When Phase 6+ introduces hostility relations, replace
+    // the `sameHandle` check with the predicate.
+    if (sameHandle(target, state.playerId)) {
+      attack(world, rng, target);
+    }
+    return;
+  }
   setComponent(world, handle, "position", { x: nx, y: ny });
 }

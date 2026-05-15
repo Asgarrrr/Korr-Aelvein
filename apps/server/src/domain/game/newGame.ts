@@ -58,6 +58,7 @@ export function newGame(seed: number, style: StyleId): GameState {
     rngState: rng.state(),
     time: 0,
     turn: 0,
+    gameOver: false,
   };
 }
 
@@ -98,6 +99,7 @@ function spawnDonjonZone(
       position: { x: wx, y: wy },
       actor: { glyph: "r", name: "wanderer" },
       ai: { kind: "wanderer" },
+      hp: { current: 3, max: 3 },
     });
     schedule(globalScheduler, 0, {
       kind: "actor",

@@ -4,9 +4,12 @@ import { getTile, TILE_FLOOR } from "../../dungeon/index";
 import {
   despawn,
   emptyWorld,
+  forQuery,
   getComponent,
+  isLiveHandle,
   type Position,
   removeComponent,
+  setComponent,
   spawn,
 } from "../../ecs/index";
 import type { RngState } from "../../rng/index";
@@ -49,7 +52,10 @@ function makeBoxLevel(): Level {
 function makeState(level: Level, x: number, y: number): GameState {
   const rngState: RngState = [1, 2, 3, 4];
   const world = emptyWorld();
-  const playerId = spawn(world, { position: { x, y } });
+  const playerId = spawn(world, {
+    position: { x, y },
+    hp: { current: 10, max: 10 },
+  });
   const globalScheduler = emptyScheduler<GlobalEvent>();
   schedule(globalScheduler, 0, {
     kind: "actor",
@@ -66,6 +72,7 @@ function makeState(level: Level, x: number, y: number): GameState {
     rngState,
     time: 0,
     turn: 0,
+    gameOver: false,
   };
 }
 
@@ -185,6 +192,102 @@ describe("tick: MOVE", () => {
     expect(next).toBe(state);
     expect(state.globalScheduler.heap.length).toBe(1);
     expect(state.globalScheduler.heap[0]).toEqual(before);
+  });
+});
+
+describe("tick: bump-combat", () => {
+  function makeArenaState(): GameState {
+    // 5x5 box, player at (2,2), wanderer at (3,2). The player can MOVE east
+    // to bump-attack; nothing else inhabits the world.
+    const world = emptyWorld();
+    const playerId = spawn(world, {
+      position: { x: 2, y: 2 },
+      hp: { current: 10, max: 10 },
+    });
+    const wanderer = spawn(world, {
+      position: { x: 3, y: 2 },
+      actor: { glyph: "r", name: "wanderer" },
+      ai: { kind: "wanderer" },
+      hp: { current: 3, max: 3 },
+    });
+    const globalScheduler = emptyScheduler<GlobalEvent>();
+    schedule(globalScheduler, 0, {
+      kind: "actor",
+      zone: DONJON_ZONE,
+      entity: playerId,
+    });
+    // Wanderer scheduled far in the future so the test's single tick can
+    // never trigger the AI dispatch — we want to isolate the player's MOVE
+    // semantics, not interleave random wanderer behaviour.
+    schedule(globalScheduler, 1_000_000, {
+      kind: "actor",
+      zone: DONJON_ZONE,
+      entity: wanderer,
+    });
+    const zones = new Map<ZoneId, ZoneStatus>();
+    zones.set(DONJON_ZONE, { kind: "active", world, level: makeBoxLevel() });
+    return {
+      zones,
+      activeZone: DONJON_ZONE,
+      playerId,
+      globalScheduler,
+      rngState: [1, 2, 3, 4],
+      time: 0,
+      turn: 0,
+      gameOver: false,
+    };
+  }
+
+  test("MOVE into a wanderer's tile deals damage instead of moving", () => {
+    const state = makeArenaState();
+    let wanderer: { id: number; gen: number } | undefined;
+    forQuery(activeWorld(state), ["ai"], (h) => {
+      if (wanderer === undefined) wanderer = { id: h.id, gen: h.gen };
+    });
+    if (wanderer === undefined) throw new Error("test: wanderer not found");
+    const beforeHp = getComponent(activeWorld(state), wanderer, "hp");
+    expect(beforeHp?.current).toBe(3);
+    const next = tick(state, { type: "MOVE", dir: "e" });
+    expect(playerPos(next)).toEqual({ x: 2, y: 2 });
+    expect(next.turn).toBe(1);
+    const afterHp = getComponent(activeWorld(next), wanderer, "hp");
+    expect(afterHp?.current).toBeLessThan(3);
+    expect(afterHp?.current).toBeGreaterThanOrEqual(0);
+  });
+
+  test("killing a wanderer via MOVE despawns it and lazy-skips its heap slot", () => {
+    let state = makeArenaState();
+    // Drop wanderer hp to 1 so any roll kills it.
+    let wanderer: { id: number; gen: number } | undefined;
+    forQuery(activeWorld(state), ["ai"], (h) => {
+      if (wanderer === undefined) wanderer = { id: h.id, gen: h.gen };
+    });
+    if (wanderer === undefined) throw new Error("test: wanderer not found");
+    setComponent(activeWorld(state), wanderer, "hp", { current: 1, max: 3 });
+    state = tick(state, { type: "MOVE", dir: "e" });
+    expect(isLiveHandle(activeWorld(state), wanderer)).toBe(false);
+    expect(state.gameOver).toBe(false);
+  });
+
+  test("gameOver becomes true once the player's hp reaches zero", () => {
+    const state = makeArenaState();
+    // Pre-set hp to zero (whatever inflicted the damage isn't the point of
+    // this test — the bump-attack path is covered by the "damage instead
+    // of moving" test above). The end-of-tick `playerIsDead` check is what
+    // we want to exercise.
+    setComponent(activeWorld(state), state.playerId, "hp", {
+      current: 0,
+      max: 10,
+    });
+    expect(state.gameOver).toBe(false);
+    const next = tick(state, { type: "WAIT" });
+    expect(next.gameOver).toBe(true);
+  });
+
+  test("after gameOver, further tick calls throw", () => {
+    const state = makeArenaState();
+    const dead: GameState = { ...state, gameOver: true };
+    expect(() => tick(dead, { type: "WAIT" })).toThrow(/run is over/);
   });
 });
 

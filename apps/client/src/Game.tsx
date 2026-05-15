@@ -16,11 +16,18 @@ const KEY_DIR: Record<string, "n" | "e" | "s" | "w"> = {
   a: "w",
 };
 
+type Snapshot = {
+  turn: number;
+  gameOver: boolean;
+  hp: { current: number; max: number };
+  grid: string;
+};
+
 function Game() {
   const [status, setStatus] = useState<"connecting" | "open" | "closed">(
     "connecting",
   );
-  const [snapshot, setSnapshot] = useState<string | null>(null);
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
 
   useEffect(() => {
     const game = client.game.subscribe();
@@ -49,7 +56,12 @@ function Game() {
         }
         rows.push(row);
       }
-      setSnapshot(`turn ${data.turn}\n\n${rows.join("\n")}`);
+      setSnapshot({
+        turn: data.turn,
+        gameOver: data.gameOver,
+        hp: data.player.hp,
+        grid: rows.join("\n"),
+      });
     });
     game.on("close", () => setStatus("closed"));
 
@@ -76,8 +88,14 @@ function Game() {
     <main style={{ fontFamily: "system-ui", padding: 24 }}>
       <h1>Korr Aelvein</h1>
       <p>Status: {status}</p>
+      {snapshot !== null && (
+        <p>
+          Turn {snapshot.turn} — HP {snapshot.hp.current} / {snapshot.hp.max}
+          {snapshot.gameOver && " — GAME OVER"}
+        </p>
+      )}
       <pre style={{ fontSize: 11, maxHeight: 600, overflow: "auto" }}>
-        {snapshot}
+        {snapshot?.grid ?? ""}
       </pre>
     </main>
   );

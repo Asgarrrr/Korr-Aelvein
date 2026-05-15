@@ -28,7 +28,12 @@ const bodySchema = t.Union([
 const responseSchema = t.Object({
   type: t.Literal("state"),
   turn: t.Number(),
-  player: t.Object({ x: t.Number(), y: t.Number() }),
+  gameOver: t.Boolean(),
+  player: t.Object({
+    x: t.Number(),
+    y: t.Number(),
+    hp: t.Object({ current: t.Number(), max: t.Number() }),
+  }),
   mobs: t.Array(
     t.Object({
       x: t.Number(),
@@ -66,12 +71,16 @@ function toPair(pt: readonly [number, number]): [number, number] {
 }
 
 function toSnapshot(state: GameState): Snapshot {
-  const { playerId, turn } = state;
+  const { playerId, turn, gameOver } = state;
   const world = activeWorld(state);
   const level = activeLevel(state);
   const pos = getComponent(world, playerId, "position");
   if (pos === undefined) {
     throw new Error("toSnapshot: player entity has no position component");
+  }
+  const hp = getComponent(world, playerId, "hp");
+  if (hp === undefined) {
+    throw new Error("toSnapshot: player entity has no hp component");
   }
   const mobs: Array<{ x: number; y: number; glyph: string }> = [];
   // `ai` filter excludes the player (who has no AI component) — no need
@@ -85,7 +94,8 @@ function toSnapshot(state: GameState): Snapshot {
   return {
     type: "state",
     turn,
-    player: { x: pos.x, y: pos.y },
+    gameOver,
+    player: { x: pos.x, y: pos.y, hp: { current: hp.current, max: hp.max } },
     mobs,
     level: {
       grid: {
@@ -122,6 +132,12 @@ export function createApp() {
       message(ws, action) {
         const state = sessions.get(ws.id);
         if (state === undefined) return;
+        // Game over: drop inbound actions on the floor. The client already
+        // has the terminal snapshot (the one that flipped `gameOver` to
+        // true); re-emitting the same payload on every keystroke would be
+        // noise. The state machine stays frozen until the connection
+        // closes.
+        if (state.gameOver) return;
         const next = tick(state, action);
         sessions.set(ws.id, next);
         ws.send(toSnapshot(next));
