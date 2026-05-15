@@ -22,7 +22,7 @@ function h(id: number, gen = 0): EntityHandle {
 // Naive reference: keep events sorted by (time, seq) ascending. Always
 // correct, never fast. Mirrors `Scheduler` semantics.
 type Ref = {
-  list: ScheduledEvent[];
+  list: ScheduledEvent<EntityHandle>[];
   now: number;
   nextSeq: number;
 };
@@ -31,11 +31,11 @@ function refEmpty(): Ref {
   return { list: [], now: 0, nextSeq: 0 };
 }
 
-function refSchedule(r: Ref, delay: number, handle: EntityHandle): void {
-  const ev: ScheduledEvent = {
+function refSchedule(r: Ref, delay: number, payload: EntityHandle): void {
+  const ev: ScheduledEvent<EntityHandle> = {
     time: r.now + delay,
     seq: r.nextSeq,
-    handle,
+    payload,
   };
   r.nextSeq += 1;
   let insertAt = r.list.length;
@@ -48,7 +48,7 @@ function refSchedule(r: Ref, delay: number, handle: EntityHandle): void {
   r.list.splice(insertAt, 0, ev);
 }
 
-function refPop(r: Ref): ScheduledEvent | undefined {
+function refPop(r: Ref): ScheduledEvent<EntityHandle> | undefined {
   const head = r.list.shift();
   if (head === undefined) return undefined;
   r.now = head.time;
@@ -59,7 +59,7 @@ function refPop(r: Ref): ScheduledEvent | undefined {
 // index that violates it relative to its parent. Throws if it encounters
 // a hole in the heap — `Scheduler.heap` is typed `ScheduledEvent[]` so a
 // hole is a real bug worth surfacing loudly, not a "no violation found".
-function findHeapViolation(s: Scheduler): number {
+function findHeapViolation<T>(s: Scheduler<T>): number {
   const heap = s.heap;
   for (const [i, cur] of heap.entries()) {
     if (cur === undefined) {
@@ -94,7 +94,7 @@ function makeLcg(seed: number): () => number {
 }
 
 function runCrossCheck(seed: number, steps: number, delayMod: number): void {
-  const real = emptyScheduler();
+  const real = emptyScheduler<EntityHandle>();
   const ref = refEmpty();
   const rand = makeLcg(seed);
   let scheduled = 0;
@@ -151,7 +151,7 @@ describe("scheduler — property tests vs sorted-array reference", () => {
   });
 
   test("schedule N then drain N reproduces (time, seq) sorted order", () => {
-    const s = emptyScheduler();
+    const s = emptyScheduler<EntityHandle>();
     const rand = makeLcg(0xdeadbeef);
     const N = 1000;
     const inserted: Array<{ time: number; seq: number; id: number }> = [];
@@ -169,7 +169,7 @@ describe("scheduler — property tests vs sorted-array reference", () => {
       if (e === undefined) {
         throw new Error("pop returned undefined while size > 0");
       }
-      popped.push({ time: e.time, seq: e.seq, id: e.handle.id });
+      popped.push({ time: e.time, seq: e.seq, id: e.payload.id });
       expect(findHeapViolation(s)).toBe(-1);
     }
     inserted.sort((a, b) =>
@@ -181,7 +181,7 @@ describe("scheduler — property tests vs sorted-array reference", () => {
   test("pure tiebreak: 1000 events at delay 0 pop in strict seq order", () => {
     // The only configuration where every comparison falls through to the seq
     // tiebreak — wide-delay tests bury this path under time variation.
-    const s = emptyScheduler();
+    const s = emptyScheduler<EntityHandle>();
     const N = 1000;
     for (let i = 0; i < N; i++) {
       schedule(s, 0, h(i));
@@ -192,7 +192,7 @@ describe("scheduler — property tests vs sorted-array reference", () => {
       if (e === undefined) {
         throw new Error(`pop returned undefined at i=${i} while size > 0`);
       }
-      expect(e.handle.id).toBe(i);
+      expect(e.payload.id).toBe(i);
       expect(e.seq).toBe(i);
       expect(e.time).toBe(0);
     }

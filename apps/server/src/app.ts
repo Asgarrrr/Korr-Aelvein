@@ -1,7 +1,7 @@
 import { Elysia, t } from "elysia";
 import { forQuery, getComponent } from "./domain/ecs/index";
 import type { GameState } from "./domain/game/state";
-import { newGame } from "./domain/game/state";
+import { activeLevel, activeWorld, newGame } from "./domain/game/state";
 import { tick } from "./domain/game/tick";
 
 const TCoords = t.Tuple([t.Number(), t.Number()]);
@@ -62,7 +62,9 @@ function toPair(pt: readonly [number, number]): [number, number] {
 }
 
 function toSnapshot(state: GameState): Snapshot {
-  const { level, world, playerId, turn } = state;
+  const { playerId, turn } = state;
+  const world = activeWorld(state);
+  const level = activeLevel(state);
   const pos = getComponent(world, playerId, "position");
   if (pos === undefined) {
     throw new Error("toSnapshot: player entity has no position component");

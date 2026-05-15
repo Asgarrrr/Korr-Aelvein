@@ -1,63 +1,61 @@
 /**
  * Turn-time scheduler — binary min-heap keyed on `(time, seq)`.
  *
- * One entry per future occurrence of an actor's turn. Faster actors
- * re-enter the heap with a smaller `delay`; slower ones with a larger
- * `delay`. Multi-action turns fall out for free: re-schedule the same
- * handle twice with small delays and it pops twice before another actor
- * gets a slot. Non-actor events (status expire, traps, scheduled
- * effects) will land here as additional discriminated arms when phase 3
- * needs them — the heap doesn't care what's queued, only when.
+ * Generic over the payload `T`. Phase 1/2 used it with `EntityHandle` as the
+ * payload (one entry per actor turn). Phase 3 lifts the payload to a
+ * `GlobalEvent` discriminated union so the same heap can carry actor turns,
+ * scheduled NPC abstracts, and world events on a single timeline. The heap
+ * itself doesn't care about T — it orders by `(time, seq)` only.
  *
  * Determinism contract: starting from `emptyScheduler()`, the sequence of
  * `schedule` / `pop` calls fully determines the popped event sequence.
  * Tie-break on equal `time` is the insertion-order `seq`, owned by the
- * scheduler itself — not derived from `World` column layout — so component
- * add/remove churn elsewhere cannot reorder turns.
+ * scheduler itself — not derived from any external storage layout — so churn
+ * elsewhere cannot reorder turns.
  *
  * Mutation model: mirrors `World`. `Scheduler` is mutated in place; the
  * surrounding `GameState` wrapper rotates per tick.
  *
- * Stale entries: when an entity is despawned, scheduled events that still
- * reference its handle are skipped lazily on pop (caller checks
- * `isLiveHandle`). Eager removal would be O(n) in a binary heap and isn't
- * worth it at our entity scale.
+ * Stale payloads: when a payload references something that has since died
+ * (e.g. a despawned entity), the caller checks at `pop` time and discards.
+ * Eager removal would be O(n) in a binary heap and isn't worth it at our
+ * entity scale. `pop` always advances `now` to the popped event's `time`,
+ * even when the caller discards the event — game-time advances regardless of
+ * who's alive.
  */
 
-import type { EntityHandle } from "../ecs/index";
-
-/** A future occurrence on the timeline. */
-export type ScheduledEvent = {
+/** A future occurrence on the timeline, carrying an arbitrary payload. */
+export type ScheduledEvent<T> = {
   /** Absolute tick at which this event fires. */
   readonly time: number;
   /** Insertion order — breaks `time` ties deterministically (FIFO). */
   readonly seq: number;
-  /** Whose turn it is. */
-  readonly handle: EntityHandle;
+  /** Caller-defined payload (actor handle, global event, …). */
+  readonly payload: T;
 };
 
 /**
  * Mutable scheduler state. `heap` is a binary min-heap in array form:
  * children of `i` are at `2i+1` and `2i+2`; parent is at `(i-1) >> 1`.
  */
-export type Scheduler = {
-  heap: ScheduledEvent[];
+export type Scheduler<T> = {
+  heap: ScheduledEvent<T>[];
   /** Last popped event's time. 0 when nothing has been popped yet. */
   now: number;
   /** Next `seq` to hand out. Monotonic; never resets. */
   nextSeq: number;
 };
 
-export function emptyScheduler(): Scheduler {
+export function emptyScheduler<T>(): Scheduler<T> {
   return { heap: [], now: 0, nextSeq: 0 };
 }
 
-function lessThan(a: ScheduledEvent, b: ScheduledEvent): boolean {
+function lessThan<T>(a: ScheduledEvent<T>, b: ScheduledEvent<T>): boolean {
   if (a.time !== b.time) return a.time < b.time;
   return a.seq < b.seq;
 }
 
-function bubbleUp(heap: ScheduledEvent[], start: number): void {
+function bubbleUp<T>(heap: ScheduledEvent<T>[], start: number): void {
   let i = start;
   while (i > 0) {
     const parent = (i - 1) >> 1;
@@ -71,7 +69,7 @@ function bubbleUp(heap: ScheduledEvent[], start: number): void {
   }
 }
 
-function bubbleDown(heap: ScheduledEvent[], start: number): void {
+function bubbleDown<T>(heap: ScheduledEvent<T>[], start: number): void {
   let i = start;
   const n = heap.length;
   while (true) {
@@ -103,20 +101,16 @@ function bubbleDown(heap: ScheduledEvent[], start: number): void {
 }
 
 /**
- * Schedule `handle` to act at `now + delay`. `delay` must be a non-negative
+ * Schedule `payload` to fire at `now + delay`. `delay` must be a non-negative
  * integer — internal callers only, no runtime check (boundary-only validation
  * per project rules; floats would let cross-engine FP drift leak into the
  * queue order, negative values would let events fire in the past).
  */
-export function schedule(
-  s: Scheduler,
-  delay: number,
-  handle: EntityHandle,
-): void {
-  const ev: ScheduledEvent = {
+export function schedule<T>(s: Scheduler<T>, delay: number, payload: T): void {
+  const ev: ScheduledEvent<T> = {
     time: s.now + delay,
     seq: s.nextSeq,
-    handle,
+    payload,
   };
   s.nextSeq += 1;
   s.heap.push(ev);
@@ -124,7 +118,7 @@ export function schedule(
 }
 
 /** Earliest scheduled event without mutating the heap. */
-export function peek(s: Scheduler): ScheduledEvent | undefined {
+export function peek<T>(s: Scheduler<T>): ScheduledEvent<T> | undefined {
   return s.heap[0];
 }
 
@@ -132,15 +126,14 @@ export function peek(s: Scheduler): ScheduledEvent | undefined {
  * Pop the earliest event and advance `now` to its time. Empty pop leaves
  * `now` unchanged and returns `undefined`.
  *
- * Stale handles: `pop` always advances `now` to the popped event's `time`,
- * even when the caller decides to discard the event because its handle is
- * dead. A chain of stale entries between two live events therefore steps
- * `now` through each intermediate stale time. That is the right invariant
- * for game-time (it advances regardless of who's alive), but phase-2
- * authors writing the AI drain need to know they should loop:
- * `while (peek live ? false : pop && isLiveHandle(...))`.
+ * Stale payloads: `pop` always advances `now` to the popped event's `time`,
+ * even when the caller decides to discard the event (e.g. its actor was
+ * despawned). A chain of stale entries between two live events therefore
+ * steps `now` through each intermediate stale time. That is the right
+ * invariant for game-time (it advances regardless of who's alive); drain
+ * loops must loop on `pop` + a liveness check rather than peeking.
  */
-export function pop(s: Scheduler): ScheduledEvent | undefined {
+export function pop<T>(s: Scheduler<T>): ScheduledEvent<T> | undefined {
   const top = s.heap[0];
   if (top === undefined) return undefined;
   const last = s.heap.pop();
@@ -153,6 +146,6 @@ export function pop(s: Scheduler): ScheduledEvent | undefined {
 }
 
 /** Number of events currently in the heap. */
-export function size(s: Scheduler): number {
+export function size<T>(s: Scheduler<T>): number {
   return s.heap.length;
 }
