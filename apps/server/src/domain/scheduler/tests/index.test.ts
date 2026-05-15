@@ -8,7 +8,7 @@ function h(id: number, gen = 0): EntityHandle {
 
 describe("scheduler — empty state", () => {
   test("peek and pop both return undefined on an empty scheduler", () => {
-    const s = emptyScheduler();
+    const s = emptyScheduler<EntityHandle>();
     expect(peek(s)).toBeUndefined();
     expect(pop(s)).toBeUndefined();
     expect(size(s)).toBe(0);
@@ -16,7 +16,7 @@ describe("scheduler — empty state", () => {
   });
 
   test("pop on empty does not advance now", () => {
-    const s = emptyScheduler();
+    const s = emptyScheduler<EntityHandle>();
     pop(s);
     expect(s.now).toBe(0);
   });
@@ -24,32 +24,32 @@ describe("scheduler — empty state", () => {
 
 describe("scheduler — basic ordering", () => {
   test("single event: peek returns it without mutation, pop advances now", () => {
-    const s = emptyScheduler();
+    const s = emptyScheduler<EntityHandle>();
     schedule(s, 42, h(1));
     const seen = peek(s);
-    expect(seen?.handle).toEqual(h(1));
+    expect(seen?.payload).toEqual(h(1));
     expect(seen?.time).toBe(42);
     expect(size(s)).toBe(1);
     expect(s.now).toBe(0);
 
     const popped = pop(s);
-    expect(popped?.handle).toEqual(h(1));
+    expect(popped?.payload).toEqual(h(1));
     expect(s.now).toBe(42);
     expect(size(s)).toBe(0);
   });
 
   test("two events: earliest time pops first", () => {
-    const s = emptyScheduler();
+    const s = emptyScheduler<EntityHandle>();
     schedule(s, 100, h(1));
     schedule(s, 50, h(2));
-    expect(pop(s)?.handle).toEqual(h(2));
+    expect(pop(s)?.payload).toEqual(h(2));
     expect(s.now).toBe(50);
-    expect(pop(s)?.handle).toEqual(h(1));
+    expect(pop(s)?.payload).toEqual(h(1));
     expect(s.now).toBe(100);
   });
 
   test("delay 0 schedules at the current `now`", () => {
-    const s = emptyScheduler();
+    const s = emptyScheduler<EntityHandle>();
     schedule(s, 0, h(1));
     expect(peek(s)?.time).toBe(0);
 
@@ -62,27 +62,27 @@ describe("scheduler — basic ordering", () => {
 
 describe("scheduler — FIFO tiebreak via seq", () => {
   test("equal times pop in insertion order", () => {
-    const s = emptyScheduler();
+    const s = emptyScheduler<EntityHandle>();
     schedule(s, 10, h(1));
     schedule(s, 10, h(2));
     schedule(s, 10, h(3));
-    expect(pop(s)?.handle).toEqual(h(1));
-    expect(pop(s)?.handle).toEqual(h(2));
-    expect(pop(s)?.handle).toEqual(h(3));
+    expect(pop(s)?.payload).toEqual(h(1));
+    expect(pop(s)?.payload).toEqual(h(2));
+    expect(pop(s)?.payload).toEqual(h(3));
   });
 
   test("interleaved schedule/pop still respects FIFO for ties", () => {
-    const s = emptyScheduler();
+    const s = emptyScheduler<EntityHandle>();
     schedule(s, 10, h(1)); // seq 0
     schedule(s, 5, h(2)); // seq 1
     schedule(s, 10, h(3)); // seq 2 — same time as h(1), inserted after
-    expect(pop(s)?.handle).toEqual(h(2));
-    expect(pop(s)?.handle).toEqual(h(1));
-    expect(pop(s)?.handle).toEqual(h(3));
+    expect(pop(s)?.payload).toEqual(h(2));
+    expect(pop(s)?.payload).toEqual(h(1));
+    expect(pop(s)?.payload).toEqual(h(3));
   });
 
   test("seq monotonically increases and never resets", () => {
-    const s = emptyScheduler();
+    const s = emptyScheduler<EntityHandle>();
     schedule(s, 10, h(1));
     schedule(s, 10, h(2));
     pop(s);
@@ -97,19 +97,19 @@ describe("scheduler — FIFO tiebreak via seq", () => {
 
 describe("scheduler — multi-action per turn", () => {
   test("scheduling the same handle multiple times pops it multiple times", () => {
-    const s = emptyScheduler();
+    const s = emptyScheduler<EntityHandle>();
     schedule(s, 100, h(1));
     schedule(s, 110, h(1)); // second action a hair later
     schedule(s, 105, h(2)); // another actor interleaved
-    expect(pop(s)?.handle).toEqual(h(1));
-    expect(pop(s)?.handle).toEqual(h(2));
-    expect(pop(s)?.handle).toEqual(h(1));
+    expect(pop(s)?.payload).toEqual(h(1));
+    expect(pop(s)?.payload).toEqual(h(2));
+    expect(pop(s)?.payload).toEqual(h(1));
   });
 });
 
 describe("scheduler — stress", () => {
   test("100 random delays pop in monotonic non-decreasing time order", () => {
-    const s = emptyScheduler();
+    const s = emptyScheduler<EntityHandle>();
     // Fixed-seed pseudo-random to keep the test deterministic. We do not
     // pull `Rng` here — keeping this module's tests free of cross-module
     // deps and using a tiny inlined LCG for repeatability.
@@ -135,7 +135,7 @@ describe("scheduler — stress", () => {
 
   test("two identical operation sequences produce identical pop sequences", () => {
     function run(): Array<{ time: number; handle: EntityHandle }> {
-      const s = emptyScheduler();
+      const s = emptyScheduler<EntityHandle>();
       let lcg = 12345;
       const rand = (): number => {
         lcg = (lcg * 1103515245 + 12345) & 0x7fffffff;
@@ -148,7 +148,7 @@ describe("scheduler — stress", () => {
       while (true) {
         const ev = pop(s);
         if (ev === undefined) break;
-        out.push({ time: ev.time, handle: ev.handle });
+        out.push({ time: ev.time, handle: ev.payload });
       }
       return out;
     }
@@ -158,7 +158,7 @@ describe("scheduler — stress", () => {
 
 describe("scheduler — `now` semantics", () => {
   test("now advances to popped event's time, never backwards", () => {
-    const s = emptyScheduler();
+    const s = emptyScheduler<EntityHandle>();
     schedule(s, 50, h(1));
     schedule(s, 100, h(2));
     pop(s);
@@ -168,7 +168,7 @@ describe("scheduler — `now` semantics", () => {
   });
 
   test("scheduling further uses the current now as base", () => {
-    const s = emptyScheduler();
+    const s = emptyScheduler<EntityHandle>();
     schedule(s, 50, h(1));
     pop(s); // now = 50
     schedule(s, 10, h(2));

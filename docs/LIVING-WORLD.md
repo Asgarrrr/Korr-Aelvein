@@ -44,12 +44,22 @@ only the discrete state changes the player would notice.
 ## Target `GameState` shape
 
 ```ts
-type ZoneId = number & { __zone: true };
-type Time = number; // game-ticks since epoch, monotonic
+type ZoneId = number; // plain number — no brand. The project forbids `as`,
+                      // and constructing a branded type without it requires
+                      // a class wrapper. Plain number is enough; ZoneId is
+                      // documentation, not type-system enforcement.
+type Time = number;   // game-ticks since epoch, monotonic.
 
-type ZoneStatus =
-  | { kind: "active";  world: World; scheduler: Scheduler }
-  | { kind: "dormant"; world: World; lastSimAt: Time };
+// Phase 3 ships a single shape (no discriminator). Phase 4 will introduce
+// the discriminator and a `dormant` variant when the dormant shape is
+// decided from real evidence (likely `summary: ActorSummary[]` rather than
+// a full `World`).
+type ZoneStatus = { world: World; level: Level };
+
+// Phase 4 target (illustrative, not committed):
+// type ZoneStatus =
+//   | { kind: "active";  world: World; level: Level }
+//   | { kind: "dormant"; level: Level; summary: ActorSummary[]; lastSimAt: Time };
 
 type GameState = {
   readonly zones: Map<ZoneId, ZoneStatus>;
@@ -63,9 +73,18 @@ type GameState = {
 
 type GlobalEvent =
   | { kind: "actor";    zone: ZoneId; actor: EntityHandle }
-  | { kind: "schedule"; zone: ZoneId; npc: EntityHandle; activity: ActivityId }
-  | { kind: "world";    effect: WorldEffectId };
+  // Phase 4+ variants — not yet implemented, listed so the discriminator's
+  // exhaustiveness story is clear:
+  // | { kind: "schedule"; zone: ZoneId; npc: EntityHandle; activity: ActivityId }
+  // | { kind: "world";    effect: WorldEffectId }
+  ;
 ```
+
+**Phase 3 ships only the `actor` variant** of `GlobalEvent` and a single-
+shape `ZoneStatus` (no `active` / `dormant` discriminator yet). Phase 4
+adds both: a new `GlobalEvent` arm for off-zone NPC schedules, *and* the
+`ZoneStatus` discriminator with a `dormant` shape derived from real abstract-
+resolver evidence.
 
 ### What survives Phases 1-2 intact
 
@@ -123,7 +142,7 @@ entities)`. Sparse-wakeup workload fits the heap exactly.
 |---|---|---|
 | 1 | Min-heap scheduler + `WAIT` action | done (PR #7) |
 | 2 | Wanderer mob + drain loop + first AI | done (PR #8) |
-| 3 | Multi-zone `GameState` shape, **single zone for now** (the donjon) — no village, no abstract events yet | next |
+| 3 | Multi-zone `GameState` shape, **single zone for now** (the donjon) — no village, no abstract events yet | done |
 | 4 | First scheduled NPC abstract (shopkeeper open/close) — validates the abstract-resolver pipeline end-to-end | planned |
 | 5 | Bump-combat (`MOVE` into actor → `ATTACK`, hp damage via `rng.int`, despawn on hp ≤ 0, `gameOver` in snapshot) | planned, orthogonal to Phase 4 |
 | later | Village zone, weather / world events, time-of-day, multi-floor descent | planned |

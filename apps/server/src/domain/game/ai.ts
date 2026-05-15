@@ -1,12 +1,12 @@
 import { DX4, DY4, getTile, inBounds, TILE_WALL } from "../dungeon/index";
 import { type EntityHandle, getComponent, setComponent } from "../ecs/index";
 import type { Rng } from "../rng/index";
-import { cellBlocked, type GameState } from "./state";
+import { activeLevel, activeWorld, cellBlocked, type GameState } from "./state";
 
 /**
- * Resolve one turn for `handle` based on its `ai` component. Mutates
- * `state.world` only — scheduling/turn cost is the caller's responsibility.
- * Callers must have verified `isLiveHandle` first.
+ * Resolve one turn for `handle` based on its `ai` component. Mutates the
+ * active zone's world only — scheduling/turn cost is the caller's
+ * responsibility. Callers must have verified `isLiveHandle` first.
  *
  * Returns `true` iff the entity acted (and should be rescheduled). `false`
  * means the entity has no `ai` component and the caller should drop it from
@@ -17,7 +17,8 @@ export function runAi(
   rng: Rng,
   handle: EntityHandle,
 ): boolean {
-  const ai = getComponent(state.world, handle, "ai");
+  const world = activeWorld(state);
+  const ai = getComponent(world, handle, "ai");
   if (ai === undefined) return false;
   switch (ai.kind) {
     case "wanderer":
@@ -33,7 +34,9 @@ export function runAi(
 }
 
 function runWanderer(state: GameState, rng: Rng, handle: EntityHandle): void {
-  const pos = getComponent(state.world, handle, "position");
+  const world = activeWorld(state);
+  const level = activeLevel(state);
+  const pos = getComponent(world, handle, "position");
   // Defensive: a wanderer without a position can't move. Phase 2 only spawns
   // wanderers with position; if this fires, something further upstream is
   // broken — skip the turn silently rather than crash the tick.
@@ -48,8 +51,8 @@ function runWanderer(state: GameState, rng: Rng, handle: EntityHandle): void {
   }
   const nx = pos.x + dx;
   const ny = pos.y + dy;
-  if (!inBounds(nx, ny, state.level.grid)) return;
-  if (getTile(state.level.grid, nx, ny) === TILE_WALL) return;
-  if (cellBlocked(state, nx, ny)) return;
-  setComponent(state.world, handle, "position", { x: nx, y: ny });
+  if (!inBounds(nx, ny, level.grid)) return;
+  if (getTile(level.grid, nx, ny) === TILE_WALL) return;
+  if (cellBlocked(world, nx, ny)) return;
+  setComponent(world, handle, "position", { x: nx, y: ny });
 }

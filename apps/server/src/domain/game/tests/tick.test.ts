@@ -11,9 +11,18 @@ import {
 } from "../../ecs/index";
 import type { RngState } from "../../rng/index";
 import { emptyScheduler, schedule } from "../../scheduler/index";
-import type { GameState } from "../state";
-import { newGame } from "../state";
+import {
+  activeLevel,
+  activeWorld,
+  type GameState,
+  type GlobalEvent,
+  newGame,
+  type ZoneId,
+  type ZoneStatus,
+} from "../state";
 import { tick } from "../tick";
+
+const DONJON_ZONE: ZoneId = 0;
 
 function makeLevel(w: number, h: number, tiles: Uint8Array): Level {
   return {
@@ -41,13 +50,27 @@ function makeState(level: Level, x: number, y: number): GameState {
   const rngState: RngState = [1, 2, 3, 4];
   const world = emptyWorld();
   const playerId = spawn(world, { position: { x, y } });
-  const scheduler = emptyScheduler();
-  schedule(scheduler, 0, playerId);
-  return { level, world, playerId, scheduler, rngState, turn: 0 };
+  const globalScheduler = emptyScheduler<GlobalEvent>();
+  schedule(globalScheduler, 0, {
+    kind: "actor",
+    zone: DONJON_ZONE,
+    actor: playerId,
+  });
+  const zones = new Map<ZoneId, ZoneStatus>();
+  zones.set(DONJON_ZONE, { world, level });
+  return {
+    zones,
+    activeZone: DONJON_ZONE,
+    playerId,
+    globalScheduler,
+    rngState,
+    time: 0,
+    turn: 0,
+  };
 }
 
 function playerPos(s: GameState): Position {
-  const p = getComponent(s.world, s.playerId, "position");
+  const p = getComponent(activeWorld(s), s.playerId, "position");
   if (p === undefined) {
     throw new Error("test: player entity has no position");
   }
@@ -96,22 +119,24 @@ describe("tick: MOVE", () => {
     }
   });
 
-  test("valid move preserves level, world, scheduler, playerId by reference; rngState value-equal when no rolls happen", () => {
+  test("valid move preserves zones, scheduler, playerId by reference; rngState value-equal when no rolls happen", () => {
     const state = makeState(makeBoxLevel(), 2, 2);
     const next = tick(state, { type: "MOVE", dir: "e" });
-    expect(next.level).toBe(state.level);
-    // World and scheduler are mutated in place — same reference, updated contents.
-    expect(next.world).toBe(state.world);
-    expect(next.scheduler).toBe(state.scheduler);
+    // The zones map and the active zone's world+level are mutated in place
+    // via the scheduler / setComponent paths — same reference, updated contents.
+    expect(next.zones).toBe(state.zones);
+    expect(activeLevel(next)).toBe(activeLevel(state));
+    expect(activeWorld(next)).toBe(activeWorld(state));
+    expect(next.globalScheduler).toBe(state.globalScheduler);
     expect(next.playerId).toBe(state.playerId);
     // rngState is re-snapshotted every tick (fresh tuple), so identity drifts,
-    // but value stays equal in Phase 1 where MOVE doesn't roll.
+    // but value stays equal when MOVE doesn't roll (no other AIs in this state).
     expect(next.rngState).toEqual(state.rngState);
   });
 
   test("throws specifically about missing position when the component was removed", () => {
     const state = makeState(makeBoxLevel(), 2, 2);
-    removeComponent(state.world, state.playerId, "position");
+    removeComponent(activeWorld(state), state.playerId, "position");
     expect(() => tick(state, { type: "MOVE", dir: "n" })).toThrow(
       /missing the position component/,
     );
@@ -119,7 +144,7 @@ describe("tick: MOVE", () => {
 
   test("throws specifically about a stale handle when the player has been despawned", () => {
     const state = makeState(makeBoxLevel(), 2, 2);
-    despawn(state.world, state.playerId);
+    despawn(activeWorld(state), state.playerId);
     expect(() => tick(state, { type: "MOVE", dir: "n" })).toThrow(
       /player handle is stale/,
     );
@@ -139,22 +164,27 @@ describe("tick: MOVE", () => {
     const state = makeState(makeBoxLevel(), 2, 2);
     const next = tick(state, { type: "MOVE", dir: "n" });
     // After tick: pop player@0 → now=0, schedule player@100.
-    expect(next.scheduler.now).toBe(0);
-    expect(next.scheduler.heap.length).toBe(1);
-    expect(next.scheduler.heap[0]?.time).toBe(100);
-    expect(next.scheduler.heap[0]?.handle).toEqual(state.playerId);
+    expect(next.globalScheduler.now).toBe(0);
+    expect(next.globalScheduler.heap.length).toBe(1);
+    const head = next.globalScheduler.heap[0];
+    expect(head?.time).toBe(100);
+    expect(head?.payload.kind).toBe("actor");
+    if (head?.payload.kind === "actor") {
+      expect(head.payload.actor).toEqual(state.playerId);
+      expect(head.payload.zone).toBe(state.activeZone);
+    }
   });
 
   test("a refused move does not consume the player's turn slot", () => {
     const state = makeState(makeBoxLevel(), 2, 1); // 2,1 is interior; (2,0) is wall
-    const before = state.scheduler.heap[0];
+    const before = state.globalScheduler.heap[0];
     if (before === undefined) {
       throw new Error("test setup: scheduler heap should not be empty");
     }
     const next = tick(state, { type: "MOVE", dir: "n" });
     expect(next).toBe(state);
-    expect(state.scheduler.heap.length).toBe(1);
-    expect(state.scheduler.heap[0]).toEqual(before);
+    expect(state.globalScheduler.heap.length).toBe(1);
+    expect(state.globalScheduler.heap[0]).toEqual(before);
   });
 });
 
@@ -169,26 +199,26 @@ describe("tick: WAIT", () => {
   test("WAIT re-schedules the player one turn later", () => {
     const state = makeState(makeBoxLevel(), 2, 2);
     const next = tick(state, { type: "WAIT" });
-    expect(next.scheduler.now).toBe(0);
-    expect(next.scheduler.heap.length).toBe(1);
-    expect(next.scheduler.heap[0]?.time).toBe(100);
+    expect(next.globalScheduler.now).toBe(0);
+    expect(next.globalScheduler.heap.length).toBe(1);
+    expect(next.globalScheduler.heap[0]?.time).toBe(100);
   });
 
-  test("consecutive WAITs advance scheduler.now by one turn each", () => {
+  test("consecutive WAITs advance state.time by one turn each", () => {
     let state = makeState(makeBoxLevel(), 2, 2);
     state = tick(state, { type: "WAIT" });
-    expect(state.scheduler.now).toBe(0);
+    expect(state.time).toBe(0);
     state = tick(state, { type: "WAIT" });
-    expect(state.scheduler.now).toBe(100);
+    expect(state.time).toBe(100);
     state = tick(state, { type: "WAIT" });
-    expect(state.scheduler.now).toBe(200);
+    expect(state.time).toBe(200);
   });
 });
 
 describe("newGame", () => {
   test("places the player at the spawn point", () => {
     const state = newGame(42, "rim");
-    const spawnPt = state.level.spawn;
+    const spawnPt = activeLevel(state).spawn;
     expect(spawnPt).not.toBeNull();
     if (spawnPt !== null) {
       const pos = playerPos(state);
@@ -197,9 +227,13 @@ describe("newGame", () => {
     }
   });
 
-  test("starts at turn 0", () => {
-    expect(newGame(42, "rim").turn).toBe(0);
-    expect(newGame(7, "caverns").turn).toBe(0);
+  test("starts at turn 0 and time 0", () => {
+    const a = newGame(42, "rim");
+    expect(a.turn).toBe(0);
+    expect(a.time).toBe(0);
+    const b = newGame(7, "caverns");
+    expect(b.turn).toBe(0);
+    expect(b.time).toBe(0);
   });
 
   test("spawn is a floor tile", () => {
@@ -208,7 +242,7 @@ describe("newGame", () => {
       for (const style of styles) {
         const state = newGame(seed, style);
         const pos = playerPos(state);
-        expect(getTile(state.level.grid, pos.x, pos.y)).toBe(TILE_FLOOR);
+        expect(getTile(activeLevel(state).grid, pos.x, pos.y)).toBe(TILE_FLOOR);
       }
     }
   });
@@ -216,16 +250,26 @@ describe("newGame", () => {
   test("two different seeds produce different levels", () => {
     const a = newGame(1, "rim");
     const b = newGame(2, "rim");
-    expect(Array.from(a.level.grid.tiles)).not.toEqual(
-      Array.from(b.level.grid.tiles),
+    expect(Array.from(activeLevel(a).grid.tiles)).not.toEqual(
+      Array.from(activeLevel(b).grid.tiles),
     );
   });
 
   test("player entity carries actor and hp components", () => {
     const state = newGame(42, "rim");
-    const actor = getComponent(state.world, state.playerId, "actor");
-    const hp = getComponent(state.world, state.playerId, "hp");
+    const world = activeWorld(state);
+    const actor = getComponent(world, state.playerId, "actor");
+    const hp = getComponent(world, state.playerId, "hp");
     expect(actor).toEqual({ glyph: "@", name: "you" });
     expect(hp).toEqual({ current: 10, max: 10 });
+  });
+
+  test("activeZone is the only zone in the map and exposes a world+level", () => {
+    const state = newGame(42, "rim");
+    expect(state.zones.size).toBe(1);
+    const zone = state.zones.get(state.activeZone);
+    expect(zone).toBeDefined();
+    expect(zone?.world).toBeDefined();
+    expect(zone?.level).toBeDefined();
   });
 });
