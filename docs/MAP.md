@@ -21,10 +21,14 @@ apps/
           *.ts                              world / query / forQuery / components / entity / system.
           tests/                            world / query / forquery / system / determinism / stress.
           bench/                            standard.bench.ts + mega.bench.ts.
-        game/         Turn-based game loop. Pure (state, action) → state.
-          state.ts                          GameState type + newGame factory.
-          tick.ts                           Action type + tick reducer (MOVE).
-          tests/                            tick.test.ts.
+        scheduler/    Min-heap turn scheduler — see `docs/GAME-LOOP.md`.
+          index.ts                          emptyScheduler / schedule / peek / pop / size.
+          tests/                            index + properties (heap invariants, ties, sort-drain).
+        game/         Turn-based game loop — see `docs/GAME-LOOP.md`.
+          state.ts                          GameState + newGame + cellBlocked.
+          tick.ts                           Action + tick reducer + drainNonPlayer.
+          ai.ts                             runAi dispatcher + per-kind handlers (wanderer).
+          tests/                            tick + wanderer.
         dungeon/      Procgen — see `docs/PROCGEN.md` for the full story.
           types.ts, grid.ts, index.ts       Level/Tile types, flat-array helpers, public surface.
           tests/                            grid / index / properties — foundation + adversarial.
@@ -41,7 +45,7 @@ apps/
 packages/
   typescript-config/  Shared tsconfigs (base, react-library).
 .github/workflows/    CI: lint + typecheck + test + build on PR/push.
-docs/                 Technical docs — codebase map, procgen deep-dive.
+docs/                 Technical docs — MAP, PROCGEN, GAME-LOOP, LIVING-WORLD.
 registry/             Worldbuilding + narrative-design notes (not code). See `registry/README.md`.
 biome.json            Single quality config (lint + format + organize-imports).
 CLAUDE.md             Project rules — read every session.
@@ -82,6 +86,24 @@ turbo.json            Build / dev / test / check-types tasks.
 - **Algorithm**: sfc32 (128-bit state) + SplitMix32 expansion. Pure 32-bit JS arithmetic, no BigInt. Identical sequences across V8/Bun and any modern browser.
 - **Why this and not Mulberry32 / PCG / xoshiro / wyrand / ChaCha8**: see the docstring at the top of `index.ts` and `~/.claude/projects/-Users-asgarrrr-Documents-Projects-korr-aelvein/memory/project_design_decisions.md`.
 - **Bench**: `bun run bench` (in `apps/server`). Reference: `next() ≈ 4.6 ns/op`, `pick(arr[10]) ≈ 36.5 ns/op` (O(n) is the cost of the no-`as`/no-`!` rule, accepted).
+
+### `apps/server/src/domain/scheduler`
+
+- **Public API**: `emptyScheduler()`, `schedule(s, delay, handle)`, `peek(s)`, `pop(s)`, `size(s)`, types `Scheduler` / `ScheduledEvent`.
+- **Algorithm**: binary min-heap keyed on `(time, seq)`. Insertion-order `seq` (owned by the scheduler, not derived from `World` column layout) breaks `time` ties deterministically.
+- **Mutation model**: mirrors `World`. `Scheduler` is mutated in place; the surrounding `GameState` wrapper rotates per tick.
+- **Stale handles**: lazy skip on pop. `pop` always advances `now` to the popped event's `time`, even when the event is stale. Eager removal would be O(n) in a binary heap and isn't worth it at our entity scale.
+- **Multi-action turns**: re-schedule the same handle twice with smaller delays; both pop before slower actors get a slot. No special case in the heap.
+- **Why this and not Hauberk-style energy / indexed PQ with decrease-key / hashed timing wheel**: see `docs/GAME-LOOP.md` § "The scheduler".
+
+### `apps/server/src/domain/game`
+
+- **Public API**: `newGame(seed, style)`, `tick(state, action)`, `cellBlocked(state, x, y)`, `runAi(state, rng, handle)`, types `GameState` / `Action` / `Dir` / `Ai`.
+- **Loop shape**: pure-ish reducer `(state, action) → state`. RNG is hydrated once per tick from `state.rngState`, threaded through the action and the drain loop, persisted back to the returned wrapper.
+- **Drain loop**: `drainNonPlayer` pops every non-player event up to the next player slot. Stale handles are skipped lazily; entities whose `ai` was stripped drop out of the heap rather than zombie-cycle.
+- **AI dispatch**: discriminated-union `Ai` + `switch(ai.kind)` with a `never` exhaustiveness sentinel. Adding a new variant without its handler is a compile error.
+- **Refused-action contract**: if `MOVE` fails validation (bounds / wall / occupancy), `tick` returns `state` by reference. No `pop`, no reschedule, no turn cost.
+- **Full story** (data shapes, determinism contract, accepted trade-offs, rejected alternatives, the multi-zone roadmap): `docs/GAME-LOOP.md` and `docs/LIVING-WORLD.md`.
 
 ### `apps/client`
 
