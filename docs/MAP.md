@@ -103,7 +103,7 @@ turbo.json            Build / dev / test / check-types tasks.
 
 ### `apps/server/src/domain/game`
 
-- **Public API**: `newGame(seed, style)`, `tick(state, action)`, `attack(world, rng, target)`, `entityAt(world, x, y)`, `runAi(state, rng, handle)`, `applyAbstract(zone, entity)`, `getZone / activeZoneStatus / activeWorld / activeLevel`, types `GameState` / `Action` / `Dir` / `ZoneId` / `ZoneStatus` / `GlobalEvent` / `Time` / `Ai` / `Schedule` / `AttackResult`.
+- **Public API**: `newGame(seed, style)`, `tick(state, action)`, `attack(world, rng, target)`, `entityAt(world, x, y)`, `runAi(state, rng, handle)`, `applyAbstract(zone, entity)`, `getZone / activeZoneStatus / activeWorld / activeLevel`, types `GameState` / `Action` / `Dir` / `ZoneId` / `ZoneStatus` / `GlobalEvent` / `Time` / `AttackResult`. `Ai` and `Schedule` are component types — import from `domain/ecs/index` (only `Ai` is re-exported there today; `Schedule` lives on the component but isn't surfaced until a caller needs it).
 - **Multi-zone shape**: `GameState.zones: Map<ZoneId, ZoneStatus>` with one `active` zone and zero or more `dormant` zones. `globalScheduler: Scheduler<GlobalEvent>` carries actor turns *and* schedule events on a single timeline.
 - **Loop shape**: pure-ish reducer `(state, action) → state`. RNG is hydrated once per tick from `state.rngState`, threaded through the action and the drain loop, persisted back to the returned wrapper.
 - **Drain dispatch**: `drainNonPlayer` switches on `GlobalEvent.kind` — `actor` runs `runAi` (in-bubble AI), `schedule` runs `applyAbstract` (off-zone NPC). A `never` exhaustiveness sentinel forces new variants to land alongside their dispatcher.

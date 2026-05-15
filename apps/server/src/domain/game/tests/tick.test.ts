@@ -13,7 +13,7 @@ import {
   spawn,
 } from "../../ecs/index";
 import type { RngState } from "../../rng/index";
-import { emptyScheduler, schedule } from "../../scheduler/index";
+import { emptyScheduler, schedule, size } from "../../scheduler/index";
 import {
   activeLevel,
   activeWorld,
@@ -54,6 +54,7 @@ function makeState(level: Level, x: number, y: number): GameState {
   const world = emptyWorld();
   const playerId = spawn(world, {
     position: { x, y },
+    actor: { glyph: "@", name: "you" },
     hp: { current: 10, max: 10 },
   });
   const globalScheduler = emptyScheduler<GlobalEvent>();
@@ -202,6 +203,7 @@ describe("tick: bump-combat", () => {
     const world = emptyWorld();
     const playerId = spawn(world, {
       position: { x: 2, y: 2 },
+      actor: { glyph: "@", name: "you" },
       hp: { current: 10, max: 10 },
     });
     const wanderer = spawn(world, {
@@ -288,6 +290,72 @@ describe("tick: bump-combat", () => {
     const state = makeArenaState();
     const dead: GameState = { ...state, gameOver: true };
     expect(() => tick(dead, { type: "WAIT" })).toThrow(/run is over/);
+  });
+
+  test("drain fires every event at the dead player's timestamp (no short-circuit)", () => {
+    // Two wanderers and a hp=0 player all scheduled at time 0. After one
+    // tick, `gameOver` must be set AND both wanderers must have rolled
+    // their direction (rngState advances; both stay rescheduled).
+    // This pins the "drain finishes its timestamp regardless of player
+    // death" invariant that replaced the old short-circuit in Phase 5.
+    const world = emptyWorld();
+    const playerId = spawn(world, {
+      position: { x: 2, y: 2 },
+      actor: { glyph: "@", name: "you" },
+      hp: { current: 0, max: 10 }, // pre-dead, gameOver computed at tick end
+    });
+    const wa = spawn(world, {
+      position: { x: 3, y: 2 },
+      actor: { glyph: "r", name: "wA" },
+      ai: { kind: "wanderer" },
+      hp: { current: 3, max: 3 },
+    });
+    const wb = spawn(world, {
+      position: { x: 1, y: 2 },
+      actor: { glyph: "r", name: "wB" },
+      ai: { kind: "wanderer" },
+      hp: { current: 3, max: 3 },
+    });
+    const globalScheduler = emptyScheduler<GlobalEvent>();
+    schedule(globalScheduler, 0, {
+      kind: "actor",
+      zone: DONJON_ZONE,
+      entity: playerId,
+    });
+    schedule(globalScheduler, 0, {
+      kind: "actor",
+      zone: DONJON_ZONE,
+      entity: wa,
+    });
+    schedule(globalScheduler, 0, {
+      kind: "actor",
+      zone: DONJON_ZONE,
+      entity: wb,
+    });
+    const zones = new Map<ZoneId, ZoneStatus>();
+    zones.set(DONJON_ZONE, { kind: "active", world, level: makeBoxLevel() });
+    const rngBefore: RngState = [1, 2, 3, 4];
+    const state: GameState = {
+      zones,
+      activeZone: DONJON_ZONE,
+      playerId,
+      globalScheduler,
+      rngState: rngBefore,
+      time: 0,
+      turn: 0,
+      gameOver: false,
+    };
+    const next = tick(state, { type: "WAIT" });
+    expect(next.gameOver).toBe(true);
+    // Both wanderers consumed their direction roll → rngState diverged.
+    expect(next.rngState).not.toEqual(rngBefore);
+    // Both wanderers rescheduled at t=100 alongside the player → heap
+    // size still 3. If the drain had aborted on player death, the second
+    // wanderer would be left on the heap at t=0.
+    expect(size(next.globalScheduler)).toBe(3);
+    for (const ev of next.globalScheduler.heap) {
+      expect(ev.time).toBe(100);
+    }
   });
 });
 

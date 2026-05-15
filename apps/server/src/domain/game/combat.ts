@@ -7,10 +7,17 @@ import {
 import type { Rng } from "../rng/index";
 
 /**
- * Outcome of one attack against `target`. `killed` is `true` iff the new HP
- * is ≤ 0 after damage — the caller decides what to do with the dying entity
- * (despawn for mobs, leave it at hp=0 for the player so `gameOver` can be
- * surfaced through the snapshot).
+ * Outcome of one attack against `target`.
+ *
+ * `damage` is the **rolled** damage (the raw `rng.int(MIN, MAX)` result),
+ * not the **applied** damage after the `Math.max(0, ...)` clamp. For an
+ * overkill — target hp=1, damage=3 — the report is `{damage: 3, killed:
+ * true}`, even though only 1 hp was actually consumed. UI consumers that
+ * want "you dealt N damage" should clamp themselves: `min(damage, hp_pre)`.
+ *
+ * `killed` is `true` iff the new HP is ≤ 0 after damage — the caller
+ * decides what to do with the dying entity (despawn for mobs, leave it at
+ * hp=0 for the player so `gameOver` can be surfaced through the snapshot).
  */
 export type AttackResult = {
   readonly damage: number;
