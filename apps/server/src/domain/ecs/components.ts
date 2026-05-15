@@ -23,10 +23,16 @@ export type HP = {
   readonly max: number;
 };
 
+// Discriminated union so each AI kind can carry its own state without
+// per-kind components. Wanderer carries nothing today; later kinds (chaser,
+// fleer, etc.) extend this union.
+export type Ai = { readonly kind: "wanderer" };
+
 export type Components = {
   readonly position?: Position;
   readonly actor?: Actor;
   readonly hp?: HP;
+  readonly ai?: Ai;
 };
 
 export type ComponentKey = keyof Components;

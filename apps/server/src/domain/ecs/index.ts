@@ -1,5 +1,6 @@
 export type {
   Actor,
+  Ai,
   ComponentKey,
   Components,
   HP,

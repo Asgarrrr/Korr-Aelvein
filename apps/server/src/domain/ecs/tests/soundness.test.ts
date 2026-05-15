@@ -29,11 +29,12 @@ describe("restore: generation safety", () => {
       position: [],
       actor: [],
       hp: [],
+      ai: [],
       generations: [[0, 2 ** 31]],
       nextId: 1,
       recycled: [],
-      added: { position: [], actor: [], hp: [] },
-      removed: { position: [], actor: [], hp: [] },
+      added: { position: [], actor: [], hp: [], ai: [] },
+      removed: { position: [], actor: [], hp: [], ai: [] },
       events: [],
     };
     expect(() => restore(s)).toThrow(/generation/);
@@ -44,11 +45,12 @@ describe("restore: generation safety", () => {
       position: [],
       actor: [],
       hp: [],
+      ai: [],
       generations: [[0, Number.POSITIVE_INFINITY]],
       nextId: 1,
       recycled: [],
-      added: { position: [], actor: [], hp: [] },
-      removed: { position: [], actor: [], hp: [] },
+      added: { position: [], actor: [], hp: [], ai: [] },
+      removed: { position: [], actor: [], hp: [], ai: [] },
       events: [],
     };
     expect(() => restore(s)).toThrow(/generation/);
@@ -59,11 +61,12 @@ describe("restore: generation safety", () => {
       position: [],
       actor: [],
       hp: [],
+      ai: [],
       generations: [[0, -1]],
       nextId: 1,
       recycled: [],
-      added: { position: [], actor: [], hp: [] },
-      removed: { position: [], actor: [], hp: [] },
+      added: { position: [], actor: [], hp: [], ai: [] },
+      removed: { position: [], actor: [], hp: [], ai: [] },
       events: [],
     };
     expect(() => restore(s)).toThrow(/generation/);
@@ -74,11 +77,12 @@ describe("restore: generation safety", () => {
       position: [],
       actor: [],
       hp: [],
+      ai: [],
       generations: [[0, 1.5]],
       nextId: 1,
       recycled: [],
-      added: { position: [], actor: [], hp: [] },
-      removed: { position: [], actor: [], hp: [] },
+      added: { position: [], actor: [], hp: [], ai: [] },
+      removed: { position: [], actor: [], hp: [], ai: [] },
       events: [],
     };
     expect(() => restore(s)).toThrow(/generation/);
@@ -89,6 +93,7 @@ describe("restore: generation safety", () => {
       position: [],
       actor: [],
       hp: [],
+      ai: [],
       generations: [
         [0, 0],
         [1, 2],
@@ -96,8 +101,8 @@ describe("restore: generation safety", () => {
       ],
       nextId: 3,
       recycled: [1],
-      added: { position: [], actor: [], hp: [] },
-      removed: { position: [], actor: [], hp: [] },
+      added: { position: [], actor: [], hp: [], ai: [] },
+      removed: { position: [], actor: [], hp: [], ai: [] },
       events: [],
     };
     expect(() => restore(s)).not.toThrow();
@@ -180,13 +185,37 @@ describe("component fields: finite numbers only", () => {
       position: [[0, { x: Number.NaN, y: 0 }]],
       actor: [],
       hp: [],
+      ai: [],
       generations: [[0, 0]],
       nextId: 1,
       recycled: [],
-      added: { position: [], actor: [], hp: [] },
-      removed: { position: [], actor: [], hp: [] },
+      added: { position: [], actor: [], hp: [], ai: [] },
+      removed: { position: [], actor: [], hp: [], ai: [] },
       events: [],
     };
     expect(() => restore(s)).toThrow(/finite/);
+  });
+
+  test("restore rejects an unknown ai kind", () => {
+    // The discriminant string is the payload — boundary validation matches
+    // the policy used for numeric fields.
+    const s = {
+      position: [],
+      actor: [],
+      hp: [],
+      ai: [[0, { kind: "garbage" }]],
+      generations: [[0, 0]],
+      nextId: 1,
+      recycled: [],
+      added: { position: [], actor: [], hp: [], ai: [] },
+      removed: { position: [], actor: [], hp: [], ai: [] },
+      events: [],
+    };
+    // The `ai` literal is intentionally outside the known union — we want to
+    // verify runtime defence, not the type system, so the test crosses the
+    // boundary with a structural cast via `unknown` on a `JSON.parse` round
+    // trip (no `as` in test code per project rules).
+    const corrupted: SerializableWorld = JSON.parse(JSON.stringify(s));
+    expect(() => restore(corrupted)).toThrow(/unknown ai kind/);
   });
 });
