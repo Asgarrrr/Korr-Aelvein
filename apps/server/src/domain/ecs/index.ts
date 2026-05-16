@@ -31,12 +31,14 @@ export {
   getComponent,
   isLiveHandle,
   removeComponent,
+  setComponent,
+  spawn,
+  type World,
+} from "./world";
+export {
   restore,
   type SerializableEvents,
   type SerializableLifecycle,
   type SerializableWorld,
-  setComponent,
   snapshot,
-  spawn,
-  type World,
-} from "./world";
+} from "./world/snapshot";
