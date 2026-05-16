@@ -68,6 +68,50 @@ describe("lifecycle buffers (added / removed)", () => {
     expect(drainExited(w, "actor")).toEqual([]);
   });
 
+  test("despawn drains every column for an entity that holds them all", () => {
+    // Chokepoint test for the `columnRemovers` dispatch — adding a new
+    // component without wiring it into `despawn` would survive every
+    // other test (none exercise the new column on despawn) but would
+    // leak a dense entry forever. This test catches that class of bug.
+    const w = emptyWorld();
+    const a = spawn(w, {
+      position: { x: 3, y: 4 },
+      actor: { glyph: "@", name: "all" },
+      hp: { current: 5, max: 5 },
+      ai: { kind: "wanderer" },
+      schedule: {
+        waypoints: [
+          [0, 0],
+          [1, 1],
+        ],
+        nextIndex: 1,
+        period: 10,
+      },
+    });
+    expect(w.position.dense.length).toBe(1);
+    expect(w.actor.dense.length).toBe(1);
+    expect(w.hp.dense.length).toBe(1);
+    expect(w.ai.dense.length).toBe(1);
+    expect(w.schedule.dense.length).toBe(1);
+    despawn(w, a);
+    expect(w.position.dense.length).toBe(0);
+    expect(w.actor.dense.length).toBe(0);
+    expect(w.hp.dense.length).toBe(0);
+    expect(w.ai.dense.length).toBe(0);
+    expect(w.schedule.dense.length).toBe(0);
+    expect(w.position.sparse.size).toBe(0);
+    expect(w.actor.sparse.size).toBe(0);
+    expect(w.hp.sparse.size).toBe(0);
+    expect(w.ai.sparse.size).toBe(0);
+    expect(w.schedule.sparse.size).toBe(0);
+    // And every column's exit buffer caught the handle.
+    expect(drainExited(w, "position")).toEqual([a]);
+    expect(drainExited(w, "actor")).toEqual([a]);
+    expect(drainExited(w, "hp")).toEqual([a]);
+    expect(drainExited(w, "ai")).toEqual([a]);
+    expect(drainExited(w, "schedule")).toEqual([a]);
+  });
+
   test("second drain returns empty (buffer cleared)", () => {
     const w = emptyWorld();
     spawn(w, { position: { x: 0, y: 0 } });
