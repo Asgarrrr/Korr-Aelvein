@@ -190,6 +190,53 @@ export function removeWhere<T>(
   }
 }
 
+/**
+ * Drop every event whose payload matches `predicate` and hand each one to
+ * `handler` in `(time, seq)` order — the same order a `pop` chain would have
+ * produced. `now` is not advanced (matches `removeWhere`); the handler is
+ * free to inspect `ev.time` itself.
+ *
+ * Single pass over the heap array: matches are collected and skipped from
+ * the compact in one read sweep, then Floyd heapify on the survivors. The
+ * predicate is called exactly once per event.
+ *
+ * Used by Phase 6 zone-entry catchup: drain every `schedule` event for the
+ * zone being concretised whose `time <= state.time`, in the order the
+ * normal drain loop would have applied them. The previous implementation
+ * iterated `s.heap` directly from outside the module, then called
+ * `removeWhere` (predicate twice), then sorted, then applied — three passes
+ * and the heap shape leaked to the caller. `drainWhere` collapses it into
+ * one verb the scheduler owns.
+ */
+export function drainWhere<T>(
+  s: Scheduler<T>,
+  predicate: (event: ScheduledEvent<T>) => boolean,
+  handler: (event: ScheduledEvent<T>) => void,
+): void {
+  const heap = s.heap;
+  const matched: ScheduledEvent<T>[] = [];
+  let write = 0;
+  for (let read = 0; read < heap.length; read++) {
+    const ev = heap[read];
+    if (ev === undefined) continue;
+    if (predicate(ev)) {
+      matched.push(ev);
+      continue;
+    }
+    heap[write] = ev;
+    write += 1;
+  }
+  if (matched.length === 0) return;
+  heap.length = write;
+  for (let i = (write >> 1) - 1; i >= 0; i--) {
+    bubbleDown(heap, i);
+  }
+  matched.sort((a, b) => (a.time === b.time ? a.seq - b.seq : a.time - b.time));
+  for (const ev of matched) {
+    handler(ev);
+  }
+}
+
 /** Earliest scheduled event without mutating the heap. */
 export function peek<T>(s: Scheduler<T>): ScheduledEvent<T> | undefined {
   return s.heap[0];

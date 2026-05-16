@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { EntityHandle } from "../../ecs/index";
 import {
+  drainWhere,
   emptyScheduler,
   peek,
   pop,
   removeWhere,
+  type ScheduledEvent,
   schedule,
   scheduleAt,
   size,
@@ -292,5 +294,161 @@ describe("scheduler — removeWhere", () => {
     schedule(s, 30, h(3)); // seq 2
     pop(s); // h(2), seq 1
     expect(peek(s)?.seq).toBe(2);
+  });
+});
+
+describe("scheduler — drainWhere", () => {
+  test("hands every matching event to the handler in (time, seq) order", () => {
+    const s = emptyScheduler<EntityHandle>();
+    schedule(s, 30, h(1)); // seq 0
+    schedule(s, 10, h(2)); // seq 1
+    schedule(s, 20, h(3)); // seq 2
+    schedule(s, 10, h(4)); // seq 3
+    const seen: ScheduledEvent<EntityHandle>[] = [];
+    drainWhere(
+      s,
+      (ev) => ev.payload.id !== 3,
+      (ev) => seen.push(ev),
+    );
+    expect(seen.map((ev) => ev.payload.id)).toEqual([2, 4, 1]);
+    // Only the non-matching event survives.
+    expect(size(s)).toBe(1);
+    expect(pop(s)?.payload).toEqual(h(3));
+  });
+
+  test("preserves heap order for survivors", () => {
+    const s = emptyScheduler<EntityHandle>();
+    const inserts: ReadonlyArray<readonly [number, number]> = [
+      [100, 1],
+      [10, 2],
+      [50, 3],
+      [5, 4],
+      [200, 5],
+      [25, 6],
+    ];
+    for (const [delay, id] of inserts) {
+      schedule(s, delay, h(id));
+    }
+    drainWhere(
+      s,
+      (ev) => ev.payload.id === 2 || ev.payload.id === 5,
+      () => {},
+    );
+    const order: number[] = [];
+    while (true) {
+      const ev = pop(s);
+      if (ev === undefined) break;
+      order.push(ev.time);
+    }
+    expect(order).toEqual([5, 25, 50, 100]);
+  });
+
+  test("empty heap is a no-op (handler never called)", () => {
+    const s = emptyScheduler<EntityHandle>();
+    let calls = 0;
+    drainWhere(
+      s,
+      () => true,
+      () => {
+        calls += 1;
+      },
+    );
+    expect(calls).toBe(0);
+    expect(size(s)).toBe(0);
+  });
+
+  test("matching nothing leaves the heap intact and never calls the handler", () => {
+    const s = emptyScheduler<EntityHandle>();
+    schedule(s, 10, h(1));
+    schedule(s, 20, h(2));
+    let calls = 0;
+    drainWhere(
+      s,
+      () => false,
+      () => {
+        calls += 1;
+      },
+    );
+    expect(calls).toBe(0);
+    expect(pop(s)?.payload).toEqual(h(1));
+    expect(pop(s)?.payload).toEqual(h(2));
+  });
+
+  test("no-match call leaves the heap byte-identical (seq order, slot order, size)", () => {
+    // Locks the contract: when the predicate matches nothing, the compact
+    // loop performs identity writes, `heap.length` is untouched, and no
+    // Floyd heapify runs. Determinism contract for replay relies on this.
+    const s = emptyScheduler<EntityHandle>();
+    const inserts: ReadonlyArray<readonly [number, number]> = [
+      [100, 1],
+      [10, 2],
+      [50, 3],
+      [5, 4],
+      [200, 5],
+      [25, 6],
+    ];
+    for (const [delay, id] of inserts) {
+      schedule(s, delay, h(id));
+    }
+    const snapshot = s.heap.map((ev) => ({
+      time: ev.time,
+      seq: ev.seq,
+      id: ev.payload.id,
+    }));
+    drainWhere(
+      s,
+      () => false,
+      () => {},
+    );
+    const after = s.heap.map((ev) => ({
+      time: ev.time,
+      seq: ev.seq,
+      id: ev.payload.id,
+    }));
+    expect(after).toEqual(snapshot);
+    expect(s.heap.length).toBe(inserts.length);
+  });
+
+  test("does not advance `now` (parallel with removeWhere)", () => {
+    const s = emptyScheduler<EntityHandle>();
+    schedule(s, 50, h(1));
+    schedule(s, 100, h(2));
+    drainWhere(
+      s,
+      (ev) => ev.payload.id === 1,
+      () => {},
+    );
+    expect(s.now).toBe(0);
+  });
+
+  test("does not reset seq counter — future events keep monotonic seq", () => {
+    const s = emptyScheduler<EntityHandle>();
+    schedule(s, 10, h(1)); // seq 0
+    schedule(s, 20, h(2)); // seq 1
+    drainWhere(
+      s,
+      (ev) => ev.payload.id === 1,
+      () => {},
+    );
+    expect(s.nextSeq).toBe(2);
+    schedule(s, 30, h(3)); // seq 2
+    pop(s); // h(2), seq 1
+    expect(peek(s)?.seq).toBe(2);
+  });
+
+  test("handler order matches the order a normal pop chain would produce", () => {
+    const s = emptyScheduler<EntityHandle>();
+    schedule(s, 10, h(1)); // seq 0
+    schedule(s, 10, h(2)); // seq 1
+    schedule(s, 10, h(3)); // seq 2
+    schedule(s, 20, h(4)); // seq 3
+    const drained: number[] = [];
+    drainWhere(
+      s,
+      () => true,
+      (ev) => drained.push(ev.payload.id),
+    );
+    expect(drained).toEqual([1, 2, 3, 4]);
+    expect(size(s)).toBe(0);
   });
 });

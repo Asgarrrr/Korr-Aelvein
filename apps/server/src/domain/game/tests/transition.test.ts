@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { Level } from "../../dungeon/index";
 import { TILE_FLOOR } from "../../dungeon/index";
 import {
+  despawn,
   emptyWorld,
   forQuery,
   getComponent,
@@ -473,6 +474,165 @@ describe("concretize — same-time catchup", () => {
     }
     const pos = getComponent(targetNow.world, npcId, "position");
     expect(pos).toEqual({ x: 2, y: 2 });
+  });
+
+  test("concretize drains schedule events with stale entities without crashing or surviving on the heap", () => {
+    // applyAbstract guards on `isLiveHandle` and returns undefined for
+    // despawned entities. The catchup must still drain the heap entry
+    // (otherwise it would throw in `drainNonPlayer` once the zone is
+    // active). The companion invariant — "lastSimAt does not advance on a
+    // refusal" — is contract-only (the field is invisible post-flip), but
+    // the drain side-effect is observable: the stale event must not
+    // survive on the heap.
+    const DUMMY: ZoneId = 0;
+    const TARGET: ZoneId = 1;
+    const level = makeAllFloorLevel(3, 3, { x: 0, y: 0 });
+
+    const dummyWorld = emptyWorld();
+    const playerId = spawn(dummyWorld, {
+      position: { x: 0, y: 0 },
+      actor: { glyph: "@", name: "you" },
+      hp: { current: 10, max: 10 },
+    });
+
+    const targetWorld = emptyWorld();
+    const waypoints: ReadonlyArray<readonly [number, number]> = [
+      [1, 1],
+      [2, 2],
+    ];
+    const npcId = spawn(targetWorld, {
+      position: { x: 1, y: 1 },
+      actor: { glyph: "v", name: "npc" },
+      schedule: { waypoints, nextIndex: 1, period: 100 },
+    });
+    // Entity exists on the world but is despawned before concretize runs —
+    // its heap entry survives (lazy-skip pattern), but applyAbstract sees a
+    // stale handle and bails.
+    despawn(targetWorld, npcId);
+
+    const scheduler = emptyScheduler<GlobalEvent>();
+    schedule(scheduler, 100, {
+      kind: "schedule",
+      zone: TARGET,
+      entity: npcId,
+    });
+
+    const initialLastSimAt = 50;
+    const state: GameState = {
+      zones: new Map<ZoneId, ZoneStatus>([
+        [DUMMY, { kind: "active", world: dummyWorld, level }],
+        [
+          TARGET,
+          {
+            kind: "dormant",
+            world: targetWorld,
+            level,
+            lastSimAt: initialLastSimAt,
+          },
+        ],
+      ]),
+      activeZone: DUMMY,
+      playerId,
+      globalScheduler: scheduler,
+      rngState: [1, 2, 3, 4],
+      time: 100,
+      turn: 0,
+      gameOver: false,
+    };
+
+    parkActiveZone(state, DUMMY);
+    // After parkActiveZone the TARGET zone is still dormant — read it back
+    // so we can inspect its post-concretize state.
+    concretize(state, TARGET);
+
+    // Zone is now active. Before the contract fix it would have advanced
+    // lastSimAt to 100 even though the event was a no-op; that snapshot is
+    // gone once the zone flips, so we check the pre-flip state via the
+    // catchup's documented invariant: the event should still have been
+    // drained from the heap (no `schedule` event survives concretize), and
+    // no position mutation occurred on the despawned entity.
+    expect(size(state.globalScheduler)).toBeLessThanOrEqual(1);
+    // Heap survivor (if any) is for DUMMY, never a stale TARGET schedule.
+    for (const ev of state.globalScheduler.heap) {
+      const p = ev.payload;
+      expect(p.kind === "schedule" && p.zone === TARGET).toBe(false);
+    }
+  });
+
+  test("concretize skips schedule events with time <= lastSimAt (lower-bound contract)", () => {
+    // Pinned defensive contract: the catchup window is `(lastSimAt,
+    // state.time]`. Events at time <= lastSimAt have already been applied
+    // by an earlier drain pass and must not be re-applied. Today's drain
+    // loop pops them before they accumulate, but the lower bound keeps
+    // concretize correct under any future drain refactor.
+    const DUMMY: ZoneId = 0;
+    const TARGET: ZoneId = 1;
+    const level = makeAllFloorLevel(3, 3, { x: 0, y: 0 });
+
+    const dummyWorld = emptyWorld();
+    const playerId = spawn(dummyWorld, {
+      position: { x: 0, y: 0 },
+      actor: { glyph: "@", name: "you" },
+      hp: { current: 10, max: 10 },
+    });
+
+    const targetWorld = emptyWorld();
+    const waypoints: ReadonlyArray<readonly [number, number]> = [
+      [1, 1],
+      [2, 2],
+    ];
+    // NPC starts at (1,1), nextIndex points at the (2,2) waypoint. If
+    // applyAbstract fires, it moves the NPC to (2,2). If concretize
+    // honours the lower bound, the position stays at (1,1).
+    const npcId = spawn(targetWorld, {
+      position: { x: 1, y: 1 },
+      actor: { glyph: "v", name: "npc" },
+      schedule: { waypoints, nextIndex: 1, period: 100 },
+    });
+
+    const scheduler = emptyScheduler<GlobalEvent>();
+    // Event scheduled at time = 30, but lastSimAt = 50 — meaning this
+    // event was already applied in a previous drain pass (constructed
+    // artificially here; the running game would have popped it).
+    schedule(scheduler, 30, {
+      kind: "schedule",
+      zone: TARGET,
+      entity: npcId,
+    });
+
+    const state: GameState = {
+      zones: new Map<ZoneId, ZoneStatus>([
+        [DUMMY, { kind: "active", world: dummyWorld, level }],
+        [
+          TARGET,
+          {
+            kind: "dormant",
+            world: targetWorld,
+            level,
+            lastSimAt: 50,
+          },
+        ],
+      ]),
+      activeZone: DUMMY,
+      playerId,
+      globalScheduler: scheduler,
+      rngState: [1, 2, 3, 4],
+      time: 100,
+      turn: 0,
+      gameOver: false,
+    };
+
+    parkActiveZone(state, DUMMY);
+    concretize(state, TARGET);
+
+    const targetNow = state.zones.get(TARGET);
+    if (targetNow === undefined || targetNow.kind !== "active") {
+      throw new Error("test: TARGET should be active after concretize");
+    }
+    // Position unchanged → applyAbstract was never called for the event
+    // at time=30 (it sat below lastSimAt=50).
+    const pos = getComponent(targetNow.world, npcId, "position");
+    expect(pos).toEqual({ x: 1, y: 1 });
   });
 
   test("enterZone leaves the origin zone active when the target has no free spawn cell", () => {

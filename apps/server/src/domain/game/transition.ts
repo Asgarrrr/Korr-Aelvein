@@ -24,15 +24,15 @@ import {
   type World,
 } from "../ecs/index";
 import {
+  drainWhere,
   pop,
   removeWhere,
-  type ScheduledEvent,
   schedule,
   scheduleAt,
 } from "../scheduler/index";
 import { applyAbstract } from "./abstract";
 import { activeWorld, entityAt, getZone } from "./state";
-import type { GameState, GlobalEvent, ZoneId, ZoneStatus } from "./types";
+import type { GameState, ZoneId } from "./types";
 
 /**
  * Convert the active zone `id` to dormant. Despawns the player from that
@@ -80,86 +80,70 @@ export function parkActiveZone(state: GameState, id: ZoneId): void {
 }
 
 /**
- * Flip dormant zone `id` to active. Three steps:
+ * Flip dormant zone `id` to active. One pass over the heap:
  *
- *  1. Catchup: apply every `schedule` event for `id` with `time <=
- *     state.time` in `(time, seq)` order; `zone.lastSimAt` advances to the
- *     highest applied event time.
- *  2. Drop remaining `schedule` events for `id` from the heap — once the
- *     zone is active they would throw in `drainNonPlayer`.
- *  3. Flip the zone, then schedule a fresh `actor` event at `state.time`
+ *  1. Drain every `schedule` event for `id` — both the due ones (`time <=
+ *     state.time`, applied in `(time, seq)` order with `zone.lastSimAt`
+ *     advancing to the highest applied time) and the not-yet-due tail (just
+ *     dropped: once the zone is active these would throw in `drainNonPlayer`).
+ *  2. Flip the zone, then schedule a fresh `actor` event at `state.time`
  *     for every entity in the zone's world with an `ai` component (resume
  *     in-bubble ticking).
  *
  * Does NOT spawn the player — that's the orchestrator's job, since only it
  * holds the persistent state being carried across.
  *
- * The catchup loop is mostly defensive in the current architecture:
- * `drainNonPlayer` processes dormant `schedule` events continuously, so the
- * only events catchup typically picks up are same-time-as-the-player same-
- * tick events the drain stopped just before. Pinning the contract from
- * `docs/LIVING-WORLD.md` keeps the design safe under future drain refactors.
+ * The drained-and-applied subset is mostly defensive in the current
+ * architecture: `drainNonPlayer` processes dormant `schedule` events
+ * continuously, so the only events catchup typically picks up are same-time-
+ * as-the-player same-tick events the drain stopped just before. Pinning the
+ * contract from `docs/LIVING-WORLD.md` keeps the design safe under future
+ * drain refactors.
  */
 export function concretize(state: GameState, id: ZoneId): void {
   const zone = getZone(state, id);
   if (zone.kind !== "dormant") {
     throw new Error(`concretize: zone ${id} is ${zone.kind}, not dormant`);
   }
-  catchupDormant(state, zone, id);
-  removeWhere(state.globalScheduler, (ev) => {
-    const p = ev.payload;
-    return p.kind === "schedule" && p.zone === id;
-  });
+  // Pinned contract from docs/LIVING-WORLD.md § "Concretizing a dormant zone":
+  // drain every `schedule` event for `id`, simulate the window
+  // `(zone.lastSimAt, state.time]` via `applyAbstract`, advance `lastSimAt`
+  // only to the highest *applied* time. Both bounds are typically empty in
+  // today's architecture (drainNonPlayer processes dormant events
+  // continuously, so lastSimAt ≈ state.time at concretize time), but pinning
+  // the contract here keeps the design safe if a future Phase moves to
+  // deferred / lazy simulation — at which point lastSimAt becomes the
+  // load-bearing resume point.
+  drainWhere(
+    state.globalScheduler,
+    (ev) => {
+      const p = ev.payload;
+      return p.kind === "schedule" && p.zone === id;
+    },
+    (ev) => {
+      if (ev.time > state.time) return;
+      if (ev.time <= zone.lastSimAt) return;
+      const period = applyAbstract(zone, ev.payload.entity);
+      if (period === undefined) return;
+      zone.lastSimAt = ev.time;
+    },
+  );
   state.zones.set(id, {
     kind: "active",
     world: zone.world,
     level: zone.level,
   });
   // schedule(_, 0, _) adds at `scheduler.now` which is `state.time` at this
-  // point (the catchup batch-removed without popping, so `now` is unchanged).
-  // Each AI entity therefore gets a fresh actor event at `state.time` and
-  // fires before the player's next event scheduled at `state.time +
-  // ACTION_COST`.
+  // point (drainWhere mutated the heap without popping, so `now` is
+  // unchanged). Each AI entity therefore gets a fresh actor event at
+  // `state.time` and fires before the player's next event scheduled at
+  // `state.time + ACTION_COST`.
   for (const [handle] of query(zone.world, ["ai"])) {
     schedule(state.globalScheduler, 0, {
       kind: "actor",
       zone: id,
       entity: handle,
     });
-  }
-}
-
-/**
- * Pop every `schedule` event for `zone` with `time <= state.time` out of
- * the heap and apply them in `(time, seq)` order — the same order
- * `drainNonPlayer` would have used.
- *
- * Heap mutation during traversal is unsafe (would skip events), so we
- * collect matches first, batch-remove via `removeWhere`, sort
- * deterministically, then apply.
- */
-function catchupDormant(
-  state: GameState,
-  zone: ZoneStatus & { kind: "dormant" },
-  id: ZoneId,
-): void {
-  const due: ScheduledEvent<GlobalEvent>[] = [];
-  for (const ev of state.globalScheduler.heap) {
-    const p = ev.payload;
-    if (p.kind === "schedule" && p.zone === id && ev.time <= state.time) {
-      due.push(ev);
-    }
-  }
-  if (due.length === 0) return;
-  removeWhere(state.globalScheduler, (ev) => {
-    const p = ev.payload;
-    return p.kind === "schedule" && p.zone === id && ev.time <= state.time;
-  });
-  due.sort((a, b) => (a.time === b.time ? a.seq - b.seq : a.time - b.time));
-  for (const ev of due) {
-    if (ev.payload.kind !== "schedule") continue;
-    applyAbstract(zone, ev.payload.entity);
-    zone.lastSimAt = ev.time;
   }
 }
 
