@@ -25,7 +25,28 @@
  * repeatedly on the same `state` — `toSnapshot` is pure-on-input (reads
  * world, allocates a fresh literal), so repeated calls don't mutate.
  *
- * ── Discovery results (30-run aggregate, 2026-05) ─────────────────────────
+ * ── Payload change note (2026-06, Phase 7 perception) ─────────────────────
+ *
+ *   The wire format changed after the 2026-05 table was measured: tiles
+ *   are perception-masked (unseen cells ship as 255 — 3 chars each, vs 1
+ *   for a raw tile), mobs are FOV-filtered, and `spawn` + `rooms` were
+ *   removed from the schema. Post-perception baseline (30-run aggregate,
+ *   2026-06):
+ *
+ *   scenario                         median µs   payload (B)
+ *   S1 newGame                          33.9        9 607
+ *   S2 midgame                          33.9        9 608
+ *   S3 100 mobs                         38.2        9 607
+ *   S4 1000 mobs (pathological)         80.9       10 334
+ *
+ *   Per call: 1.6× the 2026-05 numbers (mask loop over 2 400 tiles +
+ *   per-mob FOV probe) — under the 2× investigation bar, absolute cost
+ *   still trivial at human action rates. Payload: +3.2 KB at S1 (the
+ *   "255" inflation minus the rooms removal); S4 collapsed 33.4 → 10.3 KB
+ *   because out-of-FOV mobs no longer ship. Compare future runs against
+ *   THIS table, not the 2026-05 one.
+ *
+ * ── Discovery results (30-run aggregate, 2026-05, pre-perception) ─────────
  *
  *   scenario                         median µs    p95 µs   payload (B)
  *   S1 newGame (80×30, 2 mobs)         21.1       22.2         6 393

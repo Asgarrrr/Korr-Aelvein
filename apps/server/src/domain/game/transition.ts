@@ -31,6 +31,7 @@ import {
   scheduleAt,
 } from "../scheduler/index";
 import { applyAbstract } from "./abstract";
+import { updatePerception, VISION_RADIUS } from "./perception";
 import { activeWorld, entityAt, getZone } from "./state";
 import type { GameState, ZoneId } from "./types";
 
@@ -75,6 +76,11 @@ export function parkActiveZone(state: GameState, id: ZoneId): void {
     kind: "dormant",
     world: zone.world,
     level: zone.level,
+    // Carry the perception memory by reference — `seen` is the map memory
+    // the player gets back on return; `visible` goes stale during
+    // dormancy by design (see the ZoneStatus docstring).
+    seen: zone.seen,
+    visible: zone.visible,
     lastSimAt: state.time,
   });
 }
@@ -132,6 +138,8 @@ export function concretize(state: GameState, id: ZoneId): void {
     kind: "active",
     world: zone.world,
     level: zone.level,
+    seen: zone.seen,
+    visible: zone.visible,
   });
   // schedule(_, 0, _) adds at `scheduler.now` which is `state.time` at this
   // point (drainWhere mutated the heap without popping, so `now` is
@@ -215,6 +223,9 @@ export function enterZone(
     actor: { glyph: "@", name: "you" },
     hp,
   });
+  // FOV at the arrival cell, before the snapshot ships this tick — the
+  // zone's `seen` keeps whatever a previous visit accumulated.
+  updatePerception(newZone, newZone.level, px, py, VISION_RADIUS);
   scheduleAt(state.globalScheduler, playerNextTime, {
     kind: "actor",
     zone: target,

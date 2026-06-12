@@ -24,6 +24,7 @@
     "bench:scheduler": "bun run src/domain/scheduler/bench/standard.bench.ts",
     "bench:scheduler:variants": "bun run src/domain/scheduler/bench/variants.bench.ts",
     "bench:scheduler:agg": "bun run src/domain/scheduler/bench/aggregate.bench.ts",
+    "bench:fov": "bun run src/domain/perception/bench/fov.bench.ts",
     "bench:snapshot": "bun run src/bench/snapshot.bench.ts",
     "bench:snapshot:agg": "bun run src/bench/snapshot.agg.bench.ts",
     "preview": "bun run scripts/preview-dungeon.ts",

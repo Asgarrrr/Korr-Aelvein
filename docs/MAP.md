@@ -11,7 +11,7 @@ apps/
     src/
       app.ts          Elysia builder (pure). Use `createApp()` for in-memory testing.
       index.ts        Listener: `createApp().listen(PORT)`, re-exports `type App`.
-      tests/          app.test.ts (/health + factory).
+      tests/          app.test.ts (/health + factory) + snapshot.test.ts (perception filtering on the wire).
       domain/         Pure game logic. No imports from transport/.
         rng/          Seeded sfc32 PRNG with serialisable state — see `apps/server/src/domain/rng/README.md`.
           index.ts                          PRNG public surface.
@@ -34,7 +34,12 @@ apps/
           abstract.ts                       applyAbstract (off-zone NPC schedules — Phase 4).
           combat.ts                         attack (Phase 5 bump-combat, pure-on-world).
           transition.ts                     parkActiveZone + concretize + enterZone (Phase 6 zone transitions).
-          tests/                            tick + wanderer + village + combat + transition.
+          perception.ts                     VISION_RADIUS + updatePerception (Phase 7 glue: FOV → ZoneStatus.seen/visible).
+          tests/                            tick + wanderer + village + combat + transition + perception.
+        perception/   Field of view — symmetric shadowcasting (Albert Ford), pure, integer-only.
+          index.ts                          computeFov(level, ox, oy, radius) → Uint8Array mask + isOpaque(tile).
+          tests/                            index + properties (exact diamond-model oracle, symmetry) + determinism (pinned hashes).
+          bench/                            fov.bench.ts (~3-5 µs/call at 80×30 r=12).
         dungeon/      Procgen — see `apps/server/src/domain/dungeon/README.md` (entry point) and `docs/PROCGEN.md` (full story).
           types.ts, grid.ts, index.ts       Level/Tile types, flat-array helpers, public surface.
           tests/                            grid / index / properties — foundation + adversarial.
@@ -71,6 +76,7 @@ turbo.json            Build / dev / test / check-types tasks.
 - **Entry point**: `src/index.ts` calls `createApp().listen(PORT)`. Re-exports `type App` for the client via Eden Treaty.
 - **App builder**: `src/app.ts` — pure `createApp()` that returns the Elysia instance without listening. Use this from tests: `await createApp().handle(new Request(...))`.
 - **WebSocket**: `/game` with TypeBox `body` and `response` schemas. Inbound validation is the security boundary of the server-authoritative model.
+- **Wire is perception-filtered** (Phase 7): tiles the player has never seen ship as the sentinel `255` (`TILE_UNSEEN`, app.ts-local — domain `Tile` stays `0 | 1 | 2`), mobs outside the current FOV are omitted, `downStairs` is `null` until seen. `spawn` and `rooms` were **removed** from the snapshot schema — the client never consumed them and they leaked unexplored layout.
 - **HTTP**: `/health` returns `{ ok: true }`.
 - **Port**: `3000` (override with `PORT` env var; declared in `turbo.json#globalEnv`).
 - **Game logic**: lives under `src/domain/`. Currently `rng/` (PRNG infra), `dungeon/` (procgen), and `game/` (tick loop).
@@ -102,9 +108,17 @@ turbo.json            Build / dev / test / check-types tasks.
 - **Multi-action turns**: re-schedule the same handle twice with smaller delays; both pop before slower actors get a slot. No special case in the heap.
 - **Why this and not Hauberk-style energy / indexed PQ with decrease-key / hashed timing wheel**: see `docs/GAME-LOOP.md` § "The scheduler".
 
+### `apps/server/src/domain/perception`
+
+- **Public API**: `computeFov(level, ox, oy, radius): Uint8Array` (row-major 0/1 mask, origin always visible, throws on off-grid origin, euclidean range `dx² + dy² ≤ r²`) and `isOpaque(tile)` — the single sight-blocking predicate (wall + door today; door open/closed state lands here later).
+- **Algorithm**: symmetric shadowcasting (Albert Ford), explicit stack, exact rational slopes compared by cross-multiplication — zero floats, deterministic by construction. Floor↔floor visibility is symmetric; walls are modeled as inscribed diamonds.
+- **Why not** recursive shadowcasting (asymmetric — unfair once mobs perceive), permissive FOV (~10× slower, over-reveals), naive raycasting (artefacts), or rot-js (2.56 MB toolkit, non-symmetric FOV): see the docstring in `index.ts`.
+- **Tests**: exact-oracle cross-check (segment vs open inscribed diamonds + the pinch rule for double-grazing rays), symmetry, range cut, pinned FNV-1a hashes over generated levels.
+- **Perf**: ~3-5 µs per call at 80×30 r=12 (`bun run bench:fov`).
+
 ### `apps/server/src/domain/game`
 
-- **Public API**: `newGame(seed, style)`, `tick(state, action)`, `attack(world, rng, target)`, `entityAt(world, x, y)`, `runAi(state, rng, handle)`, `applyAbstract(zone, entity)`, `parkActiveZone(state, id)`, `concretize(state, id)`, `enterZone(state, target, actionCost)`, `getZone / activeZoneStatus / activeWorld / activeLevel`, types `GameState` / `Action` / `Dir` / `ZoneId` / `ZoneStatus` / `GlobalEvent` / `Time` / `AttackResult`. `Ai` and `Schedule` are component types — import from `domain/ecs/index` (only `Ai` is re-exported there today; `Schedule` lives on the component but isn't surfaced until a caller needs it).
+- **Public API**: `newGame(seed, style)`, `tick(state, action)`, `attack(world, rng, target)`, `entityAt(world, x, y)`, `runAi(state, rng, handle)`, `applyAbstract(zone, entity)`, `parkActiveZone(state, id)`, `concretize(state, id)`, `enterZone(state, target, actionCost)`, `updatePerception(zone, level, x, y, radius)` + `VISION_RADIUS`, `getZone / activeZoneStatus / activeWorld / activeLevel`, types `GameState` / `Action` / `Dir` / `ZoneId` / `ZoneStatus` / `GlobalEvent` / `Time` / `AttackResult`. `Ai` and `Schedule` are component types — import from `domain/ecs/index` (only `Ai` is re-exported there today; `Schedule` lives on the component but isn't surfaced until a caller needs it).
 - **Multi-zone shape**: `GameState.zones: Map<ZoneId, ZoneStatus>` with one `active` zone and zero or more `dormant` zones. `globalScheduler: Scheduler<GlobalEvent>` carries actor turns *and* schedule events on a single timeline.
 - **Loop shape**: pure-ish reducer `(state, action) → state`. RNG is hydrated once per tick from `state.rngState`, threaded through the action and the drain loop, persisted back to the returned wrapper.
 - **Drain dispatch**: `drainNonPlayer` switches on `GlobalEvent.kind` — `actor` runs `runAi` (in-bubble AI), `schedule` runs `applyAbstract` (off-zone NPC). A `never` exhaustiveness sentinel forces new variants to land alongside their dispatcher.

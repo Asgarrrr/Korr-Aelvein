@@ -1,14 +1,20 @@
 import { Elysia, t } from "elysia";
 import { forQuery, getComponent } from "./domain/ecs/index";
 import {
-  activeLevel,
-  activeWorld,
+  activeZoneStatus,
   type GameState,
   newGame,
   tick,
 } from "./domain/game/index";
 
 const TCoords = t.Tuple([t.Number(), t.Number()]);
+
+/**
+ * Wire sentinel for a tile the player has never seen. Lives here, not in
+ * the dungeon domain — `Tile` stays `0 | 1 | 2`; 255 exists only on the
+ * wire. The client renders it as blank space (`apps/client/src/render.ts`).
+ */
+const TILE_UNSEEN = 255;
 
 const bodySchema = t.Union([
   t.Object({
@@ -47,23 +53,17 @@ export const responseSchema = t.Object({
       glyph: t.String(),
     }),
   ),
+  // Perception-filtered (Phase 7): `tiles` ships TILE_UNSEEN for never-seen
+  // cells, `downStairs` stays null until its tile has been seen. `spawn`
+  // and `rooms` were removed outright — the client never consumed them and
+  // both leaked level layout the player hadn't earned.
   level: t.Object({
     grid: t.Object({
       width: t.Number(),
       height: t.Number(),
       tiles: t.Array(t.Number()),
     }),
-    spawn: t.Union([t.Null(), TCoords]),
     downStairs: t.Union([t.Null(), TCoords]),
-    rooms: t.Array(
-      t.Object({
-        x: t.Number(),
-        y: t.Number(),
-        w: t.Number(),
-        h: t.Number(),
-        doors: t.Array(TCoords),
-      }),
-    ),
   }),
 });
 
@@ -78,8 +78,8 @@ function toPair(pt: readonly [number, number]): [number, number] {
 
 export function toSnapshot(state: GameState): Snapshot {
   const { playerId, turn, gameOver } = state;
-  const world = activeWorld(state);
-  const level = activeLevel(state);
+  const zone = activeZoneStatus(state);
+  const { world, level, seen, visible } = zone;
   const pos = getComponent(world, playerId, "position");
   if (pos === undefined) {
     throw new Error("toSnapshot: player entity has no position component");
@@ -90,13 +90,23 @@ export function toSnapshot(state: GameState): Snapshot {
   }
   const mobs: Array<{ x: number; y: number; glyph: string }> = [];
   // `ai` filter excludes the player (who has no AI component) — no need
-  // for an explicit "not the player" check.
+  // for an explicit "not the player" check. Only mobs inside the current
+  // FOV ship; memory (`seen`) shows terrain, never entities.
   forQuery(world, ["position", "actor", "ai"], (_handle, view) => {
     const p = view.position;
     const a = view.actor;
     if (p === undefined || a === undefined) return;
+    if (visible[p.y * level.grid.width + p.x] !== 1) return;
     mobs.push({ x: p.x, y: p.y, glyph: a.glyph });
   });
+  // Mask the grid: seen tiles ship as-is, the rest as TILE_UNSEEN.
+  const tiles: number[] = new Array(level.grid.tiles.length);
+  for (const [i, raw] of level.grid.tiles.entries()) {
+    tiles[i] = seen[i] === 1 ? raw : TILE_UNSEEN;
+  }
+  const stairs = level.downStairs;
+  const stairsSeen =
+    stairs !== null && seen[stairs[1] * level.grid.width + stairs[0]] === 1;
   return {
     type: "state",
     turn,
@@ -109,17 +119,9 @@ export function toSnapshot(state: GameState): Snapshot {
       grid: {
         width: level.grid.width,
         height: level.grid.height,
-        tiles: Array.from(level.grid.tiles),
+        tiles,
       },
-      spawn: level.spawn === null ? null : toPair(level.spawn),
-      downStairs: level.downStairs === null ? null : toPair(level.downStairs),
-      rooms: level.rooms.map((r) => ({
-        x: r.x,
-        y: r.y,
-        w: r.w,
-        h: r.h,
-        doors: r.doors.map(toPair),
-      })),
+      downStairs: stairs !== null && stairsSeen ? toPair(stairs) : null,
     },
   };
 }
