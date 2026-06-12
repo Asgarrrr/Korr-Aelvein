@@ -55,9 +55,9 @@ export function activeLevel(state: GameState): Level {
  * what bump-combat needs to identify the target without a second scan.
  *
  * O(n) over `position + actor` entities. Fine below ~1000 actors per zone
- * (audited 2026-05); the planned upgrade is a `Map<cellKey, EntityHandle>`
- * maintained in `setComponent("position")` once bump-combat or actor count
- * forces it.
+ * (audited 2026-05); the planned upgrade is a flat-index
+ * `Map<number, EntityHandle>` (keyed by `idx(x, y, width)`) maintained in
+ * `setComponent("position")` once bump-combat or actor count forces it.
  */
 export function entityAt(
   world: World,
@@ -66,7 +66,7 @@ export function entityAt(
 ): EntityHandle | undefined {
   for (const [handle, view] of query(world, ["position", "actor"])) {
     const p = view.position;
-    if (p !== undefined && p.x === x && p.y === y) return handle;
+    if (p.x === x && p.y === y) return handle;
   }
   return undefined;
 }

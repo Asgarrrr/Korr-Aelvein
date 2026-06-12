@@ -34,7 +34,7 @@ export function inBounds(
   return x >= 0 && y >= 0 && x < grid.width && y < grid.height;
 }
 
-function isTile(value: number): value is Tile {
+export function isTile(value: number): value is Tile {
   return value === TILE_WALL || value === TILE_FLOOR || value === TILE_DOOR;
 }
 

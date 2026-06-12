@@ -14,6 +14,7 @@
 import {
   generateLevel,
   getTile,
+  idx,
   type Level,
   type StyleId,
   TILE_WALL,
@@ -80,6 +81,7 @@ function spawnDonjonZone(
     throw new Error("spawnDonjonZone: generated level has no spawn point");
   }
   const [px, py] = level.spawn;
+  const { width } = level.grid;
   const world = emptyWorld();
   const playerId = spawn(world, {
     position: { x: px, y: py },
@@ -93,9 +95,9 @@ function spawnDonjonZone(
   });
 
   const floors = listFloorCells(level);
-  const taken = new Set<string>([cellKey(px, py)]);
+  const taken = new Set<number>([idx(px, py, width)]);
   for (let i = 0; i < WANDERER_COUNT; i++) {
-    const [wx, wy] = pickFreeFloor(rng, floors, taken);
+    const [wx, wy] = pickFreeFloor(rng, floors, taken, width);
     const wanderer = spawn(world, {
       position: { x: wx, y: wy },
       actor: { glyph: "r", name: "wanderer" },
@@ -107,10 +109,10 @@ function spawnDonjonZone(
       zone: DONJON_ZONE,
       entity: wanderer,
     });
-    taken.add(cellKey(wx, wy));
+    taken.add(idx(wx, wy, width));
   }
 
-  const size = level.grid.width * level.grid.height;
+  const size = width * level.grid.height;
   const donjon: ZoneStatus = {
     kind: "active",
     world,
@@ -137,6 +139,7 @@ function spawnVillageZone(
   globalScheduler: Scheduler<GlobalEvent>,
 ): void {
   const level = generateLevel(rng, 40, 20, "rim");
+  const { width } = level.grid;
   const world = emptyWorld();
   const floors = listFloorCells(level);
   if (floors.length < 2) {
@@ -144,18 +147,18 @@ function spawnVillageZone(
       "spawnVillageZone: village level has fewer than 2 floor cells",
     );
   }
-  const taken = new Set<string>();
+  const taken = new Set<number>();
   // Reserve `level.spawn` for the arriving player. `enterZone`
   // pre-computes the player's spawn cell *before* `concretize` runs
   // catchupDormant — if a Schedule waypoint included `level.spawn`,
   // catchup could move an NPC onto the pre-computed cell and the player
   // would land on top of them on entry.
   if (level.spawn !== null) {
-    taken.add(cellKey(level.spawn[0], level.spawn[1]));
+    taken.add(idx(level.spawn[0], level.spawn[1], width));
   }
-  const homeCell = pickFreeFloor(rng, floors, taken);
-  taken.add(cellKey(homeCell[0], homeCell[1]));
-  const counterCell = pickFreeFloor(rng, floors, taken);
+  const homeCell = pickFreeFloor(rng, floors, taken, width);
+  taken.add(idx(homeCell[0], homeCell[1], width));
+  const counterCell = pickFreeFloor(rng, floors, taken, width);
   const villager = spawn(world, {
     position: { x: homeCell[0], y: homeCell[1] },
     actor: { glyph: "v", name: "shopkeeper" },
@@ -175,7 +178,7 @@ function spawnVillageZone(
   });
   // Fresh fog: the village has never been perceived. `enterZone` computes
   // the first real FOV when the player arrives.
-  const size = level.grid.width * level.grid.height;
+  const size = width * level.grid.height;
   zones.set(VILLAGE_ZONE, {
     kind: "dormant",
     world,
@@ -184,10 +187,6 @@ function spawnVillageZone(
     visible: new Uint8Array(size),
     lastSimAt: 0,
   });
-}
-
-function cellKey(x: number, y: number): string {
-  return `${x},${y}`;
 }
 
 function listFloorCells(level: Level): Array<readonly [number, number]> {
@@ -204,11 +203,12 @@ function listFloorCells(level: Level): Array<readonly [number, number]> {
 function pickFreeFloor(
   rng: Rng,
   floors: ReadonlyArray<readonly [number, number]>,
-  taken: ReadonlySet<string>,
+  taken: ReadonlySet<number>,
+  width: number,
 ): readonly [number, number] {
   // Single allocation, one rng.pick — no rejection loop, no determinism trap
   // from variable-length RNG consumption.
-  const available = floors.filter(([x, y]) => !taken.has(cellKey(x, y)));
+  const available = floors.filter(([x, y]) => !taken.has(idx(x, y, width)));
   if (available.length === 0) {
     throw new Error("pickFreeFloor: no floor cells available");
   }

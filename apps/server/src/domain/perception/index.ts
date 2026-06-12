@@ -44,7 +44,7 @@
  */
 
 import type { Level, Tile } from "../dungeon/index";
-import { TILE_DOOR, TILE_FLOOR, TILE_WALL } from "../dungeon/index";
+import { isTile, TILE_DOOR, TILE_WALL } from "../dungeon/index";
 
 /**
  * Single chokepoint for "does this tile block sight?". Doors block while
@@ -62,10 +62,6 @@ export function isOpaque(tile: Tile): boolean {
   return tile === TILE_WALL || tile === TILE_DOOR;
 }
 
-function isTileValue(value: number): value is Tile {
-  return value === TILE_WALL || value === TILE_FLOOR || value === TILE_DOOR;
-}
-
 /**
  * Raw-index read with fail-closed semantics: out-of-bounds and corrupt
  * tile values are opaque. Perception must never reveal past the edge of
@@ -75,7 +71,7 @@ function opaqueAt(level: Level, x: number, y: number): boolean {
   const { width, height, tiles } = level.grid;
   if (x < 0 || y < 0 || x >= width || y >= height) return true;
   const raw = tiles[y * width + x];
-  if (raw === undefined || !isTileValue(raw)) return true;
+  if (raw === undefined || !isTile(raw)) return true;
   return isOpaque(raw);
 }
 

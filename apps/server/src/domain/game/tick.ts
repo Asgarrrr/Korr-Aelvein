@@ -50,7 +50,9 @@ function dirDelta(dir: Dir): readonly [number, number] {
       return [-1, 0];
     default: {
       const _exhaustive: never = dir;
-      throw new Error(`dirDelta: unhandled direction ${String(_exhaustive)}`);
+      throw new Error(
+        `dirDelta: unhandled direction ${JSON.stringify(_exhaustive)}`,
+      );
     }
   }
 }
