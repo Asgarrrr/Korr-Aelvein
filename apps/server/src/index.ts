@@ -7,3 +7,4 @@ const app = createApp().listen(PORT);
 console.log(`server listening on http://localhost:${app.server?.port}`);
 
 export type { App } from "./app";
+export type { WireTile } from "./snapshot";

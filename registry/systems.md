@@ -1,5 +1,11 @@
 # Game systems
 
+> This document holds the high-level system sketches. Full design documents:
+> - Combat system → `registry/combat.md`
+> - Métier system (all 12 professions) → `registry/métiers.md`
+> - Bestiary and creature AI → `registry/bestiary.md`
+> - Chain and inheritance rules → `registry/inheritance.md`
+
 ## Progression — no XP, no levels
 
 Three axes, all diegetic, no numbers.

@@ -21,6 +21,7 @@ import {
 import { emptyWorld, spawn } from "../ecs/index";
 import { createRng, type Rng } from "../rng/index";
 import { emptyScheduler, type Scheduler, schedule } from "../scheduler/index";
+import { updatePerception, VISION_RADIUS } from "./perception";
 import type { GameState, GlobalEvent, ZoneId, ZoneStatus } from "./types";
 
 const DONJON_ZONE: ZoneId = 0;
@@ -109,7 +110,18 @@ function spawnDonjonZone(
     taken.add(cellKey(wx, wy));
   }
 
-  zones.set(DONJON_ZONE, { kind: "active", world, level });
+  const size = level.grid.width * level.grid.height;
+  const donjon: ZoneStatus = {
+    kind: "active",
+    world,
+    level,
+    seen: new Uint8Array(size),
+    visible: new Uint8Array(size),
+  };
+  // Initial FOV before returning: the WS handler snapshots on `open`,
+  // before any tick runs — without this the first frame would be all fog.
+  updatePerception(donjon, px, py, VISION_RADIUS);
+  zones.set(DONJON_ZONE, donjon);
   return playerId;
 }
 
@@ -161,10 +173,15 @@ function spawnVillageZone(
     zone: VILLAGE_ZONE,
     entity: villager,
   });
+  // Fresh fog: the village has never been perceived. `enterZone` computes
+  // the first real FOV when the player arrives.
+  const size = level.grid.width * level.grid.height;
   zones.set(VILLAGE_ZONE, {
     kind: "dormant",
     world,
     level,
+    seen: new Uint8Array(size),
+    visible: new Uint8Array(size),
     lastSimAt: 0,
   });
 }

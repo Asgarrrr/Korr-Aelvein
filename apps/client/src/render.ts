@@ -5,7 +5,7 @@
  *
  * Contract: `renderGrid(input)` returns a `\n`-joined string of `height`
  * rows, each `width` chars wide. Glyph priority per cell: player > mob >
- * tile (wall `#`, floor `.`, door `+`).
+ * tile (wall `#`, floor `.`, door `+`, never-seen fog ` `).
  *
  * Implementation notes (see `bench/render.variants.bench.ts` for the
  * measured comparison):
@@ -30,12 +30,15 @@
  * guard if that constraint ever becomes load-bearing for gameplay.
  */
 
+import type { WireTile } from "server";
+
 export type RenderInput = {
   readonly width: number;
   readonly height: number;
   /**
    * Row-major tile array, length `width × height`. Values: 0 wall, 1 floor,
-   * 2 door — matches the server's `TILE_*` constants. Accepts the
+   * 2 door — matching the server's `TILE_*` constants — plus the wire-only
+   * 255 (never-seen fog, `TILE_UNSEEN` in the server's app.ts). Accepts the
    * plain-array form the WS snapshot ships (TypeBox round-trips Uint8Array
    * as `number[]`).
    */
@@ -48,12 +51,22 @@ export type RenderInput = {
   }>;
 };
 
-// ASCII char codes for the four tile/entity glyphs the renderer emits.
+// ASCII char codes for the tile/entity glyphs the renderer emits.
 const CODE_WALL = 35; // '#'
 const CODE_FLOOR = 46; // '.'
 const CODE_DOOR = 43; // '+'
 const CODE_PLAYER = 64; // '@'
+const CODE_SPACE = 32; // ' ' — fog (never-seen tile)
 const CODE_NL = 10; // '\n'
+
+/**
+ * Wire sentinel for a never-seen tile. Typed `WireTile` (the server's wire
+ * union, consumed type-only via Eden) so a drift in the server's
+ * `TILE_UNSEEN` becomes a client compile error here — not a silent repaint
+ * of the whole fog as `#`. Must be branched explicitly: the tile
+ * fallthrough renders any unhandled value as a wall.
+ */
+const TILE_UNSEEN: WireTile = 255;
 
 export function renderGrid(input: RenderInput): string {
   const { width, height, tiles, player, mobs } = input;
@@ -82,7 +95,17 @@ export function renderGrid(input: RenderInput): string {
           code = mob.charCodeAt(0) ?? CODE_WALL;
         } else {
           const t = tiles[cellIdx] ?? 0;
-          code = t === 1 ? CODE_FLOOR : t === 2 ? CODE_DOOR : CODE_WALL;
+          // No visible-vs-remembered distinction in monochrome ASCII —
+          // both render at full brightness until the Canvas renderer dims
+          // memory. Fog alone is blank.
+          code =
+            t === TILE_UNSEEN
+              ? CODE_SPACE
+              : t === 1
+                ? CODE_FLOOR
+                : t === 2
+                  ? CODE_DOOR
+                  : CODE_WALL;
         }
       }
       buf[idx] = code;

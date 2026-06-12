@@ -8,6 +8,8 @@ A vast and **inexplicable** abyss at the heart of an island. Its mere presence a
 - why it is there
 - what lies at the bottom
 
+> For the full lore development — what Korr is, the founders, the myths and their corruption, the chamber at the bottom — see `registry/lore-deep.md`.
+
 **It has always been there.** There is no record of a *before*. The town was not built around it because someone discovered it — there is no founder, no expedition, no first sighting. People sat at its edge and stayed, because there was nowhere else to be. Generations have lived alongside it.
 
 ### Almost an entity

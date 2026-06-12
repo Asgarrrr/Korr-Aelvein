@@ -27,11 +27,31 @@ export type ZoneStatus =
       readonly kind: "active";
       readonly world: World;
       readonly level: Level;
+      /**
+       * Player perception memory, one byte per tile (row-major,
+       * `level.grid.width × level.grid.height`). `seen` accumulates every
+       * tile ever perceived in this zone (drives the client's map memory
+       * and the snapshot's tile masking); `visible` is the current FOV,
+       * overwritten by `updatePerception` whenever the player moves.
+       * Both mutable by deliberate exception to the surrounding
+       * `readonly` (same convention as `lastSimAt`) so map-value identity
+       * stays stable across ticks. **Not JSON-safe** — a `Uint8Array`
+       * stringifies to an index-keyed object; a future save API must
+       * serialise explicitly, same caveat as `GameState.zones`.
+       */
+      seen: Uint8Array;
+      visible: Uint8Array;
     }
   | {
       readonly kind: "dormant";
       readonly world: World;
       readonly level: Level;
+      /** See the `active` variant. `visible` is stale while the zone is
+       * dormant (nobody recomputes it) — harmless: the snapshot only reads
+       * the active zone and `enterZone` recomputes on arrival. `seen` is
+       * the part that must survive dormancy. */
+      seen: Uint8Array;
+      visible: Uint8Array;
       /**
        * Game-time of the last applied `GlobalEvent.schedule`. Mutable by
        * deliberate exception to the surrounding `readonly` so map-value

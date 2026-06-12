@@ -1,14 +1,6 @@
 import { Elysia, t } from "elysia";
-import { forQuery, getComponent } from "./domain/ecs/index";
-import {
-  activeLevel,
-  activeWorld,
-  type GameState,
-  newGame,
-  tick,
-} from "./domain/game/index";
-
-const TCoords = t.Tuple([t.Number(), t.Number()]);
+import { type GameState, newGame, tick } from "./domain/game/index";
+import { responseSchema, toSnapshot } from "./snapshot";
 
 const bodySchema = t.Union([
   t.Object({
@@ -29,105 +21,15 @@ const bodySchema = t.Union([
   }),
 ]);
 
-export const responseSchema = t.Object({
-  type: t.Literal("state"),
-  turn: t.Number(),
-  gameOver: t.Boolean(),
-  activeZone: t.Number(),
-  zones: t.Array(t.Number()),
-  player: t.Object({
-    x: t.Number(),
-    y: t.Number(),
-    hp: t.Object({ current: t.Number(), max: t.Number() }),
-  }),
-  mobs: t.Array(
-    t.Object({
-      x: t.Number(),
-      y: t.Number(),
-      glyph: t.String(),
-    }),
-  ),
-  level: t.Object({
-    grid: t.Object({
-      width: t.Number(),
-      height: t.Number(),
-      tiles: t.Array(t.Number()),
-    }),
-    spawn: t.Union([t.Null(), TCoords]),
-    downStairs: t.Union([t.Null(), TCoords]),
-    rooms: t.Array(
-      t.Object({
-        x: t.Number(),
-        y: t.Number(),
-        w: t.Number(),
-        h: t.Number(),
-        doors: t.Array(TCoords),
-      }),
-    ),
-  }),
-});
-
-// Single source of truth: the wire-format TS type is derived from the
-// TypeBox response schema (`typeof schema.static`). Schema and TS type
-// can no longer drift.
-export type Snapshot = typeof responseSchema.static;
-
-function toPair(pt: readonly [number, number]): [number, number] {
-  return [pt[0], pt[1]];
-}
-
-export function toSnapshot(state: GameState): Snapshot {
-  const { playerId, turn, gameOver } = state;
-  const world = activeWorld(state);
-  const level = activeLevel(state);
-  const pos = getComponent(world, playerId, "position");
-  if (pos === undefined) {
-    throw new Error("toSnapshot: player entity has no position component");
-  }
-  const hp = getComponent(world, playerId, "hp");
-  if (hp === undefined) {
-    throw new Error("toSnapshot: player entity has no hp component");
-  }
-  const mobs: Array<{ x: number; y: number; glyph: string }> = [];
-  // `ai` filter excludes the player (who has no AI component) — no need
-  // for an explicit "not the player" check.
-  forQuery(world, ["position", "actor", "ai"], (_handle, view) => {
-    const p = view.position;
-    const a = view.actor;
-    if (p === undefined || a === undefined) return;
-    mobs.push({ x: p.x, y: p.y, glyph: a.glyph });
-  });
-  return {
-    type: "state",
-    turn,
-    gameOver,
-    activeZone: state.activeZone,
-    zones: Array.from(state.zones.keys()),
-    player: { x: pos.x, y: pos.y, hp: { current: hp.current, max: hp.max } },
-    mobs,
-    level: {
-      grid: {
-        width: level.grid.width,
-        height: level.grid.height,
-        tiles: Array.from(level.grid.tiles),
-      },
-      spawn: level.spawn === null ? null : toPair(level.spawn),
-      downStairs: level.downStairs === null ? null : toPair(level.downStairs),
-      rooms: level.rooms.map((r) => ({
-        x: r.x,
-        y: r.y,
-        w: r.w,
-        h: r.h,
-        doors: r.doors.map(toPair),
-      })),
-    },
-  };
-}
-
 export function createApp() {
   const sessions = new Map<string, GameState>();
 
-  return new Elysia()
+  // permessage-deflate: the snapshot JSON is dominated by `255,255,…` runs
+  // (fog) and compresses ~97% (9.6 KB → ~240 B, measured 2026-06). The
+  // constructor option only NEGOTIATES the extension — outgoing frames are
+  // compressed per send, via the second argument to `ws.send`. A send site
+  // that forgets the flag silently ships uncompressed.
+  return new Elysia({ websocket: { perMessageDeflate: true } })
     .get("/health", () => ({ ok: true }))
     .ws("/game", {
       body: bodySchema,
@@ -135,7 +37,7 @@ export function createApp() {
       open(ws) {
         const state = newGame(Date.now(), "rim");
         sessions.set(ws.id, state);
-        ws.send(toSnapshot(state));
+        ws.send(toSnapshot(state), true);
       },
       message(ws, action) {
         const state = sessions.get(ws.id);
@@ -148,7 +50,7 @@ export function createApp() {
         if (state.gameOver) return;
         const next = tick(state, action);
         sessions.set(ws.id, next);
-        ws.send(toSnapshot(next));
+        ws.send(toSnapshot(next), true);
       },
       close(ws) {
         sessions.delete(ws.id);

@@ -26,7 +26,8 @@ import { peek, pop, type ScheduledEvent, schedule } from "../scheduler/index";
 import { applyAbstract } from "./abstract";
 import { runAi } from "./ai";
 import { attack } from "./combat";
-import { activeLevel, activeWorld, entityAt, getZone } from "./state";
+import { updatePerception, VISION_RADIUS } from "./perception";
+import { activeWorld, activeZoneStatus, entityAt, getZone } from "./state";
 import { enterZone } from "./transition";
 import type { Action, Dir, GameState, GlobalEvent } from "./types";
 
@@ -90,8 +91,8 @@ export function tick(state: GameState, action: Action): GameState {
   if (state.gameOver) {
     throw new Error("tick: the run is over (player died); no further actions");
   }
-  const world = activeWorld(state);
-  const level = activeLevel(state);
+  const zone = activeZoneStatus(state);
+  const { world, level } = zone;
   if (!isLiveHandle(world, state.playerId)) {
     throw new Error("tick: player handle is stale (entity despawned)");
   }
@@ -143,6 +144,10 @@ export function tick(state: GameState, action: Action): GameState {
         if (result.killed) despawn(world, target);
       } else {
         setComponent(world, state.playerId, "position", { x: nx, y: ny });
+        // Perception follows the player's eyes: only an actual step
+        // changes the FOV. Bump-combat and refusals leave `seen` /
+        // `visible` byte-identical (pinned by perception.test.ts).
+        updatePerception(zone, nx, ny, VISION_RADIUS);
       }
       consumeTurn(state);
       break;

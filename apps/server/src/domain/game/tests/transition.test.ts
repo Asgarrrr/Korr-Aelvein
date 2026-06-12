@@ -74,6 +74,14 @@ function countScheduleEventsFor(state: GameState, id: ZoneId): number {
   return n;
 }
 
+// Blank perception masks for hand-built ZoneStatus literals. Perception
+// itself is covered by perception.test.ts; here the fog just satisfies
+// the required fields.
+function makeFog(level: Level): { seen: Uint8Array; visible: Uint8Array } {
+  const size = level.grid.width * level.grid.height;
+  return { seen: new Uint8Array(size), visible: new Uint8Array(size) };
+}
+
 function playerActorEvent(
   state: GameState,
 ): { time: number; zone: ZoneId } | undefined {
@@ -445,13 +453,17 @@ describe("concretize — same-time catchup", () => {
 
     const state: GameState = {
       zones: new Map<ZoneId, ZoneStatus>([
-        [DUMMY, { kind: "active", world: dummyWorld, level }],
+        [
+          DUMMY,
+          { kind: "active", world: dummyWorld, level, ...makeFog(level) },
+        ],
         [
           TARGET,
           {
             kind: "dormant",
             world: targetWorld,
             level,
+            ...makeFog(level),
             lastSimAt: 0,
           },
         ],
@@ -520,13 +532,17 @@ describe("concretize — same-time catchup", () => {
     const initialLastSimAt = 50;
     const state: GameState = {
       zones: new Map<ZoneId, ZoneStatus>([
-        [DUMMY, { kind: "active", world: dummyWorld, level }],
+        [
+          DUMMY,
+          { kind: "active", world: dummyWorld, level, ...makeFog(level) },
+        ],
         [
           TARGET,
           {
             kind: "dormant",
             world: targetWorld,
             level,
+            ...makeFog(level),
             lastSimAt: initialLastSimAt,
           },
         ],
@@ -602,13 +618,17 @@ describe("concretize — same-time catchup", () => {
 
     const state: GameState = {
       zones: new Map<ZoneId, ZoneStatus>([
-        [DUMMY, { kind: "active", world: dummyWorld, level }],
+        [
+          DUMMY,
+          { kind: "active", world: dummyWorld, level, ...makeFog(level) },
+        ],
         [
           TARGET,
           {
             kind: "dormant",
             world: targetWorld,
             level,
+            ...makeFog(level),
             lastSimAt: 50,
           },
         ],
@@ -676,13 +696,22 @@ describe("concretize — same-time catchup", () => {
 
     const state: GameState = {
       zones: new Map<ZoneId, ZoneStatus>([
-        [DUMMY, { kind: "active", world: sourceWorld, level: sourceLevel }],
+        [
+          DUMMY,
+          {
+            kind: "active",
+            world: sourceWorld,
+            level: sourceLevel,
+            ...makeFog(sourceLevel),
+          },
+        ],
         [
           TARGET,
           {
             kind: "dormant",
             world: targetWorld,
             level: targetLevel,
+            ...makeFog(targetLevel),
             lastSimAt: 0,
           },
         ],

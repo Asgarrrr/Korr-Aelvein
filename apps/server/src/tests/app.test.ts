@@ -39,15 +39,7 @@ type ServerSnapshot = {
   player: { x: number; y: number };
   level: {
     grid: { width: number; height: number; tiles: number[] };
-    spawn: [number, number] | null;
     downStairs: [number, number] | null;
-    rooms: ReadonlyArray<{
-      x: number;
-      y: number;
-      w: number;
-      h: number;
-      doors: ReadonlyArray<[number, number]>;
-    }>;
   };
 };
 
@@ -100,6 +92,11 @@ describe("WS /game", () => {
       expect(initial.level.grid.tiles.length).toBe(
         initial.level.grid.width * initial.level.grid.height,
       );
+      // FOV runs before the first tick (newGame), so the very first
+      // snapshot must already be perception-masked: some fog (255) AND
+      // some revealed terrain.
+      expect(initial.level.grid.tiles.some((v) => v === 255)).toBe(true);
+      expect(initial.level.grid.tiles.some((v) => v !== 255)).toBe(true);
 
       const nextSnap = nextMessage(ws);
       ws.send(JSON.stringify({ type: "MOVE", dir: "n" }));

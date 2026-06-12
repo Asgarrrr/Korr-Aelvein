@@ -36,6 +36,13 @@ function makeLevel(w: number, h: number, tiles: Uint8Array): Level {
   };
 }
 
+// Blank perception masks for hand-built ZoneStatus literals. The tests in
+// this file exercise the tick loop, not perception — fog starts empty.
+function makeFog(level: Level): { seen: Uint8Array; visible: Uint8Array } {
+  const size = level.grid.width * level.grid.height;
+  return { seen: new Uint8Array(size), visible: new Uint8Array(size) };
+}
+
 // 5x5 grid: wall border, 3x3 floor interior.
 function makeBoxLevel(): Level {
   const W = 5;
@@ -64,7 +71,7 @@ function makeState(level: Level, x: number, y: number): GameState {
     entity: playerId,
   });
   const zones = new Map<ZoneId, ZoneStatus>();
-  zones.set(DONJON_ZONE, { kind: "active", world, level });
+  zones.set(DONJON_ZONE, { kind: "active", world, level, ...makeFog(level) });
   return {
     zones,
     activeZone: DONJON_ZONE,
@@ -227,7 +234,13 @@ describe("tick: bump-combat", () => {
       entity: wanderer,
     });
     const zones = new Map<ZoneId, ZoneStatus>();
-    zones.set(DONJON_ZONE, { kind: "active", world, level: makeBoxLevel() });
+    const level = makeBoxLevel();
+    zones.set(DONJON_ZONE, {
+      kind: "active",
+      world,
+      level,
+      ...makeFog(level),
+    });
     return {
       zones,
       activeZone: DONJON_ZONE,
@@ -333,7 +346,13 @@ describe("tick: bump-combat", () => {
       entity: wb,
     });
     const zones = new Map<ZoneId, ZoneStatus>();
-    zones.set(DONJON_ZONE, { kind: "active", world, level: makeBoxLevel() });
+    const level = makeBoxLevel();
+    zones.set(DONJON_ZONE, {
+      kind: "active",
+      world,
+      level,
+      ...makeFog(level),
+    });
     const rngBefore: RngState = [1, 2, 3, 4];
     const state: GameState = {
       zones,

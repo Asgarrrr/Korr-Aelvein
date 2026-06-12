@@ -213,10 +213,16 @@ describe("tick: occupancy refusal", () => {
       });
     }
     const zones = new Map<ZoneId, ZoneStatus>();
+    const level = corridorLevel();
+    // Blank perception masks: these tests exercise the wanderer AI, not
+    // perception — fog starts empty.
+    const size = level.grid.width * level.grid.height;
     zones.set(DONJON_ZONE, {
       kind: "active",
       world,
-      level: corridorLevel(),
+      level,
+      seen: new Uint8Array(size),
+      visible: new Uint8Array(size),
     });
     return {
       zones,
