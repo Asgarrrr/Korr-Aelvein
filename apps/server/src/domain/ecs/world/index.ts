@@ -45,6 +45,14 @@ export function spawn(world: World, c: Components): EntityHandle {
   // callers; internally nothing mutates handles. Saves 3 allocs per spawn
   // on the 3-key case (~60 ns at N=5000).
   const handle: EntityHandle = { id, gen };
+  // Per-key fan-out, deliberately not a `for (const k of KEYS)` loop: over a
+  // non-literal key union, `columnWriters[k](world, id, c[k])` forces the value
+  // to the *intersection* of every component type (TS can't correlate the two
+  // mapped tables through a runtime key), which only an `as` compiles — and
+  // `as` is banned. Same wall `restore`/`snapshot` hit (see world/snapshot.ts).
+  // Each key still routes through `columnWriters` (the value chokepoint);
+  // writing directly instead of via `setComponent` skips its isLiveHandle +
+  // hadBefore checks, both provably redundant for a freshly allocated slot.
   if (c.position !== undefined) {
     columnWriters.position(world, id, c.position);
     world.added.position.push(handle);

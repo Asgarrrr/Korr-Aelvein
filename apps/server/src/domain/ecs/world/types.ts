@@ -41,6 +41,11 @@ export type World = ColumnsByKey & {
 };
 
 export function emptyWorld(): World {
+  // The key lists below are spelled out, not built from a shared
+  // `COMPONENT_KEYS` via `Object.fromEntries`: that yields `{ [k: string]: … }`,
+  // which doesn't satisfy the precise `ColumnsByKey` / `LifecycleBuffers` mapped
+  // types without an `as`. Explicit literals are the no-`as` cost — and the
+  // mapped types still make a forgotten column a compile error here.
   return {
     position: emptyColumn(),
     actor: emptyColumn(),
