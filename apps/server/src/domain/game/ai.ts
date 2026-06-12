@@ -35,7 +35,9 @@ export function runAi(
       // Exhaustiveness — adding a new `Ai.kind` makes this a compile error,
       // forcing the new dispatcher to land alongside the new variant.
       const _exhaustive: never = ai.kind;
-      throw new Error(`runAi: unhandled ai kind ${_exhaustive}`);
+      throw new Error(
+        `runAi: unhandled ai kind ${JSON.stringify(_exhaustive)}`,
+      );
     }
   }
 }

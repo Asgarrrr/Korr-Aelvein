@@ -12,6 +12,7 @@
  */
 
 import { t } from "elysia";
+import { isTile } from "./domain/dungeon/index";
 import { forQuery, getComponent } from "./domain/ecs/index";
 import { activeZoneStatus, type GameState } from "./domain/game/index";
 
@@ -76,10 +77,6 @@ export type Snapshot = typeof responseSchema.static;
 // fog sentinel to it instead of duplicating the literal blind.
 export type WireTile = Snapshot["level"]["grid"]["tiles"][number];
 
-function toPair(pt: readonly [number, number]): [number, number] {
-  return [pt[0], pt[1]];
-}
-
 export function toSnapshot(state: GameState): Snapshot {
   const { playerId, turn, gameOver } = state;
   const zone = activeZoneStatus(state);
@@ -99,7 +96,6 @@ export function toSnapshot(state: GameState): Snapshot {
   forQuery(world, ["position", "actor", "ai"], (_handle, view) => {
     const p = view.position;
     const a = view.actor;
-    if (p === undefined || a === undefined) return;
     if (visible[p.y * level.grid.width + p.x] !== 1) return;
     mobs.push({ x: p.x, y: p.y, glyph: a.glyph });
   });
@@ -115,10 +111,7 @@ export function toSnapshot(state: GameState): Snapshot {
   // fresh full mask. Not worth the bookkeeping until a profile demands it.
   const tiles: WireTile[] = new Array(level.grid.tiles.length);
   for (const [i, raw] of level.grid.tiles.entries()) {
-    tiles[i] =
-      seen[i] === 1 && (raw === 0 || raw === 1 || raw === 2)
-        ? raw
-        : TILE_UNSEEN;
+    tiles[i] = seen[i] === 1 && isTile(raw) ? raw : TILE_UNSEEN;
   }
   const stairs = level.downStairs;
   const stairsSeen =
@@ -137,7 +130,7 @@ export function toSnapshot(state: GameState): Snapshot {
         height: level.grid.height,
         tiles,
       },
-      downStairs: stairs !== null && stairsSeen ? toPair(stairs) : null,
+      downStairs: stairs !== null && stairsSeen ? [stairs[0], stairs[1]] : null,
     },
   };
 }
