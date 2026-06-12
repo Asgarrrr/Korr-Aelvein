@@ -1,5 +1,5 @@
 /**
- * Discovery bench for `toSnapshot` (`app.ts`) — the WS-bound snapshot
+ * Discovery bench for `toSnapshot` (`snapshot.ts`) — the WS-bound snapshot
  * built per accepted tick and pushed to the client. Two questions to
  * answer, no optimization yet:
  *
@@ -92,7 +92,6 @@
  *   noise.
  */
 
-import { type Snapshot, toSnapshot } from "../app";
 import { spawn } from "../domain/ecs/index";
 import {
   activeWorld,
@@ -101,6 +100,7 @@ import {
   tick,
 } from "../domain/game/index";
 import { fromRngState } from "../domain/rng/index";
+import { type Snapshot, toSnapshot } from "../snapshot";
 
 // ─── Harness ──────────────────────────────────────────────────────────────────
 

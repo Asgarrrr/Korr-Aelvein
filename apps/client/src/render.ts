@@ -30,6 +30,8 @@
  * guard if that constraint ever becomes load-bearing for gameplay.
  */
 
+import type { WireTile } from "server";
+
 export type RenderInput = {
   readonly width: number;
   readonly height: number;
@@ -58,12 +60,13 @@ const CODE_SPACE = 32; // ' ' — fog (never-seen tile)
 const CODE_NL = 10; // '\n'
 
 /**
- * Wire sentinel for a never-seen tile — mirrors `TILE_UNSEEN` in
- * `apps/server/src/app.ts`. Must be branched explicitly: the tile
- * fallthrough renders any unknown value as a wall, which would paint the
- * whole fog as `#`.
+ * Wire sentinel for a never-seen tile. Typed `WireTile` (the server's wire
+ * union, consumed type-only via Eden) so a drift in the server's
+ * `TILE_UNSEEN` becomes a client compile error here — not a silent repaint
+ * of the whole fog as `#`. Must be branched explicitly: the tile
+ * fallthrough renders any unhandled value as a wall.
  */
-const TILE_UNSEEN = 255;
+const TILE_UNSEEN: WireTile = 255;
 
 export function renderGrid(input: RenderInput): string {
   const { width, height, tiles, player, mobs } = input;

@@ -52,6 +52,11 @@ import { TILE_DOOR, TILE_FLOOR, TILE_WALL } from "../dungeon/index";
  * predicate (and only this predicate) grows the lookup. Call sites must
  * then also recompute perception on door-state change (see
  * `domain/game/perception.ts`) — today only player movement triggers it.
+ *
+ * TODO(door-state): the moment this predicate reads an open/closed flag,
+ * add the regression test — open a door adjacent to a stationary player,
+ * assert a cell behind it flips visible in the SAME tick. Today's prose
+ * warnings (here + `game/perception.ts`) are unenforced.
  */
 export function isOpaque(tile: Tile): boolean {
   return tile === TILE_WALL || tile === TILE_DOOR;
@@ -248,6 +253,9 @@ function scanQuadrant(
  * fresh `width × height` mask, row-major, 1 = visible. The origin is
  * always visible. Throws when the origin is off-grid — an off-grid
  * observer is a state-machine bug upstream, not a perception question.
+ * Throws on a non-integer `radius`: a float would reach `radiusSq` and
+ * the `depth > radius` cut, voiding the integer-only determinism contract
+ * the module guarantees — métiers modulating vision must round first.
  */
 export function computeFov(
   level: Level,
@@ -259,6 +267,11 @@ export function computeFov(
   if (ox < 0 || oy < 0 || ox >= width || oy >= height) {
     throw new Error(
       `computeFov: origin (${ox}, ${oy}) out of bounds (${width}x${height})`,
+    );
+  }
+  if (!Number.isInteger(radius)) {
+    throw new Error(
+      `computeFov: radius ${radius} must be an integer (a float voids the determinism contract)`,
     );
   }
   const mask = new Uint8Array(width * height);

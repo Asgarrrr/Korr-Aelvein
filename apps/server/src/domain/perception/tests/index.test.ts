@@ -70,6 +70,11 @@ describe("computeFov — surface contract", () => {
     expect(() => computeFov(level, 0, 2, 4)).toThrow(/out of bounds/);
   });
 
+  test("throws on a non-integer radius (determinism contract is integer-only)", () => {
+    const level = levelFrom(["...", "..."]);
+    expect(() => computeFov(level, 1, 0, 4.5)).toThrow(/integer/);
+  });
+
   test("radius 0 reveals only the origin", () => {
     const level = levelFrom([".....", ".....", "....."]);
     const mask = computeFov(level, 2, 1, 0);

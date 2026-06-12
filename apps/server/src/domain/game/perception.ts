@@ -11,10 +11,10 @@
  * not move when perception lands.
  *
  * Caveat: perception is recomputed ONLY on player movement (accepted step,
- * `newGame`, zone arrival). The day door open/close state lands (`isOpaque`
- * in `domain/perception` is the chokepoint), any action that flips a door
- * MUST also call `updatePerception` from the player's current position —
- * otherwise the FOV stays stale until the next step.
+ * `newGame`, zone arrival). TODO(door-state): the day door open/close state
+ * lands (`isOpaque` in `domain/perception` is the chokepoint), any action
+ * that flips a door MUST also call `updatePerception` from the player's
+ * current position — otherwise the FOV stays stale until the next step.
  */
 
 import { computeFov } from "../perception/index";

@@ -9,8 +9,9 @@ apps/
   client/             Vite 8 + React 19 SPA. Renders state, forwards input. NO game logic.
   server/             Bun + Elysia. Single source of truth for game state.
     src/
-      app.ts          Elysia builder (pure). Use `createApp()` for in-memory testing.
-      index.ts        Listener: `createApp().listen(PORT)`, re-exports `type App`.
+      app.ts          Elysia builder (pure) — transport: WS routes + inbound `bodySchema`. Use `createApp()` for in-memory testing.
+      snapshot.ts     Outbound wire projection `GameState → Snapshot`: `responseSchema`, `toSnapshot`, perception filtering, `TILE_UNSEEN`. The only place state is narrowed for the client.
+      index.ts        Listener: `createApp().listen(PORT)`, re-exports `type App` + `type WireTile`.
       tests/          app.test.ts (/health + factory) + snapshot.test.ts (perception filtering on the wire).
       domain/         Pure game logic. No imports from transport/.
         rng/          Seeded sfc32 PRNG with serialisable state — see `apps/server/src/domain/rng/README.md`.
@@ -56,8 +57,15 @@ apps/
 packages/
   typescript-config/  Shared tsconfigs (base, react-library).
 .github/workflows/    CI: lint + typecheck + test + build on PR/push.
-docs/                 Technical docs — MAP, PROCGEN, GAME-LOOP, LIVING-WORLD.
+docs/                 Technical docs — MAP, PROCGEN, GAME-LOOP, LIVING-WORLD, DESIGN-PILLARS.
 registry/             Worldbuilding + narrative-design notes (not code). See `registry/README.md`.
+                        Key design documents (not stubs):
+                        - `lore-deep.md`    — what Korr is, the founders, 5 myths and their truth, the chamber
+                        - `combat.md`       — 4 behavioral states, 3 resources, naming in combat
+                        - `métiers.md`      — all 12 professions with distinct perception in the abyss
+                        - `bestiary.md`     — 4-category taxonomy, 12 creatures, metabolism simulation
+                        - `inheritance.md`  — journal system, transmission rules, arc of 3 characters
+                        - `vocabulary.md`   — Korr/Aelvein defined, naming rules, glyph system
 biome.json            Single quality config (lint + format + organize-imports).
 CLAUDE.md             Project rules — read every session.
 turbo.json            Build / dev / test / check-types tasks.
@@ -74,9 +82,10 @@ turbo.json            Build / dev / test / check-types tasks.
 ### `apps/server`
 
 - **Entry point**: `src/index.ts` calls `createApp().listen(PORT)`. Re-exports `type App` for the client via Eden Treaty.
-- **App builder**: `src/app.ts` — pure `createApp()` that returns the Elysia instance without listening. Use this from tests: `await createApp().handle(new Request(...))`.
+- **App builder**: `src/app.ts` — pure `createApp()` that returns the Elysia instance without listening. Owns transport only (routes + inbound `bodySchema`); the outbound projection lives in `snapshot.ts`. Use this from tests: `await createApp().handle(new Request(...))`.
 - **WebSocket**: `/game` with TypeBox `body` and `response` schemas. Inbound validation is the security boundary of the server-authoritative model.
-- **Wire is perception-filtered** (Phase 7): tiles the player has never seen ship as the sentinel `255` (`TILE_UNSEEN`, app.ts-local — domain `Tile` stays `0 | 1 | 2`), mobs outside the current FOV are omitted, `downStairs` is `null` until seen. `spawn` and `rooms` were **removed** from the snapshot schema — the client never consumed them and they leaked unexplored layout.
+- **Snapshot projection**: `src/snapshot.ts` — `toSnapshot(state)` and `responseSchema`. The single chokepoint that narrows `GameState` for the wire; nothing written elsewhere reaches the client.
+- **Wire is perception-filtered** (Phase 7): tiles the player has never seen ship as the sentinel `255` (`TILE_UNSEEN`, in `snapshot.ts` — domain `Tile` stays `0 | 1 | 2`), mobs outside the current FOV are omitted, `downStairs` is `null` until seen. `spawn` and `rooms` were **removed** from the snapshot schema — the client never consumed them and they leaked unexplored layout.
 - **HTTP**: `/health` returns `{ ok: true }`.
 - **Port**: `3000` (override with `PORT` env var; declared in `turbo.json#globalEnv`).
 - **Game logic**: lives under `src/domain/`. Currently `rng/` (PRNG infra), `dungeon/` (procgen), and `game/` (tick loop).

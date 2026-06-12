@@ -4,15 +4,13 @@
 // gated stairs, and the exact `level` key set (no spawn/rooms leakage).
 
 import { describe, expect, test } from "bun:test";
-import { toSnapshot } from "../app";
 import { spawn } from "../domain/ecs/index";
 import {
   activeZoneStatus,
   type GameState,
   newGame,
 } from "../domain/game/index";
-
-const TILE_UNSEEN = 255;
+import { TILE_UNSEEN, toSnapshot } from "../snapshot";
 
 function popcount(mask: Uint8Array): number {
   let n = 0;
