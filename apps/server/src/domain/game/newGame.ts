@@ -120,7 +120,7 @@ function spawnDonjonZone(
   };
   // Initial FOV before returning: the WS handler snapshots on `open`,
   // before any tick runs — without this the first frame would be all fog.
-  updatePerception(donjon, level, px, py, VISION_RADIUS);
+  updatePerception(donjon, px, py, VISION_RADIUS);
   zones.set(DONJON_ZONE, donjon);
   return playerId;
 }

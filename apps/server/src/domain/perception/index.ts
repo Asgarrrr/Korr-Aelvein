@@ -9,13 +9,18 @@
  * (Bergström), permissive FOV, naive raycasting, or rot-js:
  *
  *   - **Symmetry.** A floor tile sees the origin iff the origin sees it —
- *     the underlying model is "the centre-to-centre segment crosses no
- *     opaque cell interior (corner-grazing allowed)". Bergström's variant
- *     and raycasting are both asymmetric, which becomes unfair the day
- *     mobs perceive the player through the same primitive. Permissive FOV
- *     is symmetric but ~10× slower and reveals too much around corners.
- *     rot-js (2.56 MB toolkit, non-symmetric FOV) fails both the
- *     dependency rules and the symmetry requirement.
+ *     the underlying model: the centre-to-centre segment enters no opaque
+ *     tile's OPEN inscribed diamond (vertices on edge midpoints — not the
+ *     full cell square), and is not *pinched*: a line that only touches
+ *     diamond boundaries stays valid while every touched diamond lies on
+ *     the same flank; grazing diamonds on both flanks of the ray is
+ *     dropped, symmetrically from both endpoints, by the sector
+ *     bookkeeping. Exact oracle: `tests/properties.test.ts`. Bergström's
+ *     variant and raycasting are both asymmetric, which becomes unfair
+ *     the day mobs perceive the player through the same primitive.
+ *     Permissive FOV is symmetric but ~10× slower and reveals too much
+ *     around corners. rot-js (2.56 MB toolkit, non-symmetric FOV) fails
+ *     both the dependency rules and the symmetry requirement.
  *   - **Determinism by construction.** Slopes are exact rationals
  *     (`Frac`, integer numerator / positive integer denominator) compared
  *     by cross-multiplication; rounding is integer floor/ceil division.
@@ -44,7 +49,9 @@ import { TILE_DOOR, TILE_FLOOR, TILE_WALL } from "../dungeon/index";
 /**
  * Single chokepoint for "does this tile block sight?". Doors block while
  * the tile type has no open/closed state — when door state lands, this
- * predicate (and only this predicate) grows the lookup.
+ * predicate (and only this predicate) grows the lookup. Call sites must
+ * then also recompute perception on door-state change (see
+ * `domain/game/perception.ts`) — today only player movement triggers it.
  */
 export function isOpaque(tile: Tile): boolean {
   return tile === TILE_WALL || tile === TILE_DOOR;

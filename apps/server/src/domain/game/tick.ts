@@ -147,7 +147,7 @@ export function tick(state: GameState, action: Action): GameState {
         // Perception follows the player's eyes: only an actual step
         // changes the FOV. Bump-combat and refusals leave `seen` /
         // `visible` byte-identical (pinned by perception.test.ts).
-        updatePerception(zone, level, nx, ny, VISION_RADIUS);
+        updatePerception(zone, nx, ny, VISION_RADIUS);
       }
       consumeTurn(state);
       break;

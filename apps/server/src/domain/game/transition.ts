@@ -225,7 +225,7 @@ export function enterZone(
   });
   // FOV at the arrival cell, before the snapshot ships this tick — the
   // zone's `seen` keeps whatever a previous visit accumulated.
-  updatePerception(newZone, newZone.level, px, py, VISION_RADIUS);
+  updatePerception(newZone, px, py, VISION_RADIUS);
   scheduleAt(state.globalScheduler, playerNextTime, {
     kind: "actor",
     zone: target,

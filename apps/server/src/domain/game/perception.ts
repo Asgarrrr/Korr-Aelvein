@@ -9,9 +9,14 @@
  *
  * Consumes no RNG — determinism tests that pin `rngState` sequences must
  * not move when perception lands.
+ *
+ * Caveat: perception is recomputed ONLY on player movement (accepted step,
+ * `newGame`, zone arrival). The day door open/close state lands (`isOpaque`
+ * in `domain/perception` is the chokepoint), any action that flips a door
+ * MUST also call `updatePerception` from the player's current position —
+ * otherwise the FOV stays stale until the next step.
  */
 
-import type { Level } from "../dungeon/index";
 import { computeFov } from "../perception/index";
 import type { ZoneStatus } from "./types";
 
@@ -24,19 +29,23 @@ export const VISION_RADIUS = 12;
 
 /**
  * Recompute the player's FOV from `(x, y)` and fold it into the zone's
- * memory: `visible` is replaced wholesale, `seen` accumulates (bitwise
+ * memory: `visible` is overwritten in place, `seen` accumulates (bitwise
  * OR — a seen tile never becomes unseen). Call on every player move and
  * on zone entry; positions that don't change don't need a call.
+ *
+ * The FOV is computed against `zone.level` rather than a caller-supplied
+ * level: passing a level that isn't the zone's own would compute a
+ * wrong-size FOV mask, and the OR into `seen` would silently no-op
+ * out-of-bounds on the Uint8Array — a silent-corruption footgun.
  */
 export function updatePerception(
   zone: ZoneStatus,
-  level: Level,
   x: number,
   y: number,
   radius: number,
 ): void {
-  const fov = computeFov(level, x, y, radius);
-  zone.visible = fov;
+  const fov = computeFov(zone.level, x, y, radius);
+  zone.visible.set(fov);
   const seen = zone.seen;
   for (const [i, v] of fov.entries()) {
     if (v === 1) seen[i] = 1;

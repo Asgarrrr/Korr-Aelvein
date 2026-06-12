@@ -59,6 +59,22 @@ describe("toSnapshot — tile masking", () => {
     }
   });
 
+  test("a corrupt raw byte on a seen cell ships as TILE_UNSEEN, not the byte (fail-closed)", () => {
+    const state = newGame(42, "rim");
+    const zone = activeZoneStatus(state);
+    const idx = zone.seen.indexOf(1);
+    if (idx < 0) throw new Error("test: no seen cell in a fresh game");
+    // Uint8Array happily stores 7 — only the wire guard stands between a
+    // corrupt byte and the client.
+    zone.level.grid.tiles[idx] = 7;
+    const snap = toSnapshot(state);
+    expect(snap.level.grid.tiles[idx]).toBe(TILE_UNSEEN);
+    // Widen for the negative assertion: 7 is (by design) not assignable
+    // to the wire tile union, so `toContain` needs a plain number[] view.
+    const wire: readonly number[] = snap.level.grid.tiles;
+    expect(wire).not.toContain(7);
+  });
+
   test("revealed wire tiles match popcount(seen), and only those", () => {
     const state = newGame(42, "rim");
     const zone = activeZoneStatus(state);
@@ -69,7 +85,9 @@ describe("toSnapshot — tile masking", () => {
     expect(revealed).toBe(popcount(zone.seen));
     for (const [i, v] of snap.level.grid.tiles.entries()) {
       if (zone.seen[i] === 1) {
-        expect(v).toBe(zone.level.grid.tiles[i] ?? -1);
+        // Flipped operands: the wire value `v` is the literal union, the
+        // raw byte is plain number — `toBe` is symmetric, types are not.
+        expect(zone.level.grid.tiles[i]).toBe(v);
       } else {
         expect(v).toBe(TILE_UNSEEN);
       }

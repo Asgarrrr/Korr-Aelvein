@@ -164,6 +164,23 @@ describe("tick MOVE — accepted moves accumulate seen", () => {
     expect(popcount(zone.visible)).toBeGreaterThan(0);
     expect(zone.visible[1 * 5 + 2]).toBe(1);
   });
+
+  test("an accepted step mutates the masks in place — references stable", () => {
+    // Pins the "mutate in place, wrapper rotates" convention: `visible`
+    // and `seen` keep the same identity for the zone's lifetime even when
+    // their bytes change (same convention as World / Scheduler).
+    const state = makeState(makeBoxLevel(), 2, 2);
+    const zoneBefore = activeZoneStatus(state);
+    const seenRef = zoneBefore.seen;
+    const visibleRef = zoneBefore.visible;
+    const visibleBytes = Array.from(zoneBefore.visible);
+    const next = tick(state, { type: "MOVE", dir: "n" });
+    const zoneAfter = activeZoneStatus(next);
+    expect(zoneAfter.visible).toBe(visibleRef);
+    expect(zoneAfter.seen).toBe(seenRef);
+    // Bytes did change — identity stability is not byte stagnation.
+    expect(Array.from(zoneAfter.visible)).not.toEqual(visibleBytes);
+  });
 });
 
 describe("tick MOVE refused / WAIT — masks byte-identical", () => {

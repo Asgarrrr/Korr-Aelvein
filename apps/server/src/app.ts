@@ -61,7 +61,14 @@ export const responseSchema = t.Object({
     grid: t.Object({
       width: t.Number(),
       height: t.Number(),
-      tiles: t.Array(t.Number()),
+      tiles: t.Array(
+        t.Union([
+          t.Literal(0),
+          t.Literal(1),
+          t.Literal(2),
+          t.Literal(TILE_UNSEEN),
+        ]),
+      ),
     }),
     downStairs: t.Union([t.Null(), TCoords]),
   }),
@@ -71,6 +78,10 @@ export const responseSchema = t.Object({
 // TypeBox response schema (`typeof schema.static`). Schema and TS type
 // can no longer drift.
 export type Snapshot = typeof responseSchema.static;
+
+// Derived from the schema, not redeclared — the schema's literal union is
+// the single source of truth for what a tile may look like on the wire.
+type WireTile = Snapshot["level"]["grid"]["tiles"][number];
 
 function toPair(pt: readonly [number, number]): [number, number] {
   return [pt[0], pt[1]];
@@ -99,10 +110,15 @@ export function toSnapshot(state: GameState): Snapshot {
     if (visible[p.y * level.grid.width + p.x] !== 1) return;
     mobs.push({ x: p.x, y: p.y, glyph: a.glyph });
   });
-  // Mask the grid: seen tiles ship as-is, the rest as TILE_UNSEEN.
-  const tiles: number[] = new Array(level.grid.tiles.length);
+  // Mask the grid: seen tiles ship as-is, the rest as TILE_UNSEEN. Fail
+  // closed: a raw byte outside {0, 1, 2} (corruption) also ships as fog,
+  // matching the perception module's `opaqueAt` stance on unknown tiles.
+  const tiles: WireTile[] = new Array(level.grid.tiles.length);
   for (const [i, raw] of level.grid.tiles.entries()) {
-    tiles[i] = seen[i] === 1 ? raw : TILE_UNSEEN;
+    tiles[i] =
+      seen[i] === 1 && (raw === 0 || raw === 1 || raw === 2)
+        ? raw
+        : TILE_UNSEEN;
   }
   const stairs = level.downStairs;
   const stairsSeen =
@@ -129,7 +145,12 @@ export function toSnapshot(state: GameState): Snapshot {
 export function createApp() {
   const sessions = new Map<string, GameState>();
 
-  return new Elysia()
+  // permessage-deflate: the snapshot JSON is dominated by `255,255,…` runs
+  // (fog) and compresses ~97% (9.6 KB → ~240 B, measured 2026-06). The
+  // constructor option only NEGOTIATES the extension — outgoing frames are
+  // compressed per send, via the second argument to `ws.send`. A send site
+  // that forgets the flag silently ships uncompressed.
+  return new Elysia({ websocket: { perMessageDeflate: true } })
     .get("/health", () => ({ ok: true }))
     .ws("/game", {
       body: bodySchema,
@@ -137,7 +158,7 @@ export function createApp() {
       open(ws) {
         const state = newGame(Date.now(), "rim");
         sessions.set(ws.id, state);
-        ws.send(toSnapshot(state));
+        ws.send(toSnapshot(state), true);
       },
       message(ws, action) {
         const state = sessions.get(ws.id);
@@ -150,7 +171,7 @@ export function createApp() {
         if (state.gameOver) return;
         const next = tick(state, action);
         sessions.set(ws.id, next);
-        ws.send(toSnapshot(next));
+        ws.send(toSnapshot(next), true);
       },
       close(ws) {
         sessions.delete(ws.id);
