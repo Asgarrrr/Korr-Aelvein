@@ -113,9 +113,14 @@ export function toSnapshot(state: GameState): Snapshot {
   for (const [i, raw] of level.grid.tiles.entries()) {
     tiles[i] = seen[i] === 1 && isTile(raw) ? raw : TILE_UNSEEN;
   }
+  // downStairs ships only once its tile has been seen, null otherwise. The
+  // null-guard here is also what narrows `stairs` for the coordinate reads,
+  // so the result is computed once rather than re-tested at the return site.
   const stairs = level.downStairs;
-  const stairsSeen =
-    stairs !== null && seen[stairs[1] * level.grid.width + stairs[0]] === 1;
+  let downStairs: Snapshot["level"]["downStairs"] = null;
+  if (stairs !== null && seen[stairs[1] * level.grid.width + stairs[0]] === 1) {
+    downStairs = [stairs[0], stairs[1]];
+  }
   return {
     type: "state",
     turn,
@@ -130,7 +135,7 @@ export function toSnapshot(state: GameState): Snapshot {
         height: level.grid.height,
         tiles,
       },
-      downStairs: stairs !== null && stairsSeen ? [stairs[0], stairs[1]] : null,
+      downStairs,
     },
   };
 }
