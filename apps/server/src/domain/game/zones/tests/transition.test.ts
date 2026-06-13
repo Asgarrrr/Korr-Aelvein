@@ -426,7 +426,7 @@ describe("concretize — same-time catchup", () => {
     };
   }
 
-  test("catchupDormant applies same-time schedule events before flipping the zone", () => {
+  test("concretize applies same-time schedule events before flipping the zone", () => {
     // The drain stops on the player heap top; same-time-but-later-seq
     // schedule events for the soon-to-be-active zone can still be in the
     // heap when concretize runs. Catchup pops + applies them so the zone
@@ -456,7 +456,7 @@ describe("concretize — same-time catchup", () => {
     const scheduler = emptyScheduler<GlobalEvent>();
     // Pre-set scheduler.now via a no-op pop dance is impossible without a
     // payload; instead just schedule directly at time = 100 from now=0, and
-    // set state.time = 100 explicitly so `catchupDormant`'s `time <=
+    // set state.time = 100 explicitly so `concretize`'s catchup `time <=
     // state.time` filter matches.
     schedule(scheduler, 100, {
       kind: "schedule",
