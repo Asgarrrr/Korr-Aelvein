@@ -10,8 +10,11 @@
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type Result, runAll as runMega } from "./mega.bench";
-import { runAll as runStandard } from "./standard.bench";
+// Namespace imports (not `runAll as runMega`): import-rename is a banned form
+// of `as` (CLAUDE.md). Both modules export `runAll`, so the namespace prefix
+// is what disambiguates them.
+import * as megaBench from "./mega.bench";
+import * as standardBench from "./standard.bench";
 
 const RUNS = Number(process.env["RUNS"] ?? 100);
 const OUT_PATH =
@@ -85,13 +88,13 @@ function stats(values: readonly number[]): Stats {
   };
 }
 
-function key(r: Result): string {
+function key(r: megaBench.Result): string {
   return `${r.scenario}|${r.n}`;
 }
 
 function aggregate(
   name: string,
-  runner: () => readonly Result[],
+  runner: () => readonly megaBench.Result[],
 ): SuiteAggregate {
   const buckets = new Map<
     string,
@@ -165,8 +168,8 @@ console.log(
 );
 
 const suites: SuiteAggregate[] = [
-  aggregate("standard", runStandard),
-  aggregate("mega", runMega),
+  aggregate("standard", standardBench.runAll),
+  aggregate("mega", megaBench.runAll),
 ];
 
 const out: Output = {

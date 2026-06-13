@@ -11,9 +11,12 @@ import type { Level } from "../dungeon/index";
 import type { EntityHandle, World } from "../ecs/index";
 import type { RngState } from "../rng/index";
 import type { Scheduler } from "../scheduler/index";
+import type { ZoneId } from "./brands";
 
-/** Integer key into `GameState.zones`. Plain `number` because constructing a branded type requires `as`, which is banned. */
-export type ZoneId = number;
+// `ZoneId` is branded (see `./brands`) so a raw number or a different id kind
+// can't be passed where a zone key is meant. Re-exported here because this is
+// the canonical import site for game-domain types.
+export type { ZoneId };
 
 /** Monotonic game-time in scheduler ticks. */
 export type Time = number;

@@ -22,11 +22,12 @@ import {
 import { emptyWorld, spawn } from "../ecs/index";
 import { createRng, type Rng } from "../rng/index";
 import { emptyScheduler, type Scheduler, schedule } from "../scheduler/index";
+import { zoneId } from "./brands";
 import { updatePerception, VISION_RADIUS } from "./perception";
 import type { GameState, GlobalEvent, ZoneId, ZoneStatus } from "./types";
 
-const DONJON_ZONE: ZoneId = 0;
-const VILLAGE_ZONE: ZoneId = 1;
+const DONJON_ZONE = zoneId(0);
+const VILLAGE_ZONE = zoneId(1);
 const WANDERER_COUNT = 2;
 /**
  * Cadence at which the village shopkeeper's schedule fires. One application

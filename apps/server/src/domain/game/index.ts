@@ -12,6 +12,7 @@
 
 export { applyAbstract } from "./abstract";
 export { runAi } from "./ai";
+export { type Brand, type ZoneId, zoneId } from "./brands";
 export { type AttackResult, attack } from "./combat";
 export { newGame } from "./newGame";
 export { updatePerception, VISION_RADIUS } from "./perception";
@@ -30,6 +31,5 @@ export type {
   GameState,
   GlobalEvent,
   Time,
-  ZoneId,
   ZoneStatus,
 } from "./types";

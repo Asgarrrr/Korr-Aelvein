@@ -73,7 +73,7 @@ No async, no mutation-as-API, no library — every randomness call flows through
 
 `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `noImplicitReturns`, `noPropertyAccessFromIndexSignature` — all on.
 
-**No `as` (any form, including `as const` and import-rename `import { X as Y }`), no `!` non-null assertion.** Both lie to the type system; the project refactors with `for…of` + `entries()`, runtime guards, or explicit annotations instead. Not yet lint-enforceable — respected on every edit, caught at review. The `rng.pick` op is O(n) (~36.5 ns/op for 10-element arrays) precisely because the rule forbids `arr[idx]` without a runtime guard. We measured the cost; we kept the rule.
+**No `as` (any form, including `as const` and import-rename `import { X as Y }`), no `!` non-null assertion.** Both lie to the type system; the project refactors with `for…of` + `entries()`, runtime guards, or explicit annotations instead. Not yet lint-enforceable — respected on every edit, caught at review. The `rng.pick` op is O(n) (~36.5 ns/op for 10-element arrays) precisely because the rule forbids `arr[idx]` without a runtime guard. We measured the cost; we kept the rule. The single carve-out: a branded-type factory in a `brands.ts` may use one `as` to construct the brand (`return n as ZoneId`) — the one widening TS can't express, provably safe and confined to that file.
 
 ### End-to-end types over WebSocket
 
@@ -128,7 +128,7 @@ registry/                       The world itself — open notebook, not code.
 | Client | **Vite 8** + **React 19** |
 | WS contract | **Eden Treaty** (`import type { App } from "server"`) |
 | Quality | **Biome 2.4** + **`bun:test`** |
-| TypeScript | **6.0**, strict, no `as`, no `!` |
+| TypeScript | **6.0**, strict, no `as` (except `brands.ts` factories), no `!` |
 
 ---
 
