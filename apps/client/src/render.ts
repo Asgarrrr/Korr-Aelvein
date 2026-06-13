@@ -67,6 +67,16 @@ const CODE_NL = 10; // '\n'
  * fallthrough renders any unhandled value as a wall.
  */
 const TILE_UNSEEN: WireTile = 255;
+// Wire tile values branched explicitly below; typed `WireTile` so a drift in
+// the server's tile union surfaces here. Wall (0) is the fallthrough default.
+const TILE_FLOOR: WireTile = 1;
+const TILE_DOOR: WireTile = 2;
+
+// One decoder for the module's lifetime — `decode` without `{ stream: true }`
+// resets its internal state each call, and `renderGrid` is synchronous, so the
+// shared instance is safe and skips a per-frame allocation. (Stays safe as long
+// as no caller ever passes `{ stream: true }` to this instance.)
+const DECODER = new TextDecoder();
 
 export function renderGrid(input: RenderInput): string {
   const { width, height, tiles, player, mobs } = input;
@@ -97,20 +107,25 @@ export function renderGrid(input: RenderInput): string {
           const t = tiles[cellIdx] ?? 0;
           // No visible-vs-remembered distinction in monochrome ASCII —
           // both render at full brightness until the Canvas renderer dims
-          // memory. Fog alone is blank.
-          code =
-            t === TILE_UNSEEN
-              ? CODE_SPACE
-              : t === 1
-                ? CODE_FLOOR
-                : t === 2
-                  ? CODE_DOOR
-                  : CODE_WALL;
+          // memory. Fog alone is blank; wall (0) + any unhandled value is `#`.
+          switch (t) {
+            case TILE_UNSEEN:
+              code = CODE_SPACE;
+              break;
+            case TILE_FLOOR:
+              code = CODE_FLOOR;
+              break;
+            case TILE_DOOR:
+              code = CODE_DOOR;
+              break;
+            default:
+              code = CODE_WALL;
+          }
         }
       }
       buf[idx] = code;
       idx += 1;
     }
   }
-  return new TextDecoder().decode(buf);
+  return DECODER.decode(buf);
 }
