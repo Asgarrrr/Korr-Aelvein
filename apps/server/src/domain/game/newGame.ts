@@ -150,10 +150,10 @@ function spawnVillageZone(
   }
   const taken = new Set<number>();
   // Reserve `level.spawn` for the arriving player. `enterZone`
-  // pre-computes the player's spawn cell *before* `concretize` runs
-  // catchupDormant — if a Schedule waypoint included `level.spawn`,
-  // catchup could move an NPC onto the pre-computed cell and the player
-  // would land on top of them on entry.
+  // pre-computes the player's spawn cell *before* `concretize` runs its
+  // schedule-catchup (`drainWhere` → `applyAbstract`) — if a Schedule
+  // waypoint included `level.spawn`, catchup could move an NPC onto the
+  // pre-computed cell and the player would land on top of them on entry.
   if (level.spawn !== null) {
     taken.add(idx(level.spawn[0], level.spawn[1], width));
   }

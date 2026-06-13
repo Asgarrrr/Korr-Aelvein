@@ -184,10 +184,11 @@ export function concretize(state: GameState, id: ZoneId): void {
  * **Atomicity note.** `findPlayerSpawnCell` runs *before* `parkActiveZone`
  * / `concretize` so a level-degeneracy throw can't poison the session's
  * `GameState`. The pre-computation reads only the target zone's `level`
- * and `world`, both stable until concretize's `catchupDormant` mutates
- * the world. `catchupDormant` only moves entities to their `Schedule`
- * waypoints; `spawnVillageZone` reserves `level.spawn` from waypoint
- * candidates so the pre-computed cell stays free across the transition.
+ * and `world`, both stable until `concretize`'s schedule-catchup
+ * (`drainWhere` → `applyAbstract`) mutates the world. That catchup only
+ * moves entities to their `Schedule` waypoints; `spawnVillageZone` reserves
+ * `level.spawn` from waypoint candidates so the pre-computed cell stays free
+ * across the transition.
  */
 export function enterZone(
   state: GameState,
