@@ -218,15 +218,24 @@ describe("createRng — pick edge cases", () => {
     }
   });
 
-  test("pick handles arrays whose elements include `undefined`", () => {
+  test("pick treats an `undefined` element as unsupported input — throws, never silently returns it", () => {
+    // Contract: real arrays passed to pick hold defined elements. A hole is
+    // bad input — pick throws on it (same stance as the empty-array
+    // invariant) rather than silently yielding undefined. (The O(1) indexed
+    // read can't distinguish a hole from out-of-bounds; that's deliberate.)
     const rng = createRng(0);
     const arr: ReadonlyArray<number | undefined> = [1, undefined, 3];
-    let undefinedCount = 0;
+    const seen = new Set<unknown>();
+    let threw = false;
     for (let i = 0; i < 500; i++) {
-      const v = rng.pick(arr);
-      if (v === undefined) undefinedCount++;
+      try {
+        seen.add(rng.pick(arr));
+      } catch {
+        threw = true;
+      }
     }
-    expect(undefinedCount).toBeGreaterThan(0);
+    expect(threw).toBe(true); // landed on the hole at least once
+    expect(seen.has(undefined)).toBe(false); // never silently returned it
   });
 });
 
