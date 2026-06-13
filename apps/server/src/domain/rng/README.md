@@ -46,7 +46,7 @@ return { ...state, rngState: rng.state() };
 
 - **Seed normalisation.** `createRng(NaN)`, `createRng(Infinity)`, `createRng(2 ** 32)`, `createRng(-1)` all collapse to a finite i32 via `| 0`. Same seed input ⇒ same state output regardless of how exotic the caller's number was.
 - **Boundary validation on `int` / `chance`.** Non-integer bounds, `max < min`, `p ∉ [0, 1]`, NaN / Infinity — all throw. The PRNG is shared infrastructure consumed by every reducer; a silent NaN from `int(NaN, 5)` would corrupt an entire tick.
-- **Empty `pick` throws.** A caller picking from a zero-length array is a state-machine bug, not "returns undefined".
+- **`pick` throws on bad input, never returns `undefined`.** A zero-length array, or an array whose chosen slot holds `undefined`, is a state-machine bug — `pick` throws rather than silently yielding `undefined`. Pass arrays of defined elements.
 - **`split` does NOT clone state.** Parent + child share no future state but parent has been advanced 4 calls. Reproducing the same child requires reproducing the same 4 parent calls.
 
 ## Why sfc32
@@ -73,10 +73,10 @@ Full rationale: `~/.claude/projects/-Users-asgarrrr-Documents-Projects-korr-aelv
 |---|---:|
 | `rng.next()` | ~4.6 |
 | `rng.int(0, 9)` | ~10 |
-| `rng.pick([…][10])` | ~36.5 (O(n) — accepted, no-`as` indexed access) |
+| `rng.pick([…][10])` | ~5.9 (O(1) — guarded indexed read) |
 | `rng.chance(0.5)` | ~6 |
 
-`pick` is O(n) instead of O(1) because the `no-as` / `no-!` project rule forbids `arr[idx]` without a runtime guard. The cost is bounded by `pick` call sites being small arrays in practice; benchmark before "fixing".
+`pick` is O(1): `nthOrThrow` reads `arr[idx]` and narrows the `T | undefined` that `noUncheckedIndexedAccess` gives back to `T` with a runtime `undefined` guard — the guard is the sanctioned no-`as` / no-`!` way to do it, so the index read needs no assertion. (It was previously an O(n) `entries()` scan written under the belief that indexing required an assertion; it does not.) An `undefined` element is treated as bad input and throws, same stance as the empty-array invariant.
 
 ## Tests
 

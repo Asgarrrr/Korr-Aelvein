@@ -126,15 +126,20 @@ function nextChance(core: RngCore, p: number): boolean {
   return core.next() < p;
 }
 
-// O(n) indexed access without `as` or `!`. Accepted cost — see
-// `project_design_decisions.md` for the rationale on `pick` O(n).
+// O(1) indexed read. The runtime `undefined` guard — not `as`/`!` — is what
+// narrows `arr[idx]` (typed `T | undefined` under noUncheckedIndexedAccess)
+// back to `T`; the guard IS the project's sanctioned alternative to an
+// assertion. `nextPick` guarantees a non-empty array and an in-bounds idx, so
+// the throw is defensive: it can only fire if the element itself is undefined,
+// which `pick` treats as bad input — same stance as the empty-array throw.
 function nthOrThrow<T>(arr: readonly T[], idx: number): T {
-  for (const [i, item] of arr.entries()) {
-    if (i === idx) return item;
+  const item = arr[idx];
+  if (item === undefined) {
+    throw new Error(
+      `nthOrThrow: no value at index ${idx} (length ${arr.length})`,
+    );
   }
-  throw new Error(
-    `nthOrThrow: index ${idx} out of bounds (length ${arr.length})`,
-  );
+  return item;
 }
 
 // ─── Public factories ──────────────────────────────────────────────────────────
