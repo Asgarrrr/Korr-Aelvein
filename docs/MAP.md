@@ -27,7 +27,8 @@ apps/
           tests/                            index + properties (heap invariants, ties, sort-drain).
         game/         Turn-based game loop — see `apps/server/src/domain/game/README.md`, `docs/GAME-LOOP.md` (Phase 1-2) and `docs/LIVING-WORLD.md` (Phase 3-6+).
           index.ts                          public barrel.
-          types.ts                          ZoneId / Time / ZoneStatus / GlobalEvent / GameState / Action / Dir.
+          brands.ts                         Branded primitives + factories — the ONE sanctioned `as` lives here (e.g. `zoneId(n)`). See CLAUDE.md § "Code style and types".
+          types.ts                          ZoneId (re-exported from brands) / Time / ZoneStatus / GlobalEvent / GameState / Action / Dir.
           newGame.ts                        newGame + spawnDonjonZone + spawnVillageZone.
           state.ts                          getZone + activeZoneStatus + activeWorld + activeLevel + entityAt.
           tick.ts                           tick reducer + drainNonPlayer (dispatch on GlobalEvent.kind).

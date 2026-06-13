@@ -20,7 +20,12 @@
  *   V5  V3 + V2                  charcode buffer + flat mob index
  */
 
-import { renderGrid as v0Render } from "../render";
+import { renderGrid } from "../render";
+
+// Local alias, not an `import { renderGrid as v0Render }`: import-rename is a
+// banned form of `as` (CLAUDE.md). `v0Render` names the production renderer as
+// the V0 baseline these variants are measured against.
+const v0Render = renderGrid;
 
 // ─── Shared input type (mirrors RenderInput) ────────────────────────────────
 

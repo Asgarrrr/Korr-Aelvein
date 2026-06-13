@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { type GameState, newGame, tick } from "./domain/game/index";
+import { type GameState, newGame, tick, zoneId } from "./domain/game/index";
 import { responseSchema, toSnapshot } from "./snapshot";
 
 const bodySchema = t.Union([
@@ -48,7 +48,16 @@ export function createApp() {
         // noise. The state machine stays frozen until the connection
         // closes.
         if (state.gameOver) return;
-        const next = tick(state, action);
+        // Trust boundary: `bodySchema` proves the inbound zone is a number, not
+        // that it's a real zone key. Brand it here — the one transport edge
+        // where an untrusted client number becomes a domain `ZoneId` — so the
+        // game layer below never handles an unbranded zone.
+        const next = tick(
+          state,
+          action.type === "ENTER_ZONE"
+            ? { ...action, zone: zoneId(action.zone) }
+            : action,
+        );
         sessions.set(ws.id, next);
         ws.send(toSnapshot(next), true);
       },

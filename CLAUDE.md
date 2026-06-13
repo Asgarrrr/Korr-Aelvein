@@ -45,6 +45,7 @@ Biome handles formatting and import order — don't argue with it, let it run.
 
 - TS strict everywhere (extends `@korr-aelvein/typescript-config/base.json`). `noUncheckedIndexedAccess` is on — treat `arr[i]` as possibly `undefined`.
 - **Never use `as` (any form, including `as const` and import-rename `import { X as Y }`) or non-null assertion (`!`) in TS.** Both lie to the type system. Refactor instead: `for (const [i, item] of arr.entries())` for safe indexed access, runtime guards for nullables, explicit type annotations (`const x: "lit" = "lit"`) instead of `as const`, and rename local symbols to avoid import-aliasing clashes. Not currently lint-enforceable — respect on every edit.
+  - **One sanctioned exception:** a branded-type factory in a file named `brands.ts` may use a single `as` to construct the brand (`return n as ZoneId`). Branding a runtime `number` is a widening TS cannot express without an assertion; the assertion is provably safe (it only tags a value) and confined to one greppable place. Outside `brands.ts` the codebase carries zero `as` assertions and zero `import { X as Y }` renames — to avoid a rename, use a namespace import (`import * as ns`) or a local `const alias = orig`; both bind faithfully and are allowed, only the type-lying `as` / `as const` and the avoidable `{ X as Y }` rename are banned. Biome has no rule to enforce this, so it stays review-enforced like the base rule.
 - New shared types or constants live in the workspace that owns them until duplication appears (see `packages/game-core` rule below).
 
 ## Testing

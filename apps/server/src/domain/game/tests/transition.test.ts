@@ -20,6 +20,7 @@ import {
   tick,
   type ZoneId,
   type ZoneStatus,
+  zoneId,
 } from "../index";
 
 type Pos = { x: number; y: number };
@@ -212,7 +213,17 @@ describe("tick: ENTER_ZONE — refusal and validation", () => {
     // is hostile / racing client input — refuse like MOVE-into-wall rather
     // than throw and tear down the session.
     const state = newGame(42, "rim");
-    const next = tick(state, { type: "ENTER_ZONE", zone: 999 });
+    const next = tick(state, { type: "ENTER_ZONE", zone: zoneId(999) });
+    expect(next).toBe(state);
+    expect(next.turn).toBe(0);
+  });
+
+  test("refuses a malformed zone number (NaN) like any other unknown id", () => {
+    // `zoneId()` only tags the type — it does not validate. `bodySchema`'s
+    // `t.Number()` admits NaN/floats, so the trust boundary relies on the
+    // not-found refusal: `zones.get(NaN)` misses, the tick returns unchanged.
+    const state = newGame(42, "rim");
+    const next = tick(state, { type: "ENTER_ZONE", zone: zoneId(Number.NaN) });
     expect(next).toBe(state);
     expect(next.turn).toBe(0);
   });
@@ -220,7 +231,7 @@ describe("tick: ENTER_ZONE — refusal and validation", () => {
   test("survives many unknown-zone messages without poisoning the session", () => {
     let s = newGame(42, "rim");
     for (let i = 0; i < 10; i++) {
-      s = tick(s, { type: "ENTER_ZONE", zone: 999 });
+      s = tick(s, { type: "ENTER_ZONE", zone: zoneId(999) });
     }
     // Session still answers normal actions afterwards.
     expect(() => tick(s, { type: "WAIT" })).not.toThrow();
@@ -418,8 +429,8 @@ describe("concretize — same-time catchup", () => {
     // schedule events for the soon-to-be-active zone can still be in the
     // heap when concretize runs. Catchup pops + applies them so the zone
     // is up to date before its discriminator flips.
-    const DUMMY: ZoneId = 0;
-    const TARGET: ZoneId = 1;
+    const DUMMY = zoneId(0);
+    const TARGET = zoneId(1);
     const level = makeAllFloorLevel(3, 3, { x: 0, y: 0 });
 
     const dummyWorld = emptyWorld();
@@ -496,8 +507,8 @@ describe("concretize — same-time catchup", () => {
     // refusal" — is contract-only (the field is invisible post-flip), but
     // the drain side-effect is observable: the stale event must not
     // survive on the heap.
-    const DUMMY: ZoneId = 0;
-    const TARGET: ZoneId = 1;
+    const DUMMY = zoneId(0);
+    const TARGET = zoneId(1);
     const level = makeAllFloorLevel(3, 3, { x: 0, y: 0 });
 
     const dummyWorld = emptyWorld();
@@ -581,8 +592,8 @@ describe("concretize — same-time catchup", () => {
     // by an earlier drain pass and must not be re-applied. Today's drain
     // loop pops them before they accumulate, but the lower bound keeps
     // concretize correct under any future drain refactor.
-    const DUMMY: ZoneId = 0;
-    const TARGET: ZoneId = 1;
+    const DUMMY = zoneId(0);
+    const TARGET = zoneId(1);
     const level = makeAllFloorLevel(3, 3, { x: 0, y: 0 });
 
     const dummyWorld = emptyWorld();
@@ -662,8 +673,8 @@ describe("concretize — same-time catchup", () => {
     // park/concretize mutations, the GameState handed back to the WS
     // handler is unchanged: origin zone still active, target still
     // dormant.
-    const DUMMY: ZoneId = 0;
-    const TARGET: ZoneId = 1;
+    const DUMMY = zoneId(0);
+    const TARGET = zoneId(1);
 
     const tiles = new Uint8Array(9);
     tiles[4] = TILE_FLOOR; // center

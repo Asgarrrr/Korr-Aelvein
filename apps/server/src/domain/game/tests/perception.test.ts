@@ -17,9 +17,10 @@ import {
   tick,
   type ZoneId,
   type ZoneStatus,
+  zoneId,
 } from "../index";
 
-const DONJON_ZONE: ZoneId = 0;
+const DONJON_ZONE = zoneId(0);
 
 function popcount(mask: Uint8Array): number {
   let n = 0;
