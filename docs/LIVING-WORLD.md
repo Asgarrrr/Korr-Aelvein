@@ -82,7 +82,7 @@ type GlobalEvent =
 **Phase 3 shipped** the multi-zone skeleton with a single-shape `ZoneStatus`
 (no discriminator) and a single `GlobalEvent.actor` variant. **Phase 4
 shipped** the `active` / `dormant` discriminator, the `GlobalEvent.schedule`
-variant, the abstract resolver pipeline (`game/abstract.ts`), and a first
+variant, the abstract resolver pipeline (`game/zones/abstract.ts`), and a first
 dormant village zone with a shopkeeper NPC oscillating between home and
 counter on a fixed period. **Phase 6 shipped** the zone-transition primitives
 (`parkActiveZone` / `concretize` / `enterZone`) and the `Action.ENTER_ZONE`
@@ -107,7 +107,7 @@ Boundary validation in `cloneAndValidateSchedule` rejects empty waypoints,
 non-positive periods, out-of-range `current`, non-finite coordinates —
 same boundary defence as `cloneAi` rejects unknown ai kinds.
 
-### Abstract resolver (`game/abstract.ts`)
+### Abstract resolver (`game/zones/abstract.ts`)
 
 ```ts
 applyAbstract(zone: ZoneStatus & { kind: "dormant" }, entity: EntityHandle):
@@ -149,7 +149,7 @@ trivially testable in isolation.
    into full simulation in disguise.
 
 2. **`parkActiveZone` / `concretize` / `enterZone`** — transitions between
-   active and dormant. Live in `apps/server/src/domain/game/transition.ts`.
+   active and dormant. Live in `apps/server/src/domain/game/zones/transition.ts`.
    See the "Zone transitions (Phase 6)" section below for the actual shape.
 
 3. **Global `time`.** `state.time` is the monotonic clock all events
@@ -157,7 +157,7 @@ trivially testable in isolation.
 
 ### Zone transitions (Phase 6)
 
-`game/transition.ts` exports three primitives:
+`game/zones/transition.ts` exports three primitives:
 
 ```ts
 parkActiveZone(state: GameState, id: ZoneId): void

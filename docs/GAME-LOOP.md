@@ -129,7 +129,7 @@ const ACTION_COST = 100; // 1 "turn" = 100 ticks; speed variants land as smaller
 
 `ENTER_ZONE` is the only action that rotates `state.activeZone` and
 `state.playerId`. Its semantics — park the current zone, concretize the
-target, teleport the player — live in `game/transition.ts`; see
+target, teleport the player — live in `game/zones/transition.ts`; see
 `docs/LIVING-WORLD.md` § "Zone transitions (Phase 6)" for the contract.
 
 Algorithm:
@@ -181,7 +181,7 @@ Three properties guaranteed:
   `ai` was stripped (despawn race, future status effects like *paralyzed*)
   drops out of the heap instead of cycling forever.
 
-## AI dispatch (`game/ai.ts`)
+## AI dispatch (`game/creatures/ai.ts`)
 
 `runAi` is a `switch(ai.kind)` with a `never` exhaustiveness sentinel:
 
@@ -225,7 +225,7 @@ The "one actor per tile" invariant becomes a bump-combat trigger as of
 Phase 5: the player's MOVE branch attacks the occupant instead of
 refusing, and a wanderer that rolls into the player's tile attacks
 instead of stepping. Wanderer-vs-wanderer still refuses (no factions yet).
-Combat lives in `game/combat.ts` (`attack(world, rng, target) → {damage,
+Combat lives in `game/creatures/combat.ts` (`attack(world, rng, target) → {damage,
 killed}`); `gameOver` is computed at end of each tick from the player's
 HP and surfaced through the WS snapshot.
 

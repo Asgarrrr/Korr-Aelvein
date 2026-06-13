@@ -3,8 +3,8 @@ import {
   getComponent,
   setComponent,
   type World,
-} from "../ecs/index";
-import type { Rng } from "../rng/index";
+} from "../../ecs/index";
+import type { Rng } from "../../rng/index";
 
 /**
  * Outcome of one attack against `target`.

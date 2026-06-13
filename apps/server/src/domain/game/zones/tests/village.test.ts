@@ -5,15 +5,15 @@ import {
   getComponent,
   removeComponent,
   type World,
-} from "../../ecs/index";
-import { size } from "../../scheduler/index";
+} from "../../../ecs/index";
+import { size } from "../../../scheduler/index";
 import {
   type GameState,
   newGame,
   tick,
   type ZoneId,
   type ZoneStatus,
-} from "../index";
+} from "../../index";
 
 type Pos = { x: number; y: number };
 

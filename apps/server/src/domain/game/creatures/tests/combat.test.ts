@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { emptyWorld, getComponent, isLiveHandle, spawn } from "../../ecs/index";
-import { createRng } from "../../rng/index";
+import {
+  emptyWorld,
+  getComponent,
+  isLiveHandle,
+  spawn,
+} from "../../../ecs/index";
+import { createRng } from "../../../rng/index";
 import { attack } from "../combat";
 
 describe("attack: damage and kill semantics", () => {

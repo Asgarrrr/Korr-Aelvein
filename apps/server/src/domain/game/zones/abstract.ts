@@ -3,8 +3,8 @@ import {
   getComponent,
   isLiveHandle,
   setComponent,
-} from "../ecs/index";
-import type { ZoneStatus } from "./types";
+} from "../../ecs/index";
+import type { ZoneStatus } from "../types";
 
 /**
  * Apply one off-zone NPC schedule event against the dormant zone the entity

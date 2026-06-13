@@ -26,18 +26,24 @@ apps/
           index.ts                          emptyScheduler / schedule / scheduleAt / peek / pop / size / removeWhere.
           tests/                            index + properties (heap invariants, ties, sort-drain).
         game/         Turn-based game loop — see `apps/server/src/domain/game/README.md`, `docs/GAME-LOOP.md` (Phase 1-2) and `docs/LIVING-WORLD.md` (Phase 3-6+).
-          index.ts                          public barrel.
+          index.ts                          public barrel (the contract — exported names are stable; client/Eden depend on them).
           brands.ts                         Branded primitives + factories — the ONE sanctioned `as` lives here (e.g. `zoneId(n)`). See CLAUDE.md § "Code style and types".
           types.ts                          ZoneId (re-exported from brands) / Time / ZoneStatus / GlobalEvent / GameState / Action / Dir.
-          newGame.ts                        newGame + spawnDonjonZone + spawnVillageZone.
-          state.ts                          getZone + activeZoneStatus + activeWorld + activeLevel + entityAt.
-          tick.ts                           tick reducer + drainNonPlayer (dispatch on GlobalEvent.kind).
-          ai.ts                             runAi dispatcher (in-bubble) + per-kind handlers (wanderer).
-          abstract.ts                       applyAbstract (off-zone NPC schedules — Phase 4).
-          combat.ts                         attack (Phase 5 bump-combat, pure-on-world).
-          transition.ts                     parkActiveZone + concretize + enterZone (Phase 6 zone transitions).
+          state.ts                          getZone + activeZoneStatus + activeWorld + activeLevel + entityAt (shared read-accessors).
           perception.ts                     VISION_RADIUS + updatePerception (Phase 7 glue: FOV → ZoneStatus.seen/visible).
-          tests/                            tick + wanderer + village + combat + transition + perception.
+          tick.ts                           tick reducer + drainNonPlayer (dispatch on GlobalEvent.kind); thin orchestrator over creatures/ + zones/.
+          tests/                            tick + perception (root orchestrator + cross-cutting glue).
+          creatures/                        One game system: combat + AI. Designated home of the creature FSM + nommage (separate plan).
+            index.ts                        sub-barrel: runAi, attack, AttackResult.
+            ai.ts                           runAi dispatcher (in-bubble) + per-kind handlers (wanderer).
+            combat.ts                       attack (Phase 5 bump-combat, pure-on-world leaf).
+            tests/                          combat + wanderer.
+          zones/                            One game system: world setup + zone lifecycle.
+            index.ts                        sub-barrel: newGame, applyAbstract, concretize, enterZone, parkActiveZone.
+            newGame.ts                      newGame + spawnDonjonZone + spawnVillageZone.
+            abstract.ts                     applyAbstract (off-zone NPC schedules — Phase 4).
+            transition.ts                   parkActiveZone + concretize + enterZone (Phase 6 zone transitions).
+            tests/                          transition + village.
         perception/   Field of view — symmetric shadowcasting (Albert Ford), pure, integer-only.
           index.ts                          computeFov(level, ox, oy, radius) → Uint8Array mask + isOpaque(tile).
           tests/                            index + properties (exact diamond-model oracle, symmetry) + determinism (pinned hashes).
