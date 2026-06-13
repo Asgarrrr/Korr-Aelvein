@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { Level } from "../../dungeon/index";
-import { TILE_FLOOR } from "../../dungeon/index";
+import type { Level } from "../../../dungeon/index";
+import { TILE_FLOOR } from "../../../dungeon/index";
 import {
   despawn,
   emptyWorld,
@@ -10,9 +10,9 @@ import {
   removeComponent,
   setComponent,
   spawn,
-} from "../../ecs/index";
-import { createRng, type RngState } from "../../rng/index";
-import { emptyScheduler, schedule, size } from "../../scheduler/index";
+} from "../../../ecs/index";
+import { createRng, type RngState } from "../../../rng/index";
+import { emptyScheduler, schedule, size } from "../../../scheduler/index";
 import {
   activeWorld,
   type GameState,
@@ -22,7 +22,7 @@ import {
   type ZoneId,
   type ZoneStatus,
   zoneId,
-} from "../index";
+} from "../../index";
 
 const DONJON_ZONE = zoneId(0);
 

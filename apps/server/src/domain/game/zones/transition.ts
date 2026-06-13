@@ -14,7 +14,7 @@
  * The full architectural commitment lives in `docs/LIVING-WORLD.md`.
  */
 
-import { getTile, type Level, TILE_WALL } from "../dungeon/index";
+import { getTile, type Level, TILE_WALL } from "../../dungeon/index";
 import {
   despawn,
   getComponent,
@@ -22,18 +22,18 @@ import {
   query,
   spawn,
   type World,
-} from "../ecs/index";
+} from "../../ecs/index";
 import {
   drainWhere,
   pop,
   removeWhere,
   schedule,
   scheduleAt,
-} from "../scheduler/index";
+} from "../../scheduler/index";
+import { updatePerception, VISION_RADIUS } from "../perception";
+import { activeWorld, entityAt, getZone } from "../state";
+import type { GameState, ZoneId } from "../types";
 import { applyAbstract } from "./abstract";
-import { updatePerception, VISION_RADIUS } from "./perception";
-import { activeWorld, entityAt, getZone } from "./state";
-import type { GameState, ZoneId } from "./types";
 
 /**
  * Convert the active zone `id` to dormant. Despawns the player from that

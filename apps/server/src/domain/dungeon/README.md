@@ -60,7 +60,7 @@ A door tile lives on the grid AND is referenced by `doors` on **both** rooms it 
 
 `Level.spawn` and `Level.downStairs` are `readonly [number, number] | null`. `null` (not `?:`) is the explicit "no value yet" — `exactOptionalPropertyTypes` is on, so the discriminator stays visible at every reader.
 
-By project convention, the player respawns at `level.spawn` on zone entry (see `game/transition.ts:enterZone`). Rim sets spawn to the center of the first placed room (always a floor cell). Caverns picks a uniform-random floor tile via `rng.int(0, floorCount - 1)` after `connectComponents` has merged all floor regions.
+By project convention, the player respawns at `level.spawn` on zone entry (see `game/zones/transition.ts:enterZone`). Rim sets spawn to the center of the first placed room (always a floor cell). Caverns picks a uniform-random floor tile via `rng.int(0, floorCount - 1)` after `connectComponents` has merged all floor regions.
 
 ## Determinism contract
 

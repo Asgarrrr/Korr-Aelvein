@@ -12,19 +12,34 @@ Turn-based game loop. Pure-ish reducer `(state, action) → state` over one or m
 
 ```
 game/
-  index.ts        public barrel
+  index.ts        public barrel — the contract; exported names are stable
   types.ts        ZoneId / Time / ZoneStatus / GlobalEvent / GameState / Action / Dir
-  newGame.ts      newGame + spawnDonjonZone + spawnVillageZone
+  brands.ts       branded ids (the one sanctioned `as`)
   state.ts        getZone / activeZoneStatus / activeWorld / activeLevel / entityAt
+  perception.ts   updatePerception (FOV → ZoneStatus.seen/visible glue)
   tick.ts         tick reducer + drainNonPlayer (dispatch on GlobalEvent.kind)
-  ai.ts           runAi dispatcher (in-bubble) + per-kind handlers
-  abstract.ts     applyAbstract (off-zone NPC schedules)
-  combat.ts       attack (Phase 5 bump-combat, pure-on-world)
-  transition.ts   parkActiveZone + concretize + enterZone (Phase 6 zone transitions)
-  tests/          tick + wanderer + village + combat + transition
+  tests/          tick + perception (root orchestrator + cross-cutting glue)
+  creatures/      one game system: combat + AI
+    index.ts      sub-barrel: runAi, attack, AttackResult
+    ai.ts         runAi dispatcher (in-bubble) + per-kind handlers
+    combat.ts     attack (Phase 5 bump-combat, pure-on-world leaf)
+    tests/        combat + wanderer
+  zones/          one game system: world setup + zone lifecycle
+    index.ts      sub-barrel: newGame, applyAbstract, concretize, enterZone, parkActiveZone
+    newGame.ts    newGame + spawnDonjonZone + spawnVillageZone
+    abstract.ts   applyAbstract (off-zone NPC schedules)
+    transition.ts parkActiveZone + concretize + enterZone (Phase 6 zone transitions)
+    tests/        transition + village
 ```
 
-Internal files import from each other directly; external callers (WS handler, tests, client-shared types via Eden) import from `./index`.
+**Convention:** one game system = one folder under `game/` (`creatures/`,
+`zones/`, …), each with its own `index.ts` sub-barrel and `tests/`. `tick` stays
+a thin orchestrator that wires the systems together; the root holds shared
+*vocabulary* (`types`, `brands`) and shared *services* (`state`, `perception`).
+New systems (the creature FSM, nommage, métiers) land as their own folder — they
+do not get added flat at the root. Internal files import from each other
+directly; external callers (WS handler, tests, client-shared types via Eden)
+import from `./index`.
 
 ## Public API
 

@@ -3,8 +3,10 @@
  * non-player event up to the next player turn drained in between.
  *
  * Companion modules:
- *  - `./ai.ts` — in-bubble AI dispatch (`runAi`).
- *  - `./abstract.ts` — out-of-bubble NPC resolver (`applyAbstract`).
+ *  - `./creatures` — in-bubble AI dispatch (`runAi`) and bump-combat
+ *    (`attack`).
+ *  - `./zones` — out-of-bubble NPC resolver (`applyAbstract`) and zone
+ *    transitions (`enterZone`).
  *  - `./state.ts` — runtime accessors (`activeWorld`, `activeLevel`,
  *    `entityAt`, `getZone`).
  *
@@ -23,13 +25,11 @@ import {
 } from "../ecs/index";
 import { fromRngState, type Rng } from "../rng/index";
 import { peek, pop, type ScheduledEvent, schedule } from "../scheduler/index";
-import { applyAbstract } from "./abstract";
-import { runAi } from "./ai";
-import { attack } from "./combat";
+import { attack, runAi } from "./creatures";
 import { updatePerception, VISION_RADIUS } from "./perception";
 import { activeWorld, activeZoneStatus, entityAt, getZone } from "./state";
-import { enterZone } from "./transition";
 import type { Action, Dir, GameState, GlobalEvent } from "./types";
+import { applyAbstract, enterZone } from "./zones";
 
 /**
  * Base cost of a basic action in scheduler ticks. 1 "turn" = 100 ticks; speed

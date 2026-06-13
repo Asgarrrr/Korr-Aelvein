@@ -18,13 +18,17 @@ import {
   type Level,
   type StyleId,
   TILE_WALL,
-} from "../dungeon/index";
-import { emptyWorld, spawn } from "../ecs/index";
-import { createRng, type Rng } from "../rng/index";
-import { emptyScheduler, type Scheduler, schedule } from "../scheduler/index";
-import { zoneId } from "./brands";
-import { updatePerception, VISION_RADIUS } from "./perception";
-import type { GameState, GlobalEvent, ZoneId, ZoneStatus } from "./types";
+} from "../../dungeon/index";
+import { emptyWorld, spawn } from "../../ecs/index";
+import { createRng, type Rng } from "../../rng/index";
+import {
+  emptyScheduler,
+  type Scheduler,
+  schedule,
+} from "../../scheduler/index";
+import { zoneId } from "../brands";
+import { updatePerception, VISION_RADIUS } from "../perception";
+import type { GameState, GlobalEvent, ZoneId, ZoneStatus } from "../types";
 
 const DONJON_ZONE = zoneId(0);
 const VILLAGE_ZONE = zoneId(1);

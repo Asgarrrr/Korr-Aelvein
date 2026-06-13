@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { Level } from "../../dungeon/index";
-import { TILE_FLOOR } from "../../dungeon/index";
+import type { Level } from "../../../dungeon/index";
+import { TILE_FLOOR } from "../../../dungeon/index";
 import {
   despawn,
   emptyWorld,
@@ -9,8 +9,8 @@ import {
   isLiveHandle,
   setComponent,
   spawn,
-} from "../../ecs/index";
-import { emptyScheduler, schedule, size } from "../../scheduler/index";
+} from "../../../ecs/index";
+import { emptyScheduler, schedule, size } from "../../../scheduler/index";
 import {
   concretize,
   type GameState,
@@ -21,7 +21,7 @@ import {
   type ZoneId,
   type ZoneStatus,
   zoneId,
-} from "../index";
+} from "../../index";
 
 type Pos = { x: number; y: number };
 
@@ -360,7 +360,9 @@ describe("tick: ENTER_ZONE — frozen NPCs resume on reactivation", () => {
     // Capture wanderer positions before leaving. Sort to compare as a set
     // — iteration order over the position column can change across a
     // player despawn/respawn cycle.
-    function wandererPositions(world: import("../../ecs/index").World): Pos[] {
+    function wandererPositions(
+      world: import("../../../ecs/index").World,
+    ): Pos[] {
       const out: Pos[] = [];
       forQuery(world, ["position", "ai"], (_handle, view) => {
         const p = view.position;
