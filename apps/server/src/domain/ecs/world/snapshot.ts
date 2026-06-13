@@ -2,7 +2,11 @@
 // replay and for hash-based regression tests. Round-trips byte-equal: same
 // snapshot → restore → same internal state.
 
-import type { ComponentKey, Components } from "../components";
+import {
+  COMPONENT_KEYS,
+  type ComponentKey,
+  type Components,
+} from "../components";
 import type { EntityId, Generation } from "../entity";
 import { columnWriters } from "./dispatch";
 import { emptyWorld, type World } from "./types";
@@ -109,34 +113,34 @@ function serializeEventBuckets(
 // `columnWriters` themselves do NOT push to lifecycle buffers — those are
 // rebuilt explicitly from the snapshot below so restore round-trips
 // byte-equal without spurious enter/exit events.
+// Correlated generic so `columnWriters[K]` and the snapshot's per-K value type
+// line up without an `as` — same technique as `spawn`'s writeColumn. Lets the
+// column restore loop below fan out over the canonical key list in one place.
+function restoreColumn<K extends ComponentKey>(
+  world: World,
+  id: EntityId,
+  key: K,
+  value: NonNullable<Components[K]>,
+): void {
+  columnWriters[key](world, id, value);
+}
+
 export function restore(s: SerializableWorld): World {
   const w = emptyWorld();
   for (const [id, gen] of s.generations) {
     assertSafeGeneration(id, gen);
     w.generations.set(id, gen);
   }
-  for (const [id, v] of s.position) columnWriters.position(w, id, v);
-  for (const [id, v] of s.actor) columnWriters.actor(w, id, v);
-  for (const [id, v] of s.hp) columnWriters.hp(w, id, v);
-  for (const [id, v] of s.ai) columnWriters.ai(w, id, v);
-  for (const [id, v] of s.schedule) columnWriters.schedule(w, id, v);
+  for (const key of COMPONENT_KEYS) {
+    for (const [id, value] of s[key]) restoreColumn(w, id, key, value);
+  }
   w.nextId = s.nextId;
   for (const id of s.recycled) w.recycled.push(id);
-  for (const [id, gen] of s.added.position) w.added.position.push({ id, gen });
-  for (const [id, gen] of s.added.actor) w.added.actor.push({ id, gen });
-  for (const [id, gen] of s.added.hp) w.added.hp.push({ id, gen });
-  for (const [id, gen] of s.added.ai) w.added.ai.push({ id, gen });
-  for (const [id, gen] of s.added.schedule) {
-    w.added.schedule.push({ id, gen });
+  for (const key of COMPONENT_KEYS) {
+    for (const [id, gen] of s.added[key]) w.added[key].push({ id, gen });
   }
-  for (const [id, gen] of s.removed.position) {
-    w.removed.position.push({ id, gen });
-  }
-  for (const [id, gen] of s.removed.actor) w.removed.actor.push({ id, gen });
-  for (const [id, gen] of s.removed.hp) w.removed.hp.push({ id, gen });
-  for (const [id, gen] of s.removed.ai) w.removed.ai.push({ id, gen });
-  for (const [id, gen] of s.removed.schedule) {
-    w.removed.schedule.push({ id, gen });
+  for (const key of COMPONENT_KEYS) {
+    for (const [id, gen] of s.removed[key]) w.removed[key].push({ id, gen });
   }
   for (const [k, v] of s.events) w.events.set(k, [...v]);
   return w;
