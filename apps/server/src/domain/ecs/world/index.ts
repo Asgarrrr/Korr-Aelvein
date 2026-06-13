@@ -1,6 +1,10 @@
 // Public facade for the world/ sub-module. See ../README.md for architecture.
 
-import type { ComponentKey, Components } from "../components";
+import {
+  COMPONENT_KEYS,
+  type ComponentKey,
+  type Components,
+} from "../components";
 import type { EntityHandle, EntityId, Generation } from "../entity";
 import {
   columnHas,
@@ -33,6 +37,37 @@ function allocId(world: World): EntityId {
   return id;
 }
 
+// Write one present column for a fresh slot, returning whether a value was
+// there (so the caller logs the enter only on a real add). Captured as a single
+// type parameter `K`, the mapped-table index `columnWriters[key]` narrows to
+// one writer and `c[key]` to one value type — the no-`as` way to fan out over
+// a key union. A loop with a *union*-typed key instead would force the value to
+// the intersection of every component type, which only an `as` compiles, and
+// `as` is banned (the wall `restore` hits too — see world/snapshot.ts).
+function writeColumn<K extends ComponentKey>(
+  world: World,
+  id: EntityId,
+  c: Components,
+  key: K,
+): boolean {
+  const value = c[key];
+  if (value === undefined) return false;
+  columnWriters[key](world, id, value);
+  return true;
+}
+
+// Removal correlates nothing (removers/has-checks take only an id), so a plain
+// union key suffices: log the exit only for columns the entity actually held,
+// then remove.
+function clearColumn(
+  world: World,
+  handle: EntityHandle,
+  key: ComponentKey,
+): void {
+  if (columnHas[key](world, handle.id)) world.removed[key].push(handle);
+  columnRemovers[key](world, handle.id);
+}
+
 export function spawn(world: World, c: Components): EntityHandle {
   const id = allocId(world);
   // Fresh slot ⇒ gen 0 (even, live). Recycled slot ⇒ stored is odd
@@ -45,33 +80,12 @@ export function spawn(world: World, c: Components): EntityHandle {
   // callers; internally nothing mutates handles. Saves 3 allocs per spawn
   // on the 3-key case (~60 ns at N=5000).
   const handle: EntityHandle = { id, gen };
-  // Per-key fan-out, deliberately not a `for (const k of KEYS)` loop: over a
-  // non-literal key union, `columnWriters[k](world, id, c[k])` forces the value
-  // to the *intersection* of every component type (TS can't correlate the two
-  // mapped tables through a runtime key), which only an `as` compiles — and
-  // `as` is banned. Same wall `restore`/`snapshot` hit (see world/snapshot.ts).
-  // Each key still routes through `columnWriters` (the value chokepoint);
-  // writing directly instead of via `setComponent` skips its isLiveHandle +
+  // One pass over the canonical key list: each present value routes through
+  // `columnWriters` (the value chokepoint) via the correlated generic above.
+  // Writing directly instead of via `setComponent` skips its isLiveHandle +
   // hadBefore checks, both provably redundant for a freshly allocated slot.
-  if (c.position !== undefined) {
-    columnWriters.position(world, id, c.position);
-    world.added.position.push(handle);
-  }
-  if (c.actor !== undefined) {
-    columnWriters.actor(world, id, c.actor);
-    world.added.actor.push(handle);
-  }
-  if (c.hp !== undefined) {
-    columnWriters.hp(world, id, c.hp);
-    world.added.hp.push(handle);
-  }
-  if (c.ai !== undefined) {
-    columnWriters.ai(world, id, c.ai);
-    world.added.ai.push(handle);
-  }
-  if (c.schedule !== undefined) {
-    columnWriters.schedule(world, id, c.schedule);
-    world.added.schedule.push(handle);
+  for (const key of COMPONENT_KEYS) {
+    if (writeColumn(world, id, c, key)) world.added[key].push(handle);
   }
   return handle;
 }
@@ -84,26 +98,7 @@ export function despawn(world: World, handle: EntityHandle): void {
   // its reference across buffers (EntityHandle is readonly so aliasing
   // can't be observed). Per-key routes through the dispatch tables, same
   // chokepoint as `removeComponent` below.
-  if (columnHas.position(world, handle.id)) {
-    world.removed.position.push(handle);
-  }
-  columnRemovers.position(world, handle.id);
-  if (columnHas.actor(world, handle.id)) {
-    world.removed.actor.push(handle);
-  }
-  columnRemovers.actor(world, handle.id);
-  if (columnHas.hp(world, handle.id)) {
-    world.removed.hp.push(handle);
-  }
-  columnRemovers.hp(world, handle.id);
-  if (columnHas.ai(world, handle.id)) {
-    world.removed.ai.push(handle);
-  }
-  columnRemovers.ai(world, handle.id);
-  if (columnHas.schedule(world, handle.id)) {
-    world.removed.schedule.push(handle);
-  }
-  columnRemovers.schedule(world, handle.id);
+  for (const key of COMPONENT_KEYS) clearColumn(world, handle, key);
   // Bump to odd ⇒ marks slot as dead under the parity encoding.
   world.generations.set(handle.id, handle.gen + 1);
   world.recycled.push(handle.id);
