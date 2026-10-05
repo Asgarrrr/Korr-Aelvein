@@ -16,10 +16,40 @@ This file holds rules, not progress: progress lives in git and in the plan.
   removing it leaves a running game.
 - Extract seams from real cases, not guesses: the module interface is
   extracted at the second mechanic, the core API is frozen at the third.
+  No abstraction without two real implementations (a test fake counts).
 - Simulation first, visuals second. A mechanic is proven in the ASCII debug
   view before it gets 3D rendering.
 - Before creating a file, helper, or type, have an `Explore` subagent on
   `haiku` search for an existing one.
+
+## Where code goes
+
+Everything has one address. Decide where code goes before writing it. If no
+row fits, that is a design question: propose a new row before coding.
+
+| What | Where |
+|---|---|
+| Foundation rule: grid, turns, actions, arbitration, death, events, RNG | `packages/engine/src/core/` |
+| One mechanic: its needs, components, systems, tuning data | `packages/engine/src/modules/<mechanic>/` |
+| Type read by two or more modules | `packages/engine/src/contracts/` |
+| Floor and world generation | `packages/engine/src/world/` |
+| Message between web and server | `packages/protocol/src/` |
+| Connections, sessions, persistence, hosting the engine | `apps/server/src/` |
+| 3D rendering | `apps/web/src/render/` |
+| ASCII debug view | `apps/web/src/debug/` |
+| Keys and clicks → player intents | `apps/web/src/input/` |
+| Color, size, duration | `apps/web/src/theme.ts`, never a literal elsewhere |
+| Tests | `<package>/test/`, mirroring `src/` |
+| Repository tooling | `scripts/` |
+
+- One file = one subject. Past ~400 lines, or when a second subject
+  appears, split into a folder by subject: `combat/{damage,status}.ts`,
+  never `combat2.ts`.
+- When adding code, name the table row that justifies its location. If the
+  change pushes a file past the limit, propose the split in the same change.
+- `scripts/check-architecture.ts` enforces the boundaries, the file limit,
+  determinism and the theme rule, as part of `verify`. Never weaken it to
+  get green: fix the code, or propose a rule change.
 
 ## Commands
 

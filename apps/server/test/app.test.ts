@@ -1,6 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import type { ClientMessage, ServerMessage } from "@korr/protocol";
-import { createApp } from "./app";
+import { createApp } from "../src/app";
 
 const app = createApp().listen(0);
 afterAll(() => app.stop());

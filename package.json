@@ -12,7 +12,8 @@
 		"typecheck": "turbo run typecheck",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
-		"verify": "biome check . && turbo run typecheck test build"
+		"check:arch": "bun scripts/check-architecture.ts",
+		"verify": "biome check . && bun run check:arch && turbo run typecheck test build"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.15",
