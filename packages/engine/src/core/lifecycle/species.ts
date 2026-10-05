@@ -15,6 +15,7 @@ export interface SpeciesShape {
 
 export interface CompiledSpecies {
 	readonly actor: boolean;
+	readonly link: Int32Array | undefined;
 	readonly mask: Int32Array;
 	readonly columns: readonly Column[];
 	readonly values: Int32Array;
@@ -26,6 +27,10 @@ export function compileSpecies(
 	maskWords: number,
 ): CompiledSpecies {
 	checkVitality(species.components.vitality);
+	const link = species.components.link;
+	// Only what never moves may lead somewhere: a link is checked against the floor it sits on.
+	if (link !== undefined && species.actor)
+		throw new Error("a link on an actor: only non-actors may lead to a floor");
 	const mask = new Int32Array(maskWords);
 	if (species.actor) mask[0] = ACTOR;
 	const columns: Column[] = [];
@@ -49,6 +54,10 @@ export function compileSpecies(
 	}
 	return {
 		actor: species.actor,
+		link:
+			link === undefined
+				? undefined
+				: Int32Array.of(link.floor ?? 0, link.x ?? 0, link.y ?? 0),
 		mask,
 		columns,
 		values: Int32Array.from(values),

@@ -68,8 +68,8 @@ defineModule({
 			const raw: Uint8Array = diet.eats;
 			return raw;
 		});
-		// @ts-expect-error satiety is not in contracts/
-		b.read("satiety");
+		// @ts-expect-error wary is not in contracts/
+		b.read("wary");
 	},
 });
 

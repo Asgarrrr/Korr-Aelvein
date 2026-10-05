@@ -98,8 +98,8 @@ test("a config holding a sparse array throws", () => {
 
 test("cell columns take no mask bit", () => {
 	const schema: Record<string, Record<string, "u8">> = {};
-	// With the core's vitality bit, 29 tags fill the first mask word exactly.
-	for (let i = 0; i < 29; i++) schema[`tag${i}`] = {};
+	// With the core's three tags and two components, 27 tags fill the first mask word exactly.
+	for (let i = 0; i < 27; i++) schema[`tag${i}`] = {};
 	const tagged = defineModule({
 		name: "tagged",
 		schema,

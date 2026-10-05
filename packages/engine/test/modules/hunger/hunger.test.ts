@@ -13,14 +13,20 @@ import {
 	type Perception,
 	type Slot,
 } from "../../../src/core/api";
-import { PERCEPTION_RADIUS } from "../../../src/core/config";
+import { LOD_PERIODS, PERCEPTION_RADIUS } from "../../../src/core/config";
 import { createWorld } from "../../../src/core/world";
 import { fear } from "../../../src/modules/fear";
 import { flora } from "../../../src/modules/flora";
 import { hunger } from "../../../src/modules/hunger";
 import { foodClass, hungerConfig } from "../../../src/modules/hunger/config";
 import { modules } from "../../../src/registry";
-import { game, populatedWorld } from "../../fixtures";
+import {
+	decider,
+	decisions,
+	game,
+	idleRounds,
+	populatedWorld,
+} from "../../fixtures";
 
 const smallWorld = () =>
 	createWorld({
@@ -181,4 +187,25 @@ test("a hungry rat skips a taken detour and takes the free one", () => {
 	const food = world.spawn(0, cheese, 2, 3);
 	world.runRounds(2);
 	expect(world.alive(food)).toBe(false);
+});
+
+test("a hungry rat walled off from its meal idles on its cached decision", () => {
+	decisions.clear();
+	const far = 4;
+	const statue = { actor: true, components: {} };
+	const world = createWorld({
+		seed: 1,
+		floors: far + 1,
+		width: 4,
+		height: 2,
+		modules: [hunger, decider],
+	});
+	world.spawnPlayer(0, statue, 0, 0);
+	const id = world.spawn(far, ratAt(hungerConfig.hungryBelow - 200), 0, 0);
+	world.spawn(far, statue, 1, 0);
+	world.spawn(far, statue, 1, 1);
+	const food = world.spawn(far, cheese, 2, 0);
+	idleRounds(world, LOD_PERIODS[far] ?? 0);
+	expect(decisions.get(id)).toBeLessThanOrEqual(2);
+	expect(world.alive(food)).toBe(true);
 });

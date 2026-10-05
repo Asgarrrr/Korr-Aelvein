@@ -1,17 +1,33 @@
 import type { AnyModule } from "./api";
-import { CAP, MAX_COORD, MAX_FLOORS, MAX_SEED, TICKS_PER_TURN } from "./config";
+import { CAP, MAX_COORD, MAX_FLOORS, MAX_SEED } from "./config";
 import { type EntityId, NONE } from "./ecs/ids";
 import { INDEX_SIZE } from "./ecs/storage";
-import type { Engine } from "./engine";
+import {
+	type ActionEntry,
+	type Engine,
+	FLOOR_STAGE,
+	KIND_CODE,
+} from "./engine";
 import type { EventVisitor } from "./events/events";
 import { spawn } from "./lifecycle/lifecycle";
 import type { ComponentName, FieldName, Species } from "./lifecycle/species";
 import { engineDigest, hashHex, worldDigest } from "./persistence/hash";
-import { FLOOR_HEADER, readFloor, SUM, saveFloor } from "./persistence/image";
+import { identityProblem } from "./persistence/identity";
+import {
+	FLOOR_HEADER,
+	readFloor,
+	STAGE,
+	SUM,
+	saveFloor,
+	WORD,
+} from "./persistence/image";
 import { readWorld, saveWorld } from "./persistence/save";
-import { checkFloor } from "./persistence/validate";
+import { checkFloor, loadFloor } from "./persistence/validate";
 import { hashName } from "./random/rng";
 import { createEngine } from "./setup/registration";
+import { ID } from "./travel/inbox";
+import { advance, dueOn, playerTurn } from "./turns/round";
+import { validTarget } from "./turns/target";
 
 export interface WorldOptions<M extends readonly AnyModule[]> {
 	readonly seed: number;
@@ -23,12 +39,45 @@ export interface WorldOptions<M extends readonly AnyModule[]> {
 	readonly audit?: boolean;
 	readonly modules: M;
 	readonly species?: Readonly<Record<string, Species<M>>>;
+	// A permutation of the floors, the order they run in within a round. Tests only: no
+	// order may change the result.
+	readonly floorOrder?: readonly number[];
+}
+
+export type Location =
+	| { readonly floor: number; readonly x: number; readonly y: number }
+	| "transit"
+	| "dead";
+
+export interface InputRecord {
+	readonly round: number;
+	readonly time: number;
+	readonly player: EntityId;
+	// As played: replaying a record is world.input(player, action, target).
+	readonly action: string;
+	readonly target: number | null;
 }
 
 export interface World<M extends readonly AnyModule[]> {
 	spawn(floor: number, species: Species<M>, x: number, y: number): EntityId;
+	spawnPlayer(
+		floor: number,
+		species: Species<M>,
+		x: number,
+		y: number,
+	): EntityId;
+	// Throws when a player becomes due: a world with players moves through advance and input.
 	runRounds(n: number): void;
+	// Runs every floor until its round ends or a player on it is due, and returns the due
+	// players. Empty means the round ended everywhere; the next call starts the next round.
+	advance(): readonly EntityId[];
+	// One decision for a due player, by registered action name ("core/step"). An unknown name
+	// or a target the action cannot take is recorded and played as core/idle.
+	input(player: EntityId, action: string, target: number | null): void;
+	inputs(): readonly InputRecord[];
 	alive(id: EntityId): boolean;
+	// "dead" also covers an id never issued.
+	locate(id: EntityId): Location;
 	peek<N extends ComponentName<M>>(
 		component: N,
 		field: FieldName<M, N>,
@@ -36,6 +85,8 @@ export interface World<M extends readonly AnyModule[]> {
 	): number;
 	hash(): string;
 	saveFloor(floor: number): Uint8Array;
+	// Replaces one floor with an image saved at this same point of this world's run.
+	loadFloor(floor: number, bytes: Uint8Array): void;
 	save(): Uint8Array;
 	// The visitor runs once per event, oldest first; the floor's events are gone afterwards.
 	drainEvents(floor: number, visit: EventVisitor): void;
@@ -55,7 +106,16 @@ function build(options: WorldOptions<readonly AnyModule[]>): Engine {
 			throw new Error(`floor side ${side} outside [1, ${MAX_COORD}]`);
 	if (!(Number.isInteger(popCap) && popCap >= 1 && popCap <= CAP))
 		throw new Error(`popCap ${popCap} outside [1, ${CAP}]`);
-	return createEngine(
+	const order = options.floorOrder;
+	if (
+		order !== undefined &&
+		!(
+			order.length === floors &&
+			[...order].sort((a, b) => a - b).every((f, i) => f === i)
+		)
+	)
+		throw new Error(`floor order ${order} is not a permutation of the floors`);
+	const engine = createEngine(
 		{
 			seed,
 			floors,
@@ -68,6 +128,8 @@ function build(options: WorldOptions<readonly AnyModule[]>): Engine {
 		options.modules,
 		options.species,
 	);
+	if (order !== undefined) engine.floorOrder = [...order];
+	return engine;
 }
 
 export function createWorld<const M extends readonly AnyModule[]>(
@@ -88,8 +150,9 @@ export function loadWorld<const M extends readonly AnyModule[]>(
 	const engine = build({ ...shape, ...options });
 	const indexes = images.map(() => new Int32Array(INDEX_SIZE));
 	const sums = new Int32Array(2 * images.length);
+	const players = new Int32Array(images.length);
 	images.forEach((image, f) => {
-		checkFloor(engine, image, f, round, indexes[f] as Int32Array);
+		players[f] = checkFloor(engine, image, f, round, indexes[f] as Int32Array);
 		const words = new Int32Array(image.buffer, image.byteOffset, FLOOR_HEADER);
 		sums[2 * f] = words[SUM] ?? 0;
 		sums[2 * f + 1] = words[SUM + 1] ?? 0;
@@ -97,9 +160,20 @@ export function loadWorld<const M extends readonly AnyModule[]>(
 	worldDigest(engine.sum, header, events, sums, engine.digest);
 	if (engine.digest[0] !== hash[0] || engine.digest[1] !== hash[1])
 		throw new Error("save file: contents do not match its hash");
+	const started = images.map(
+		(image) =>
+			new Int32Array(image.buffer, image.byteOffset, FLOOR_HEADER)[STAGE] !==
+			FLOOR_STAGE.waiting,
+	);
+	if (started.some((s) => s !== started[0]))
+		throw new Error(
+			"save file: some floors started the round and some did not",
+		);
 	images.forEach((image, f) => {
-		readFloor(engine, image, indexes[f] as Int32Array);
+		readFloor(engine, image, indexes[f] as Int32Array, players[f] ?? 0);
 	});
+	const problem = identityProblem(engine);
+	if (problem !== undefined) throw new Error(`save file: ${problem}`);
 	engine.round = round;
 	engine.events.enabled.set(events);
 	return new GameWorld<M>(engine);
@@ -109,19 +183,91 @@ class GameWorld<M extends readonly AnyModule[]> implements World<M> {
 	// A round that threw left its floor half-applied: nothing may build on that state.
 	private poisoned = false;
 	private draining = false;
+	private readonly log: InputRecord[] = [];
+	// Floors whose due player has played since the last advance. A protocol rule only, so not
+	// saved: the scheduler's order already rules out a double or out-of-order turn.
+	private readonly played = new Set<number>();
 
 	constructor(private readonly engine: Engine) {}
 
 	spawn(floor: number, species: Species<M>, x: number, y: number): EntityId {
 		this.checkMutable();
-		const at = this.engine.round * TICKS_PER_TURN;
-		return spawn(this.engine, floor, species, x, y, at);
+		return spawn(this.engine, floor, species, x, y, this.now(floor));
+	}
+
+	spawnPlayer(
+		floor: number,
+		species: Species<M>,
+		x: number,
+		y: number,
+	): EntityId {
+		this.checkMutable();
+		return spawn(this.engine, floor, species, x, y, this.now(floor), true);
 	}
 
 	runRounds(n: number): void {
+		this.run(() => {
+			for (let i = 0; i < n; i++) this.engine.runRound();
+		});
+	}
+
+	advance(): readonly EntityId[] {
+		this.checkMutable();
+		this.played.clear();
+		return this.run(() => Object.freeze(advance(this.engine)));
+	}
+
+	input(player: EntityId, action: string, target: number | null): void {
+		this.checkMutable();
+		const e = this.engine;
+		const floor = e.storage.floorOf(player);
+		const slot = floor < 0 ? NONE : e.storage.slotOf(floor, player);
+		if (slot === NONE || this.played.has(floor) || dueOn(e, floor) !== slot)
+			throw new Error(`player ${player} is not due`);
+		let index = e.actionByName.get(action) ?? e.idleIndex;
+		const { kind } = e.actions[index] as ActionEntry;
+		const value = target ?? 0;
+		const valid =
+			kind === KIND_CODE.none
+				? target === null
+				: target !== null &&
+					Number.isInteger(value) &&
+					validTarget(kind, value, e.grid.cells, e.storage.floors);
+		if (!valid) index = e.idleIndex;
+		const entry = e.actions[index] as ActionEntry;
+		this.log.push(
+			Object.freeze({
+				round: e.round,
+				time: e.scheduler.nextAt[slot] ?? 0,
+				player,
+				action: entry.name,
+				target: valid ? target : null,
+			}),
+		);
+		this.played.add(floor);
+		this.run(() => playerTurn(e, floor, slot, index, valid ? value : 0));
+	}
+
+	inputs(): readonly InputRecord[] {
+		this.checkHealthy();
+		return [...this.log];
+	}
+
+	loadFloor(floor: number, bytes: Uint8Array): void {
+		this.checkMutable();
+		const image = bytes.byteOffset % WORD === 0 ? bytes : bytes.slice();
+		loadFloor(this.engine, image, this.checkFloor(floor));
+	}
+
+	// A floor's own clock: mid-round, a newcomer acts no earlier than the floor has reached.
+	private now(floor: number): number {
+		return this.engine.now[this.checkFloor(floor)] ?? 0;
+	}
+
+	private run<T>(body: () => T): T {
 		this.checkMutable();
 		try {
-			for (let i = 0; i < n; i++) this.engine.runRound();
+			return body();
 		} catch (error) {
 			this.poisoned = true;
 			throw error;
@@ -131,6 +277,22 @@ class GameWorld<M extends readonly AnyModule[]> implements World<M> {
 	alive(id: EntityId): boolean {
 		this.checkHealthy();
 		return this.engine.storage.floorOf(id) >= 0;
+	}
+
+	locate(id: EntityId): Location {
+		this.checkHealthy();
+		const { storage, grid, inbox } = this.engine;
+		const floor = storage.floorOf(id);
+		if (floor >= 0) {
+			const slot = storage.slotOf(floor, id);
+			return { floor, x: grid.x[slot] ?? 0, y: grid.y[slot] ?? 0 };
+		}
+		for (let f = 0; f < storage.floors; f++) {
+			const list = inbox.words(f);
+			for (let i = 0; i < inbox.count(f); i++)
+				if (list[i * inbox.width + ID] === id) return "transit";
+		}
+		return "dead";
 	}
 
 	peek<N extends ComponentName<M>>(

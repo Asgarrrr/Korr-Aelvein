@@ -4,7 +4,8 @@ import { type Column, createColumn, type FieldKind } from "./schema";
 
 export const ALIVE = 1;
 export const ACTOR = 2;
-const CORE_BITS = 2;
+export const PLAYER = 4;
+const CORE_BITS = 3;
 const WORD_SHIFT = 5;
 const WORD_MASK = 31;
 
@@ -60,6 +61,27 @@ export class Storage {
 	}
 
 	alloc(floor: number): Slot {
+		const counter = (this.counters[floor] ?? 0) + 1;
+		if (counter >= ID_FLOOR_STRIDE)
+			throw new Error(`floor ${floor} ran out of entity ids`);
+		const slot = this.take(floor);
+		this.counters[floor] = counter;
+		this.enter(floor, slot, floor * ID_FLOOR_STRIDE + counter);
+		return slot;
+	}
+
+	full(floor: number): boolean {
+		return (this.freeCount[floor] ?? 0) === 0 && this.highWater[floor] === CAP;
+	}
+
+	// An entity arriving from another floor keeps the id its origin floor issued.
+	adopt(floor: number, id: EntityId): Slot {
+		const slot = this.take(floor);
+		this.enter(floor, slot, id);
+		return slot;
+	}
+
+	private take(floor: number): Slot {
 		let slot: number;
 		const freed = this.freeCount[floor] ?? 0;
 		if (freed > 0) {
@@ -72,15 +94,13 @@ export class Storage {
 			this.highWater[floor] = used + 1;
 			slot = floor * CAP + used;
 		}
-		const counter = (this.counters[floor] ?? 0) + 1;
-		if (counter >= ID_FLOOR_STRIDE)
-			throw new Error(`floor ${floor} ran out of entity ids`);
-		this.counters[floor] = counter;
-		const id = floor * ID_FLOOR_STRIDE + counter;
+		return slot as Slot;
+	}
+
+	private enter(floor: number, slot: Slot, id: number): void {
 		this.ids[slot] = id;
 		this.masks[slot * this.maskWords] = ALIVE;
 		this.insert(floor, id, slot);
-		return slot as Slot;
 	}
 
 	release(floor: number, slot: Slot): void {
@@ -128,7 +148,12 @@ export class Storage {
 		const { index, ids } = this;
 		const base = floor * INDEX_SIZE;
 		let hole = home(ids[slot] ?? 0);
-		while (index[base + hole] !== slot + 1) hole = (hole + 1) & INDEX_MASK;
+		// An empty entry ends every probe chain: a slot not found by then was never indexed.
+		for (let held = index[base + hole]; held !== slot + 1; ) {
+			if (held === 0) throw new Error(`slot ${slot} is not indexed`);
+			hole = (hole + 1) & INDEX_MASK;
+			held = index[base + hole];
+		}
 		for (let j = (hole + 1) & INDEX_MASK; ; j = (j + 1) & INDEX_MASK) {
 			const held = index[base + j] ?? 0;
 			if (held === 0) break;
@@ -167,4 +192,19 @@ export function indexInsert(
 	}
 	table[tableBase + i] = slot + 1;
 	return true;
+}
+
+// Whether `table` indexes `id`; `ids[slot - idsBase]` must hold each indexed slot's id.
+export function indexHas(
+	table: Int32Array,
+	tableBase: number,
+	ids: Int32Array,
+	idsBase: number,
+	id: number,
+): boolean {
+	for (let i = home(id); ; i = (i + 1) & INDEX_MASK) {
+		const held = table[tableBase + i] ?? 0;
+		if (held === 0) return false;
+		if (ids[held - 1 - idsBase] === id) return true;
+	}
 }

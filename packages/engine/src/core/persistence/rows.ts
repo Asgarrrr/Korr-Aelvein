@@ -1,7 +1,8 @@
-import { MAX_TICK } from "../config";
-import { ACTOR, ALIVE, indexInsert } from "../ecs/storage";
+import { ID_FLOOR_STRIDE, MAX_TICK } from "../config";
+import { ACTOR, ALIVE, indexInsert, PLAYER } from "../ecs/storage";
 import { type ActionEntry, KIND_CODE } from "../engine";
 import { END } from "../space/grid";
+import { validLink } from "../travel/link";
 import { validTarget } from "../turns/target";
 
 export const OK = 0;
@@ -32,12 +33,16 @@ const IDLE_NEXT_AT = 22;
 const IDLE_INTENT = 23;
 const ABSENT_VALUE = 24;
 const VITALITY = 27;
+const IDLE_PLAYER = 28;
+const LINK = 29;
 
 // The slot and values a failed check reports: plain numbers, so the hot loops close over nothing.
 const PROBLEM_FIELDS = 3;
 const problem = new Int32Array(PROBLEM_FIELDS);
-// checkLive leaves the live count here for checkLists.
-const tally = new Int32Array(1);
+// checkLive leaves the live count here for checkLists, and the player count for the caller.
+const tally = new Int32Array(2);
+
+export const playersSeen = () => tally[1] ?? 0;
 const report = (code: number, slot: number, value: number, other = 0) => {
 	problem[0] = slot;
 	problem[1] = value;
@@ -64,7 +69,7 @@ export function describe(code: number): string {
 		case DEAD_POSITION:
 			return `dead slot ${slot} keeps a position`;
 		case FOREIGN_ID:
-			return `slot ${slot} holds id ${value}, not one this floor issued`;
+			return `slot ${slot} holds id ${value}, not one this floor issued nor a valid id from another`;
 		case SHARED_ID:
 			return `id ${value} is held by two slots`;
 		case NEXT_AT:
@@ -99,6 +104,10 @@ export function describe(code: number): string {
 			return `slot ${slot} has unknown mask bits in word ${value}`;
 		case VITALITY:
 			return `slot ${slot} has hp ${value} outside (0, ${problem[2] ?? 0}]`;
+		case IDLE_PLAYER:
+			return `slot ${slot} is a player but does not act`;
+		case LINK:
+			return `slot ${slot} has a link to floor ${value} that leads nowhere`;
 		case TWO_ACTORS:
 			return `cell ${value} holds two actors, the second in slot ${slot}`;
 		default:
@@ -145,7 +154,8 @@ export function checkLive(
 	rows: Rows,
 	freed: Uint8Array,
 	index: Int32Array,
-	firstId: number,
+	floor: number,
+	floors: number,
 	counter: number,
 	now: number,
 	nextAt: Int32Array,
@@ -157,6 +167,7 @@ export function checkLive(
 	const { base, highWater, maskWords, ids, masks, cellOf, next, prev } = rows;
 	index.fill(0);
 	let live = 0;
+	let players = 0;
 	for (let row = 0; row < highWater; row++) {
 		const slot = base + row;
 		const mask = masks[row * maskWords] ?? 0;
@@ -170,12 +181,21 @@ export function checkLive(
 			continue;
 		}
 		live++;
+		if ((mask & PLAYER) !== 0) {
+			if ((mask & ACTOR) === 0) return report(IDLE_PLAYER, slot, 0);
+			players++;
+		}
 		for (let w = 0; w < maskWords; w++)
 			if (((masks[row * maskWords + w] ?? 0) & ~(rows.known[w] ?? 0)) !== 0)
 				return report(UNKNOWN_BITS, slot, w);
 		const id = ids[row] ?? 0;
-		const serial = id - firstId;
-		if (!(serial >= 1 && serial <= counter))
+		const origin = Math.floor(id / ID_FLOOR_STRIDE);
+		// An entity that came by stairs keeps the id its origin floor issued.
+		const issued =
+			origin === floor
+				? id - origin * ID_FLOOR_STRIDE <= counter
+				: origin < floors;
+		if (!(issued && validTarget(KIND_CODE.entity, id, 0, floors)))
 			return report(FOREIGN_ID, slot, id);
 		if (!indexInsert(index, 0, ids, base, id, slot))
 			return report(SHARED_ID, slot, id);
@@ -191,6 +211,7 @@ export function checkLive(
 			return report(WRONG_CELL, slot, cellOf[row] ?? 0);
 	}
 	tally[0] = live;
+	tally[1] = players;
 	return OK;
 }
 
@@ -331,6 +352,38 @@ export function checkVitality(
 		const top = max[row] ?? 0;
 		if (!(left > 0 && left <= top))
 			return report(VITALITY, base + row, left, top);
+	}
+	return OK;
+}
+
+export interface Links {
+	readonly word: number;
+	readonly bit: number;
+	readonly floor: Uint8Array;
+	readonly x: Int16Array;
+	readonly y: Int16Array;
+}
+
+export function checkLinks(
+	rows: Rows,
+	links: Links,
+	floor: number,
+	floors: number,
+	width: number,
+	height: number,
+): number {
+	const { base, highWater, maskWords, masks } = rows;
+	const { word, bit } = links;
+	for (let row = 0; row < highWater; row++) {
+		if (((masks[row * maskWords + word] ?? 0) & bit) === 0) continue;
+		const to = links.floor[row] ?? 0;
+		const x = links.x[row] ?? 0;
+		const y = links.y[row] ?? 0;
+		if (
+			((masks[row * maskWords] ?? 0) & ACTOR) !== 0 ||
+			!validLink(floor, to, x, y, floors, width, height)
+		)
+			return report(LINK, base + row, to);
 	}
 	return OK;
 }

@@ -1,9 +1,11 @@
 import { CAP } from "../config";
 import type { Column } from "../ecs/schema";
+import { PLAYER } from "../ecs/storage";
 import type { Engine } from "../engine";
+import { ENTRY_HEAD } from "../travel/inbox";
 import type { Checksum } from "./checksum";
 
-export const FORMAT_VERSION = 5;
+export const FORMAT_VERSION = 6;
 export const WORD = 4;
 export const VERSION = 0;
 export const FINGERPRINT = 1;
@@ -12,8 +14,14 @@ export const COUNTER = 3;
 export const HIGH_WATER = 4;
 export const FREE_COUNT = 5;
 export const TIME = 6;
-export const SUM = 7;
-export const FLOOR_HEADER = 9;
+export const STAGE = 7;
+export const PERIOD = 8;
+export const INBOX = 9;
+export const TRAFFIC = 10;
+export const EMITTED = 11;
+export const SUM = 12;
+// Then the sections, then the inbox entries.
+export const FLOOR_HEADER = 14;
 const BYTE_BITS = 8;
 
 export const FREE = 0;
@@ -84,9 +92,10 @@ export function imageWords(
 	engine: Engine,
 	highWater: number,
 	freeCount: number,
+	inbox: number,
 ): number {
 	const sections = engine.sections;
-	let words = FLOOR_HEADER;
+	let words = FLOOR_HEADER + inbox * engine.inbox.width;
 	for (let i = 0; i < sections.length; i++) {
 		const section = sections[i] as Section;
 		const bytes =
@@ -97,8 +106,13 @@ export function imageWords(
 }
 
 // Folds the floor exactly as its image reads, minus the checksum words, into engine.floorSums.
-export function floorChecksum(engine: Engine, floor: number): void {
-	const { storage, sections, sum } = engine;
+// Without the inbox, it covers only what the floor's own round may change.
+export function floorChecksum(
+	engine: Engine,
+	floor: number,
+	withInbox = true,
+): void {
+	const { storage, sections, sum, inbox } = engine;
 	if (engine.harms.count !== 0)
 		throw new Error("a snapshot was taken with harm still pending");
 	const highWater = storage.highWater[floor] ?? 0;
@@ -111,6 +125,12 @@ export function floorChecksum(engine: Engine, floor: number): void {
 	sum.word(highWater);
 	sum.word(freeCount);
 	sum.word(engine.now[floor] ?? 0);
+	sum.word(engine.stage[floor] ?? 0);
+	sum.word(engine.period[floor] ?? 0);
+	const entries = withInbox ? inbox.count(floor) : 0;
+	sum.word(entries);
+	sum.word(withInbox ? (engine.traffic[floor] ?? 0) : 0);
+	sum.word(engine.events.emittedThisTurn(floor));
 	for (let i = 0; i < sections.length; i++) {
 		const section = sections[i] as Section;
 		const bytes =
@@ -122,6 +142,7 @@ export function floorChecksum(engine: Engine, floor: number): void {
 		if (tail !== 0)
 			sum.word((section.words[start + whole] ?? 0) & tailMask(tail));
 	}
+	sum.words(inbox.words(floor), 0, entries * inbox.width);
 	sum.digest(engine.floorSums, floor * 2);
 }
 
@@ -153,6 +174,12 @@ export function writeFloor(
 	out[at + HIGH_WATER] = highWater;
 	out[at + FREE_COUNT] = freeCount;
 	out[at + TIME] = engine.now[floor] ?? 0;
+	out[at + STAGE] = engine.stage[floor] ?? 0;
+	out[at + PERIOD] = engine.period[floor] ?? 0;
+	const entries = engine.inbox.count(floor);
+	out[at + INBOX] = entries;
+	out[at + TRAFFIC] = engine.traffic[floor] ?? 0;
+	out[at + EMITTED] = engine.events.emittedThisTurn(floor);
 	out[at + SUM] = engine.floorSums[floor * 2] ?? 0;
 	out[at + SUM + 1] = engine.floorSums[floor * 2 + 1] ?? 0;
 	let w = at + FLOOR_HEADER;
@@ -168,24 +195,32 @@ export function writeFloor(
 		const tail = bytes & (WORD - 1);
 		if (tail !== 0) out[w++] = (src[start + whole] ?? 0) & tailMask(tail);
 	}
-	return w;
+	const length = entries * engine.inbox.width;
+	out.set(engine.inbox.words(floor).subarray(0, length), w);
+	return w + length;
 }
 
 export function saveFloor(engine: Engine, floor: number): Uint8Array {
 	const { highWater, freeCount } = engine.storage;
 	const out = new Int32Array(
-		imageWords(engine, highWater[floor] ?? 0, freeCount[floor] ?? 0),
+		imageWords(
+			engine,
+			highWater[floor] ?? 0,
+			freeCount[floor] ?? 0,
+			engine.inbox.count(floor),
+		),
 	);
 	floorChecksum(engine, floor);
 	writeFloor(engine, floor, out, 0);
 	return new Uint8Array(out.buffer);
 }
 
-// Expects an image that passed checkFloor, the index that check built, and a floor that never held an entity.
+// Expects an image that passed checkFloor, and the index and player count that check found.
 export function readFloor(
 	engine: Engine,
 	image: Uint8Array,
 	index: Int32Array,
+	players: number,
 ): void {
 	const words = new Int32Array(
 		image.buffer,
@@ -196,10 +231,15 @@ export function readFloor(
 	const highWater = words[HIGH_WATER] ?? 0;
 	const freeCount = words[FREE_COUNT] ?? 0;
 	const { storage, scheduler, sections } = engine;
+	clearRows(engine, floor, highWater);
 	storage.counters[floor] = words[COUNTER] ?? 0;
 	storage.highWater[floor] = highWater;
 	storage.freeCount[floor] = freeCount;
 	engine.now[floor] = words[TIME] ?? 0;
+	engine.stage[floor] = words[STAGE] ?? 0;
+	engine.period[floor] = words[PERIOD] ?? 0;
+	engine.traffic[floor] = words[TRAFFIC] ?? 0;
+	engine.events.resumeTurn(floor, words[EMITTED] ?? 0);
 	let w = FLOOR_HEADER;
 	for (let i = 0; i < sections.length; i++) {
 		const section = sections[i] as Section;
@@ -216,6 +256,33 @@ export function readFloor(
 			section.words[start + whole] = kept | ((words[w++] ?? 0) & mask);
 		}
 	}
+	const entries = words[INBOX] ?? 0;
+	engine.inbox.replace(
+		floor,
+		words.subarray(w, w + entries * engine.inbox.width),
+		entries,
+	);
 	storage.adoptIndex(floor, index);
 	scheduler.rebuild(floor);
+	engine.players[floor] = players + inboxPlayers(engine, floor);
+}
+
+// A player on its way counts for the floor it heads to.
+export function inboxPlayers(engine: Engine, floor: number): number {
+	const { inbox } = engine;
+	const list = inbox.words(floor);
+	let players = 0;
+	for (let i = 0; i < inbox.count(floor); i++)
+		if (((list[i * inbox.width + ENTRY_HEAD] ?? 0) & PLAYER) !== 0) players++;
+	return players;
+}
+
+// The section copy rewrites every row below the incoming high water; rows above it must go.
+function clearRows(engine: Engine, floor: number, highWater: number): void {
+	const { storage } = engine;
+	const from = floor * CAP + highWater;
+	const to = floor * CAP + (storage.highWater[floor] ?? 0);
+	if (from >= to) return;
+	for (const column of storage.columns) column.fill(0, from, to);
+	storage.masks.fill(0, from * storage.maskWords, to * storage.maskWords);
 }

@@ -51,6 +51,8 @@ export const ALTERNATE = -2 as Sentinel;
 export interface ReadCtx {
 	readonly step: ActionRef<"cell">;
 	readonly idle: ActionRef<"none">;
+	// Leaves through the stairs (an entity with a link) next to or under the actor.
+	readonly travel: ActionRef<"entity">;
 	// A floor's cells are numbered y * width + x.
 	readonly width: number;
 	readonly height: number;

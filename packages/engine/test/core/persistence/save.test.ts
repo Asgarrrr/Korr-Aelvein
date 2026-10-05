@@ -121,7 +121,8 @@ test("a dead slot's zeroed id does not resolve after load", () => {
 
 // One floor: world header words 0-8, event switch 9, image length 10, then the
 // floor image: version 11, fingerprint 12, floor 13, counter 14, high water 15,
-// free count 16, time 17, checksum 18-19, free list from 20.
+// free count 16, time 17, stage 18, period 19, inbox 20, traffic 21, events this turn 22,
+// checksum 23-24, free list from 25.
 const SEED_WORD = 3;
 const ROUND_WORD = 4;
 const FLOORS_WORD = 5;
@@ -131,7 +132,7 @@ const COUNTER_WORD = 14;
 const HIGH_WATER_WORD = 15;
 const FREE_COUNT_WORD = 16;
 const TIME_WORD = 17;
-const FIRST_FREE_WORD = 20;
+const FIRST_FREE_WORD = 25;
 
 const edited = (bytes: Uint8Array, word: number, value: number) => {
 	const copy = bytes.slice();
@@ -171,7 +172,7 @@ test("a damaged save throws and never loads", () => {
 		],
 		["negative high water", edited(bytes, HIGH_WATER_WORD, -5), /high water/],
 		["free count 500", edited(bytes, FREE_COUNT_WORD, 500), /free count 500/],
-		["counter below high water", edited(bytes, COUNTER_WORD, 1), /id counter/],
+		["negative counter", edited(bytes, COUNTER_WORD, -1), /id counter/],
 		["time off its round", edited(bytes, TIME_WORD, 7), /time/],
 		["width changed", edited(bytes, WIDTH_WORD, 64), /words, expected/],
 		[

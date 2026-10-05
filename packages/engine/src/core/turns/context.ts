@@ -44,6 +44,7 @@ export class Context implements ActionCtx {
 		phase: Phase,
 		readonly step: ActionRef<"cell">,
 		readonly idle: ActionRef<"none">,
+		readonly travel: ActionRef<"entity">,
 	) {
 		this.#engine = engine;
 		this.#phase = phase;

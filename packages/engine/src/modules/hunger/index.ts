@@ -72,7 +72,10 @@ export const hunger = defineModule({
 			const dist = Math.max(Math.abs(dx), Math.abs(dy));
 			if (dist > 1) {
 				const cell = approach(ctx, actor, dx, dy, dist);
-				return cell === NO_CELL ? FAIL : ctx.instead(ctx.step, cell);
+				// Blocked for now, not wrong: the decision stands and the turn passes.
+				return cell === NO_CELL
+					? ctx.instead(ctx.idle, null)
+					: ctx.instead(ctx.step, cell);
 			}
 			const full = (satiety.value[actor] ?? 0) + (edible.nutrition[meal] ?? 0);
 			satiety.value[actor] = Math.min(cfg.max, full);

@@ -38,6 +38,15 @@ export class EventLog {
 		this.emitted[floor] = 0;
 	}
 
+	// Saved with the floor, so a load mid-round reaches the cap where the unbroken run does.
+	emittedThisTurn(floor: number): number {
+		return this.emitted[floor] ?? 0;
+	}
+
+	resumeTurn(floor: number, emitted: number): void {
+		this.emitted[floor] = emitted;
+	}
+
 	// Counted before the switch is read, so a disabled floor throws at the same point.
 	emit(
 		floor: number,

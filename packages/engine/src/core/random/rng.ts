@@ -29,7 +29,7 @@ export function lowbias32(input: number): number {
 	return x >>> 0;
 }
 
-const mix = (h: number, v: number) => lowbias32(((h ^ v) + GOLDEN) | 0);
+export const mix = (h: number, v: number) => lowbias32(((h ^ v) + GOLDEN) | 0);
 
 export function draw(
 	seed: number,

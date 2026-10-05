@@ -52,6 +52,7 @@ type Equal<A, B> =
 interface ReadCtxPin {
 	readonly step: ActionRef<"cell">;
 	readonly idle: ActionRef<"none">;
+	readonly travel: ActionRef<"entity">;
 	readonly width: number;
 	readonly height: number;
 	isAlive(id: EntityId): boolean;
@@ -287,13 +288,14 @@ export const views: [
 	>,
 	Equal<Columns<Both>, { readonly v: Uint8Array; readonly who: Int32Array }>,
 	Equal<ContractView<"diet">, ReadView<Contracts["diet"]>>,
+	Equal<ContractView<"satiety">, ReadView<Contracts["satiety"]>>,
 	Equal<ContractView<"edible">, ReadView<Contracts["edible"]>>,
 	Equal<ContractView<"fire">, CellReadView<CellContracts["fire"]>>,
 	Equal<
 		Schema,
 		{ readonly [name: string]: { readonly [field: string]: FieldKind } }
 	>,
-] = [true, true, true, true, true, true, true, true];
+] = [true, true, true, true, true, true, true, true, true];
 
 declare const kind: "cell";
 export const refs: [

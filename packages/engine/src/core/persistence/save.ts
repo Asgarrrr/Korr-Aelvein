@@ -36,6 +36,7 @@ export function saveWorld(engine: Engine): Uint8Array {
 			engine,
 			storage.highWater[f] ?? 0,
 			storage.freeCount[f] ?? 0,
+			engine.inbox.count(f),
 		);
 	const out = new Int32Array(total);
 	engineDigest(engine);

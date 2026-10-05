@@ -5,6 +5,7 @@ import {
 	type AnyModule,
 	type Builder,
 	defineModule,
+	type EntityId,
 	type ModuleDef,
 	NONE,
 	type Schema,
@@ -65,6 +66,7 @@ function backwards(ctx: WriteCtx): WriteCtx {
 		inTickOf: (module) => real.inTickOf(module),
 		step: real.step,
 		idle: real.idle,
+		travel: real.travel,
 		width: real.width,
 		height: real.height,
 		isAlive: (id) => real.isAlive(id),
@@ -146,3 +148,29 @@ export const probe = defineModule({
 		});
 	},
 });
+
+// Counts each actor's full decisions: propose runs only when the core arbitrates.
+export const decisions = new Map<number, number>();
+export const decider = defineModule({
+	name: "decider",
+	schema: {},
+	config: {},
+	setup(b) {
+		b.propose((ctx, actor) => {
+			const id = ctx.idOf(actor);
+			decisions.set(id, (decisions.get(id) ?? 0) + 1);
+		});
+	},
+});
+
+export function idleRounds(
+	world: {
+		advance(): readonly EntityId[];
+		input(player: EntityId, action: string, target: number | null): void;
+	},
+	rounds: number,
+): void {
+	for (let r = 0; r < rounds; r++)
+		for (let due = world.advance(); due.length > 0; due = world.advance())
+			for (const p of due) world.input(p, "core/idle", null);
+}

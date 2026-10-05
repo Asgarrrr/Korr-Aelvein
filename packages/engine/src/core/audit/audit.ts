@@ -2,6 +2,7 @@ import type { AnyModule } from "../api";
 import { CAP } from "../config";
 import type { Column } from "../ecs/schema";
 import { CORE, CORE_KEY, type Engine } from "../engine";
+import { coreSchema } from "../health/vitality";
 import {
 	CELLS,
 	FREE,
@@ -58,10 +59,11 @@ export class Audit {
 		core(scheduler.nextAt, "nextAt");
 		core(engine.intentKey, "intent.key");
 		core(engine.intentTarget, "intent.target");
-		for (const [field, column] of Object.entries(
-			engine.components.get("vitality")?.columns ?? {},
-		))
-			core(column, `vitality.${field}`);
+		for (const name of Object.keys(coreSchema))
+			for (const [field, column] of Object.entries(
+				engine.components.get(name)?.columns ?? {},
+			))
+				core(column, `${name}.${field}`);
 		for (const module of modules) {
 			const key = hashName(module.name);
 			this.#modules.set(key, module.name);
@@ -90,12 +92,13 @@ export class Audit {
 		this.#floorSums = new Int32Array(2 * storage.floors);
 	}
 
-	// A floor's round touches only that floor: every other floor must hash the same after it.
+	// A floor's round touches only that floor and other floors' inboxes: every other floor must
+	// hash the same after it, its inbox aside.
 	startFloor(floor: number): void {
 		const engine = this.#engine;
 		for (let f = 0; f < engine.storage.floors; f++) {
 			if (f === floor) continue;
-			floorChecksum(engine, f);
+			floorChecksum(engine, f, false);
 			this.#floorSums[2 * f] = engine.floorSums[2 * f] ?? 0;
 			this.#floorSums[2 * f + 1] = engine.floorSums[2 * f + 1] ?? 0;
 		}
@@ -105,7 +108,7 @@ export class Audit {
 		const engine = this.#engine;
 		for (let f = 0; f < engine.storage.floors; f++) {
 			if (f === floor) continue;
-			floorChecksum(engine, f);
+			floorChecksum(engine, f, false);
 			if (
 				engine.floorSums[2 * f] !== this.#floorSums[2 * f] ||
 				engine.floorSums[2 * f + 1] !== this.#floorSums[2 * f + 1]

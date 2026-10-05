@@ -155,6 +155,10 @@ neighbour order (cell order, then list order) restores verbatim.
 - Intent = the cached (actionKey, target) of the chosen candidate, core
   state, persisted; the kind follows from the key. A candidate matching the
   intent gets `+INERTIA`. `SCORE_MAX + INERTIA < 2^15`. A FAIL clears it.
+- FAIL means "the decision is invalid" (target gone, cornered). A step
+  blocked this turn reaches `core.idle` through `instead` and keeps the
+  intent; otherwise crowded floors re-arbitrate every turn and LOD saves
+  nothing.
 - Modules propose goal actions whose target persists across turns (eat this
   food, flee this threat) and reach `core.step` only through `instead`. A
   cached `core.step` to an adjacent cell is dead after one move, which would
@@ -168,8 +172,8 @@ neighbour order (cell order, then list order) restores verbatim.
 - The chosen action runs in its module's write scope. It must be
   re-executable later with the same (actor, target): it re-validates and
   returns FAIL.
-- Built-in core actions: `core.step` (cell), `core.idle`, later
-  `core.descend`. Position is core-owned; modules move creatures only by
+- Built-in core actions: `core.step` (cell), `core.idle`, `core.travel`
+  (entity: a stairs entity). Position is core-owned; modules move creatures only by
   proposing `core.step`.
 - No candidate: `core.idle`.
 
@@ -266,7 +270,14 @@ export const hunger = defineModule({
   exists) into B's inbox at `t + stairTime`. `stairTime >= TICKS_PER_TURN`
   is asserted at config load, so arrival lands in round R+1 or later. An
   arrival at or before the receiver's processed time throws.
-- In transit, every floor resolves the id to NONE.
+- In transit, every floor resolves the id to NONE. A player in transit
+  counts toward its destination floor for LOD.
+- Restoring one floor into a live world is allowed only at a round
+  boundary and only if no travel touched that floor since the image (a
+  per-floor traffic counter). Otherwise an entity could exist twice or
+  vanish. A whole-world load checks that ids are unique across floors and
+  inboxes.
+- The input log is not part of a save: the server keeps it to replay.
 - Arrival clears the intent: a `Cell` target is floor-local. Entity targets
   stay valid because ids are global.
 - A floor pauses when any player on it is due. Round R+1 starts everywhere
@@ -339,7 +350,10 @@ then a red-team and a blue-team review of the diff before the next slice.
    Tests: `fire-burns` (pinned death turn, cause fire); `fear-avoids-fire`;
    spread order-independent; `runs-without-fire`.
 5. **Floors, migration, decision LOD.** Several floors, lockstep rounds,
-   inbox, `core.descend`, `lodPeriods`.
+   inbox, `core.travel`, `lodPeriods`. Stairs are entities with a core
+   `link {floor, x, y}` component; travel goes both ways through the link.
+   A new `explore` module decides migration, fed by hunger through
+   contracts (`satiety`).
    Two player actors on different floors drive input and LOD.
    Cached re-execution maps intent key -> action through a Map built at
    registration; an unknown key or an invalid target means "no intent".

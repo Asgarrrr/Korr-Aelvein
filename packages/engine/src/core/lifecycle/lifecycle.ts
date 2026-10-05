@@ -1,7 +1,9 @@
 import { MAX_TICK, TICKS_PER_TURN } from "../config";
 import { type Cell, type EntityId, NO_CELL, NONE } from "../ecs/ids";
 import type { Column } from "../ecs/schema";
+import { PLAYER } from "../ecs/storage";
 import type { Engine } from "../engine";
+import { validLink } from "../travel/link";
 import {
 	type CompiledSpecies,
 	compileSpecies,
@@ -18,14 +20,22 @@ export function spawn(
 	x: number,
 	y: number,
 	at: number,
+	player = false,
 ): EntityId {
 	const cell = checkSpawn(e, floor, x, y);
 	const compiled = compileSpecies(species, e.components, e.storage.maskWords);
+	if (player && !compiled.actor) throw new Error("a player must be an actor");
 	if (compiled.actor && e.grid.holdsOtherActor(floor, cell, NONE))
 		throw new Error(`spawn at (${x}, ${y}): the cell holds an actor`);
 	if (crowded(e, floor))
 		throw new Error(`floor ${floor} is at its popCap (${e.popCap})`);
 	const id = place(e, floor, compiled, x, y, at);
+	if (player) {
+		const { masks, maskWords } = e.storage;
+		const word = e.storage.slotOf(floor, id) * maskWords;
+		masks[word] = (masks[word] ?? 0) | PLAYER;
+		e.players[floor] = (e.players[floor] ?? 0) + 1;
+	}
 	e.emit(floor, e.spawned, NO_CAUSE, id, 0);
 	return id;
 }
@@ -59,9 +69,26 @@ export function place(
 ): EntityId {
 	if (species.actor && at > MAX_TICK)
 		throw new Error(`time ${at} exceeds ${MAX_TICK}`);
+	const link = species.link;
+	const { grid } = e;
+	if (
+		link &&
+		!validLink(
+			floor,
+			link[0] ?? 0,
+			link[1] ?? 0,
+			link[2] ?? 0,
+			e.storage.floors,
+			grid.width,
+			grid.height,
+		)
+	)
+		throw new Error(
+			`a link on floor ${floor} to floor ${link[0]} at (${link[1]}, ${link[2]}) leads nowhere`,
+		);
 	const storage = e.storage;
 	const slot = storage.alloc(floor);
-	e.grid.insert(floor, slot, x, y);
+	grid.insert(floor, slot, x, y);
 	const { masks, maskWords } = storage;
 	const { mask, columns, values } = species;
 	const base = slot * maskWords;
@@ -84,6 +111,8 @@ export function kill(
 ): void {
 	const slot = e.storage.slotOf(floor, id);
 	if (slot === NONE) return;
+	if (((e.storage.masks[slot * e.storage.maskWords] ?? 0) & PLAYER) !== 0)
+		e.players[floor] = (e.players[floor] ?? 0) - 1;
 	e.grid.remove(floor, slot);
 	e.scheduler.remove(floor, slot);
 	e.storage.release(floor, slot);

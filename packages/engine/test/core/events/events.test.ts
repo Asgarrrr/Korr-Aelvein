@@ -9,7 +9,7 @@ import {
 } from "../../../src/core/api";
 import { EVENT_CAP_PER_TURN } from "../../../src/core/config";
 import { hashName } from "../../../src/core/random/rng";
-import { createWorld, type World } from "../../../src/core/world";
+import { createWorld, loadWorld, type World } from "../../../src/core/world";
 import { flora } from "../../../src/modules/flora";
 import { hunger } from "../../../src/modules/hunger";
 import { hungerConfig } from "../../../src/modules/hunger/config";
@@ -312,4 +312,51 @@ test("the world cannot change while it drains events", () => {
 	expect(errors.length).toBe(attempts.length);
 	for (const message of errors) expect(message).toMatch(/draining/);
 	expect(() => world.runRounds(1)).not.toThrow();
+});
+
+// Two creatures each emit just over half a turn's cap; a player stands between them in line.
+const HALF = EVENT_CAP_PER_TURN / 2 + 1;
+const shouting = defineModule({
+	name: "shouting",
+	schema: { loud: { n: "i32" } },
+	config: {},
+	setup(b) {
+		const rows = b.query(["loud"]);
+		const counts = b.write("loud");
+		const shout = b.event("shout");
+		const yell = b.action("yell", "none", (ctx, actor) => {
+			for (let i = 0; i < (counts.n[actor] ?? 0); i++)
+				ctx.emit(shout, ctx.idOf(actor), 0, 0);
+			return 100;
+		});
+		b.propose((_ctx, actor, _p, out) => {
+			if (rows.has(actor)) out.push(yell, null, 1);
+		});
+	},
+});
+const pausedLoud = () => {
+	const world = createWorld({
+		seed: 1,
+		floors: 1,
+		width: 4,
+		height: 4,
+		events: false,
+		modules: [shouting],
+	});
+	const shouter = { actor: true, components: { loud: { n: HALF } } };
+	world.spawn(0, shouter, 0, 0);
+	const player = world.spawnPlayer(0, { actor: true, components: {} }, 1, 0);
+	world.spawn(0, shouter, 2, 0);
+	expect(world.advance()).toEqual([player]);
+	return { world, player };
+};
+
+test("a load mid-round keeps the round's event count, so the cap throws at the same point", () => {
+	const straight = pausedLoud();
+	straight.world.input(straight.player, "core/idle", null);
+	expect(() => straight.world.advance()).toThrow(/emitted more than/);
+	const paused = pausedLoud();
+	const loaded = loadWorld(paused.world.save(), { modules: [shouting] });
+	loaded.input(paused.player, "core/idle", null);
+	expect(() => loaded.advance()).toThrow(/emitted more than/);
 });

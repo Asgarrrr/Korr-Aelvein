@@ -75,3 +75,10 @@ test("deleting from a run that wraps the table end keeps the rest findable", () 
 		expect(storage.slotOf(0, id as EntityId)).toBe(slots.get(id) as Slot);
 	expect(storage.slotOf(0, (wrapping[0] ?? 0) as EntityId)).toBe(NONE);
 });
+
+test("releasing a slot that holds no indexed entity throws instead of probing forever", () => {
+	const storage = new Storage(1, 0);
+	const slot = storage.alloc(0);
+	storage.release(0, slot);
+	expect(() => storage.release(0, slot)).toThrow(/not indexed/);
+});

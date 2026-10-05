@@ -1,36 +1,50 @@
-import { CAP, ID_FLOOR_STRIDE, TICKS_PER_TURN } from "../config";
+import {
+	CAP,
+	EVENT_CAP_PER_TURN,
+	ID_FLOOR_STRIDE,
+	LOD_PERIODS,
+	TICKS_PER_TURN,
+} from "../config";
 import { knownBits } from "../ecs/storage";
-import type { Engine } from "../engine";
+import { type Engine, FLOOR_STAGE } from "../engine";
 import {
 	COUNTER,
+	EMITTED,
 	FINGERPRINT,
 	FLOOR,
 	FLOOR_HEADER,
 	FORMAT_VERSION,
 	FREE_COUNT,
 	HIGH_WATER,
+	INBOX,
 	imageChecksum,
 	imageWords,
+	PERIOD,
 	ROWS,
 	readFloor,
 	type Section,
+	STAGE,
 	SUM,
 	sectionCount,
 	TIME,
+	TRAFFIC,
 	tailMask,
 	VERSION,
 	WORD,
 } from "./image";
+import { inboxProblem } from "./inbox";
 import {
 	checkAbsent,
 	checkDead,
 	checkFree,
 	checkIntent,
+	checkLinks,
 	checkLists,
 	checkLive,
 	checkVitality,
 	describe,
 	OK,
+	playersSeen,
 	type Rows,
 } from "./rows";
 
@@ -44,14 +58,15 @@ export function checkVersion(version: number | undefined): void {
 const sums = new Int32Array(2);
 
 // Reads only the image: a bad one throws before any engine state changes.
-// Fills `index` with the floor's id index, which readFloor then adopts.
+// Fills `index` with the floor's id index, which readFloor then adopts, and returns how many
+// players stand on the floor.
 export function checkFloor(
 	engine: Engine,
 	image: Uint8Array,
 	floor: number,
 	round: number,
 	index: Int32Array,
-): void {
+): number {
 	const fail = (why: string): never => {
 		throw new Error(`floor ${floor} image: ${why}`);
 	};
@@ -71,12 +86,39 @@ export function checkFloor(
 	const freeCount = words[FREE_COUNT] ?? 0;
 	const counter = words[COUNTER] ?? 0;
 	const now = words[TIME] ?? 0;
-	if (!(freeCount >= 0 && freeCount <= highWater && highWater <= engine.popCap))
+	const stage = words[STAGE] ?? 0;
+	const period = words[PERIOD] ?? 0;
+	const entries = words[INBOX] ?? 0;
+	// Arrivals ignore popCap, so only CAP bounds the rows.
+	if (!(freeCount >= 0 && freeCount <= highWater && highWater <= CAP))
 		fail(`free count ${freeCount}, high water ${highWater}`);
-	if (!(counter >= highWater && counter < ID_FLOOR_STRIDE))
+	if (!(counter >= 0 && counter < ID_FLOOR_STRIDE))
 		fail(`id counter ${counter}`);
-	if (now !== round * TICKS_PER_TURN) fail(`time ${now} is not round ${round}`);
-	const expected = imageWords(engine, highWater, freeCount);
+	const start = round * TICKS_PER_TURN;
+	const end = start + TICKS_PER_TURN;
+	const timed =
+		stage === FLOOR_STAGE.waiting
+			? now === start && period === 0
+			: LOD_PERIODS.includes(period) &&
+				(stage === FLOOR_STAGE.acting
+					? now >= start && now < end
+					: now === end);
+	if (!timed)
+		fail(
+			`time ${now}, stage ${stage}, period ${period} do not fit round ${round}`,
+		);
+	// Waiting arrivals pile up without bound on a full floor: only the image's length bounds them.
+	if (
+		!(
+			entries >= 0 &&
+			entries * engine.inbox.width <= words.length - FLOOR_HEADER
+		)
+	)
+		fail(`${entries} inbox entries`);
+	const emitted = words[EMITTED] ?? 0;
+	if (!(emitted >= 0 && emitted <= EVENT_CAP_PER_TURN))
+		fail(`${emitted} events this turn`);
+	const expected = imageWords(engine, highWater, freeCount, entries);
 	if (words.length !== expected)
 		fail(`${words.length} words, expected ${expected}`);
 	imageChecksum(engine.sum, words, sums);
@@ -100,6 +142,10 @@ export function checkFloor(
 	const int32 = (array: unknown) => {
 		const view = at.get(array) ?? { at: 0, count: 0 };
 		return new Int32Array(image.buffer, view.at, view.count);
+	};
+	const uint8 = (array: unknown) => {
+		const view = at.get(array) ?? { at: 0, count: 0 };
+		return new Uint8Array(image.buffer, view.at, view.count);
 	};
 	const int16 = (array: unknown) => {
 		const view = at.get(array) ?? { at: 0, count: 0 };
@@ -135,7 +181,8 @@ export function checkFloor(
 			rows,
 			engine.checkFreed,
 			index,
-			floor * ID_FLOOR_STRIDE,
+			floor,
+			storage.floors,
 			counter,
 			now,
 			int32(scheduler.nextAt),
@@ -159,6 +206,20 @@ export function checkFloor(
 			int16(engine.vitality.hp),
 			int16(engine.vitality.max),
 		) ||
+		checkLinks(
+			rows,
+			{
+				word: engine.link.word,
+				bit: engine.link.bit,
+				floor: uint8(engine.link.floor),
+				x: int16(engine.link.x),
+				y: int16(engine.link.y),
+			},
+			floor,
+			storage.floors,
+			grid.width,
+			grid.height,
+		) ||
 		checkAbsent(
 			rows,
 			[...engine.components.values()].map(({ bit, columns }) => {
@@ -175,13 +236,40 @@ export function checkFloor(
 			}),
 		);
 	if (code !== OK) fail(describe(code));
+	const problem = inboxProblem(
+		engine,
+		words.subarray(w, w + entries * engine.inbox.width),
+		entries,
+		{ index, ids: rows.ids, base: rows.base },
+	);
+	if (problem !== undefined) fail(problem);
+	return playersSeen();
 }
 
+// Into a live world, between rounds only, and only while no entity left or headed for the floor
+// since the image: either would be duplicated or lost.
 export function loadFloor(
 	engine: Engine,
 	image: Uint8Array,
 	floor: number,
 ): void {
-	checkFloor(engine, image, floor, engine.round, engine.checkIndex);
-	readFloor(engine, image, engine.checkIndex);
+	if (!engine.stage.every((stage) => stage === FLOOR_STAGE.waiting))
+		throw new Error(`floor ${floor} image: loads only at a round boundary`);
+	const players = checkFloor(
+		engine,
+		image,
+		floor,
+		engine.round,
+		engine.checkIndex,
+	);
+	const header = new Int32Array(image.buffer, image.byteOffset, FLOOR_HEADER);
+	if (header[STAGE] !== FLOOR_STAGE.waiting)
+		throw new Error(
+			`floor ${floor} image: saved mid-round, loads only at a round boundary`,
+		);
+	if (header[TRAFFIC] !== engine.traffic[floor])
+		throw new Error(
+			`floor ${floor} image: traffic ${header[TRAFFIC]}, the live floor has ${engine.traffic[floor]}`,
+		);
+	readFloor(engine, image, engine.checkIndex, players);
 }
