@@ -3,6 +3,7 @@ import {
 	type ActionRef,
 	type Cell,
 	defineModule,
+	NO_CELL,
 	type Slot,
 } from "../../../src/core/api";
 import { spawn } from "../../../src/core/lifecycle/lifecycle";
@@ -121,4 +122,28 @@ test("an action sees perception as it is when the action runs", () => {
 	engine.grid.move(0, slot, engine.grid.cellAt(3, 1));
 	execute(engine, 0, slot, (look as ActionRef<"none">).index, 0);
 	expect(seen).toEqual([1, -2]);
+});
+
+test("cellOf is the cell a creature stands on, wherever it has walked", () => {
+	const seen: [Cell, Cell][] = [];
+	const walker = defineModule({
+		name: "walker",
+		schema: {},
+		config: {},
+		setup(b) {
+			const walk = b.action("walk", "none", [], (ctx, actor) => {
+				seen.push([ctx.cellOf(actor), ctx.cellAt(ctx.x(actor), ctx.y(actor))]);
+				const cell = ctx.cellAt(ctx.x(actor) + 1, ctx.y(actor) + 1);
+				return cell === NO_CELL
+					? ctx.instead(ctx.idle, null)
+					: ctx.instead(ctx.step, cell);
+			});
+			b.propose((_ctx, _actor, _perception, out) => out.push(walk, null, 1));
+		},
+	});
+	const world = createWorld({ ...shape(1), modules: [walker] });
+	world.spawn(0, { actor: true, components: {} }, 0, 1);
+	world.runRounds(4);
+	expect(seen.map(([of]) => of as number)).toEqual([4, 9, 14, 14]);
+	for (const [of, at] of seen) expect(of).toBe(at);
 });

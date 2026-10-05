@@ -61,6 +61,7 @@ interface ReadCtxPin {
 	x(slot: Slot): number;
 	y(slot: Slot): number;
 	cellAt(x: number, y: number): Cell;
+	cellOf(slot: Slot): Cell;
 	holdsActor(cell: Cell): boolean;
 	approach(actor: Slot, x: number, y: number): Cell;
 	firstAt(cell: Cell): Slot;

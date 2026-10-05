@@ -1,7 +1,7 @@
-import { CAP } from "../config";
+import { CAP, TICKS_PER_TURN } from "../config";
 import type { Column } from "../ecs/schema";
 import { PLAYER } from "../ecs/storage";
-import type { Engine } from "../engine";
+import { type Engine, FLOOR_STAGE } from "../engine";
 import { ENTRY_HEAD } from "../travel/inbox";
 import type { Checksum } from "./checksum";
 
@@ -157,12 +157,14 @@ export function imageChecksum(
 	sum.digest(out, 0);
 }
 
-// Expects engine.floorSums to be current for this floor; returns the word after the image.
+// Returns the word after the image. With `sum`, folds each section into it right after its
+// copy, while it is still in cache; without, expects engine.floorSums current for this floor.
 export function writeFloor(
 	engine: Engine,
 	floor: number,
 	out: Int32Array,
 	at: number,
+	sum?: Checksum,
 ): number {
 	const { storage, sections } = engine;
 	const highWater = storage.highWater[floor] ?? 0;
@@ -180,8 +182,8 @@ export function writeFloor(
 	out[at + INBOX] = entries;
 	out[at + TRAFFIC] = engine.traffic[floor] ?? 0;
 	out[at + EMITTED] = engine.events.emittedThisTurn(floor);
-	out[at + SUM] = engine.floorSums[floor * 2] ?? 0;
-	out[at + SUM + 1] = engine.floorSums[floor * 2 + 1] ?? 0;
+	sum?.reset();
+	sum?.words(out, at, SUM);
 	let w = at + FLOOR_HEADER;
 	for (let i = 0; i < sections.length; i++) {
 		const section = sections[i] as Section;
@@ -190,29 +192,50 @@ export function writeFloor(
 			sectionCount(engine, section, highWater, freeCount) * section.unit;
 		const start = (sectionStart(engine, section, floor) * section.unit) / WORD;
 		const whole = bytes >> 2;
-		for (let j = 0; j < whole; j++) out[w + j] = src[start + j] ?? 0;
-		w += whole;
+		out.set(src.subarray(start, start + whole), w);
 		const tail = bytes & (WORD - 1);
-		if (tail !== 0) out[w++] = (src[start + whole] ?? 0) & tailMask(tail);
+		if (tail !== 0) out[w + whole] = (src[start + whole] ?? 0) & tailMask(tail);
+		const written = whole + (tail === 0 ? 0 : 1);
+		sum?.words(out, w, written);
+		w += written;
 	}
 	const length = entries * engine.inbox.width;
 	out.set(engine.inbox.words(floor).subarray(0, length), w);
+	if (sum) {
+		sum.words(out, w, length);
+		sum.digest(out, at + SUM);
+	} else {
+		out[at + SUM] = engine.floorSums[floor * 2] ?? 0;
+		out[at + SUM + 1] = engine.floorSums[floor * 2 + 1] ?? 0;
+	}
 	return w + length;
 }
 
-export function saveFloor(engine: Engine, floor: number): Uint8Array {
+// Writes into `into` when it is word-aligned and large enough; a server reusing one buffer per
+// floor skips the page faults of a fresh one, the larger half of a snapshot's cost.
+export function saveFloor(
+	engine: Engine,
+	floor: number,
+	into?: Uint8Array,
+): Uint8Array {
+	if (engine.harms.count !== 0)
+		throw new Error("a snapshot was taken with harm still pending");
 	const { highWater, freeCount } = engine.storage;
-	const out = new Int32Array(
-		imageWords(
-			engine,
-			highWater[floor] ?? 0,
-			freeCount[floor] ?? 0,
-			engine.inbox.count(floor),
-		),
+	const words = imageWords(
+		engine,
+		highWater[floor] ?? 0,
+		freeCount[floor] ?? 0,
+		engine.inbox.count(floor),
 	);
-	floorChecksum(engine, floor);
-	writeFloor(engine, floor, out, 0);
-	return new Uint8Array(out.buffer);
+	const reuse =
+		into !== undefined &&
+		into.byteOffset % WORD === 0 &&
+		into.length >= words * WORD;
+	const out = reuse
+		? new Int32Array(into.buffer, into.byteOffset, words)
+		: new Int32Array(words);
+	writeFloor(engine, floor, out, 0, engine.sum);
+	return new Uint8Array(out.buffer, out.byteOffset, words * WORD);
 }
 
 // Expects an image that passed checkFloor, and the index and player count that check found.
@@ -263,7 +286,14 @@ export function readFloor(
 		entries,
 	);
 	storage.adoptIndex(floor, index);
-	scheduler.rebuild(floor);
+	// A floor mid-round resumes its round; any other has none open until it starts the next.
+	const now = engine.now[floor] ?? 0;
+	scheduler.rebuild(
+		floor,
+		engine.stage[floor] === FLOOR_STAGE.acting
+			? (Math.floor(now / TICKS_PER_TURN) + 1) * TICKS_PER_TURN
+			: now,
+	);
 	engine.players[floor] = players + inboxPlayers(engine, floor);
 }
 

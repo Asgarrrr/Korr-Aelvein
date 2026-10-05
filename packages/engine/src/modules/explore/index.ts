@@ -59,7 +59,7 @@ export const explore = defineModule({
 		b.propose((ctx, actor, perception, out) => {
 			if (!fed.has(actor) || satiety.value.get(actor) >= cfg.restlessBelow)
 				return;
-			const here = ctx.cellAt(ctx.x(actor), ctx.y(actor));
+			const here = ctx.cellOf(actor);
 			if (exits.near.read(ctx).get(here) === 0) return;
 			const count = perception.count;
 			let exit = -1;

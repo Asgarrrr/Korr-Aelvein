@@ -62,6 +62,7 @@ export interface ReadCtx {
 	x(slot: Slot): number;
 	y(slot: Slot): number;
 	cellAt(x: number, y: number): Cell;
+	cellOf(slot: Slot): Cell;
 	holdsActor(cell: Cell): boolean;
 	// A free step that closes the Chebyshev distance to (x, y): the straight one first, else
 	// the first in fixed neighbour order; NO_CELL when there is none.

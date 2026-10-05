@@ -23,7 +23,7 @@ import { createWorld } from "../../../src/core/world";
 import { fear } from "../../../src/modules/fear";
 import { foodClass, hungerConfig } from "../../../src/modules/hunger/config";
 import { modules } from "../../../src/registry";
-import { probe, reversed } from "../../fixtures";
+import { idleRounds, probe, reversed } from "../../fixtures";
 
 // Fear as if every cell were dangerous: its proposals never skip perception.
 function alwaysAlert<S extends Schema, C, K extends Schema>(
@@ -68,14 +68,17 @@ const tracked = <T extends { components: object }>(shape: T) => ({
 	components: { ...shape.components, where: {} },
 });
 
+// `cached`: a player on a second floor sets this one's period to 4, so flee and avoid also run
+// from cached decisions, after the scene that chose them has changed.
 const outcomes = (
 	seed: number,
 	list: readonly AnyModule[],
 	burning = false,
+	cached = false,
 ) => {
 	const world = createWorld({
 		seed,
-		floors: 1,
+		floors: cached ? 2 : 1,
 		width: SIDE,
 		height: SIDE,
 		modules: [...list, probe],
@@ -112,7 +115,10 @@ const outcomes = (
 		for (let i = 0; i < 4; i++) world.spawn(0, ember, ...free());
 		for (let i = 0; i < 120; i++) world.spawn(0, moss, roll(), roll());
 	}
-	world.runRounds(120);
+	if (cached) {
+		world.spawnPlayer(1, rat, 0, 0);
+		idleRounds(world, 120);
+	} else world.runRounds(120);
 	return ids.map((id) =>
 		world.alive(id)
 			? [
@@ -149,6 +155,23 @@ test("with fire burning, skipping perception on calm cells changes no decision",
 		burned += fates.filter((f) => f === "dead").length;
 	}
 	expect(burned).toBeGreaterThan(0);
+});
+
+test("with decisions cached between full ones, skipping on calm cells changes no outcome", () => {
+	const alert = modules.map(
+		(m): AnyModule => (m === fear ? alwaysAlert(fear) : m),
+	);
+	for (const burning of [false, true])
+		for (let seed = 1; seed <= 6; seed++)
+			expect({
+				seed,
+				burning,
+				fates: outcomes(seed, modules, burning, true),
+			}).toEqual({
+				seed,
+				burning,
+				fates: outcomes(seed, alert, burning, true),
+			});
 });
 
 const MOUSE = {
@@ -276,4 +299,43 @@ test("an eater spawned mid-round slips past the pre-check: the limit it relies o
 	);
 	expect(where(alert)).toEqual([4, 5]);
 	expect(where(modules)).not.toEqual([4, 5]);
+});
+
+test("a prey whose eater steps into sight after fear's tick still flees: the stamp covers it", () => {
+	// Steps one cell east every turn, whatever it sees.
+	const stalker = defineModule({
+		name: "stalker",
+		schema: { stalks: {} },
+		config: {},
+		setup(b) {
+			const creep = b.action("creep", "none", ["stalks"], (ctx, actor) =>
+				ctx.instead(ctx.step, ctx.cellAt(ctx.x(actor) + 1, ctx.y(actor))),
+			);
+			b.propose((_ctx, _actor, _perception, out) => out.push(creep, null, 1));
+		},
+	});
+	const hunger = modules.find((m) => m.name === "hunger") as AnyModule;
+	const world = createWorld({
+		seed: 1,
+		floors: 1,
+		width: SIDE,
+		height: SIDE,
+		modules: [hunger, fear, stalker],
+		species,
+	});
+	const y = 10;
+	// Spawned first, so it acts first: one cell outside perception at fear's tick, inside after.
+	world.spawn(
+		0,
+		{ actor: true, components: { stalks: {}, diet: { eats: foodClass.meat } } },
+		2,
+		y,
+	);
+	const prey = world.spawn(0, rat, 2 + PERCEPTION_RADIUS + 1, y);
+	world.runRounds(1);
+	expect(world.locate(prey)).toEqual({
+		floor: 0,
+		x: 2 + PERCEPTION_RADIUS + 2,
+		y,
+	});
 });

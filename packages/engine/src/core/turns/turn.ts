@@ -39,6 +39,7 @@ export function beginFloor(e: Engine, floor: number): void {
 	e.now[floor] = start;
 	e.events.startTurn(floor);
 	ingest(e, floor, start, start + TICKS_PER_TURN);
+	e.scheduler.open(floor, start + TICKS_PER_TURN);
 
 	const tickCtx = e.tickCtx;
 	tickCtx.setFloor(floor);

@@ -16,6 +16,16 @@ import { cells, schema } from "./schema";
 
 const DX = [-1, 0, 1, -1, 1, -1, 0, 1];
 const DY = [-1, -1, -1, 0, 0, 1, 1, 1];
+const DIRS = DX.length;
+// Indexes into DX and DY.
+const NW = 0;
+const N = 1;
+const NE = 2;
+const W = 3;
+const E = 4;
+const SW = 5;
+const S = 6;
+const SE = 7;
 const UNSEEN = Number.MAX_SAFE_INTEGER;
 // One cell of slack on every stamp: an eater moves at most one cell between fear's tick and
 // its prey's turn, and fire spreads at most one cell a round, were fear ever to tick first.
@@ -37,19 +47,48 @@ function nearFire(
 	return false;
 }
 
-function seesEater(
-	perception: Perception,
-	eats: FieldView<"u8"> | undefined,
-	prey: number,
-): boolean {
-	if (eats === undefined || prey === 0) return false;
-	for (let i = 0; i < perception.count; i++)
-		if ((eats.get(perception.slot(i)) & prey) !== 0) return true;
-	return false;
+// The distance from step (dx, dy) to a threat at (tx, ty) folded by min into `held`, or -1
+// once the step closes on any threat; min keeps -1, so threat order cannot show.
+function closer(
+	held: number,
+	tx: number,
+	ty: number,
+	dx: number,
+	dy: number,
+): number {
+	const then = Math.max(Math.abs(tx - dx), Math.abs(ty - dy));
+	if (then < Math.max(Math.abs(tx), Math.abs(ty))) return -1;
+	return then < held ? then : held;
+}
+
+// The step kept so far, packed as (farthest + 1) * DIRS + d, or -1, weighed against step d.
+function consider(
+	ctx: ReadCtx,
+	x: number,
+	y: number,
+	d: number,
+	nearest: number,
+	kept: number,
+): number {
+	if (nearest < 0 || nearest === UNSEEN) return kept;
+	const dx = DX[d] ?? 0;
+	const dy = DY[d] ?? 0;
+	const cell = ctx.cellAt(x + dx, y + dy);
+	if (cell === NO_CELL) return kept;
+	const farthest = kept < 0 ? -1 : Math.floor(kept / DIRS) - 1;
+	const keptD = kept < 0 ? -1 : kept % DIRS;
+	const straight = keptD >= 0 && (DX[keptD] === 0 || DY[keptD] === 0);
+	const axial = dx === 0 || dy === 0;
+	if (nearest < farthest) return kept;
+	if (nearest === farthest && (straight || !axial)) return kept;
+	if (ctx.holdsActor(cell)) return kept;
+	return (nearest + 1) * DIRS + d;
 }
 
 // The step never closer to any threat (eater in sight, burning cell within radius) that is
 // farthest from the nearest, straight steps first; else the actor's own cell; NO_CELL if no threat.
+// Each threat is read once into eight locals: a per-call array measured +60-100 MB of RSS (213-251
+// vs 152 MB), and a module keeps no scratch outside its columns.
 function fleeCell(
 	ctx: ReadCtx,
 	actor: Slot,
@@ -62,46 +101,53 @@ function fleeCell(
 	const count = eats === undefined || prey === 0 ? 0 : perception.count;
 	const x = ctx.x(actor);
 	const y = ctx.y(actor);
-	let best = NO_CELL;
-	let farthest = -1;
-	let straight = false;
-	for (let d = 0; d < DX.length; d++) {
-		const dx = DX[d] ?? 0;
-		const dy = DY[d] ?? 0;
-		const cell = ctx.cellAt(x + dx, y + dy);
-		if (cell === NO_CELL) continue;
-		let nearest = UNSEEN;
-		for (let i = 0; i < count && nearest >= 0; i++) {
+	const side = burning ? 2 * radius + 1 : 0;
+	let n0 = UNSEEN;
+	let n1 = UNSEEN;
+	let n2 = UNSEEN;
+	let n3 = UNSEEN;
+	let n4 = UNSEEN;
+	let n5 = UNSEEN;
+	let n6 = UNSEEN;
+	let n7 = UNSEEN;
+	let threatened = false;
+	// Eaters in sight first, then each cell of the fire box.
+	for (let i = 0; i < count + side * side; i++) {
+		let tx: number;
+		let ty: number;
+		if (i < count) {
 			if (((eats?.get(perception.slot(i)) ?? 0) & prey) === 0) continue;
-			const tx = perception.dx(i);
-			const ty = perception.dy(i);
-			const then = Math.max(Math.abs(tx - dx), Math.abs(ty - dy));
-			if (then < Math.max(Math.abs(tx), Math.abs(ty))) nearest = -1;
-			else if (then < nearest) nearest = then;
+			tx = perception.dx(i);
+			ty = perception.dy(i);
+		} else {
+			const j = i - count;
+			tx = (j % side) - radius;
+			ty = Math.floor(j / side) - radius;
+			if (burning?.get(ctx.cellAt(x + tx, y + ty)) === 0) continue;
 		}
-		if (burning)
-			for (let ty = -radius; ty <= radius && nearest >= 0; ty++)
-				for (let tx = -radius; tx <= radius && nearest >= 0; tx++) {
-					if (burning.get(ctx.cellAt(x + tx, y + ty)) === 0) continue;
-					const then = Math.max(Math.abs(tx - dx), Math.abs(ty - dy));
-					if (then < Math.max(Math.abs(tx), Math.abs(ty))) nearest = -1;
-					else if (then < nearest) nearest = then;
-				}
-		if (nearest < 0 || nearest === UNSEEN) continue;
-		const axial = dx === 0 || dy === 0;
-		if (nearest < farthest) continue;
-		if (nearest === farthest && (straight || !axial)) continue;
-		if (ctx.holdsActor(cell)) continue;
-		best = cell;
-		farthest = nearest;
-		straight = axial;
+		threatened = true;
+		n0 = closer(n0, tx, ty, -1, -1);
+		n1 = closer(n1, tx, ty, 0, -1);
+		n2 = closer(n2, tx, ty, 1, -1);
+		n3 = closer(n3, tx, ty, -1, 0);
+		n4 = closer(n4, tx, ty, 1, 0);
+		n5 = closer(n5, tx, ty, -1, 1);
+		n6 = closer(n6, tx, ty, 0, 1);
+		n7 = closer(n7, tx, ty, 1, 1);
 	}
-	if (best !== NO_CELL) return best;
+	if (!threatened) return NO_CELL;
+	let kept = consider(ctx, x, y, NW, n0, -1);
+	kept = consider(ctx, x, y, N, n1, kept);
+	kept = consider(ctx, x, y, NE, n2, kept);
+	kept = consider(ctx, x, y, W, n3, kept);
+	kept = consider(ctx, x, y, E, n4, kept);
+	kept = consider(ctx, x, y, SW, n5, kept);
+	kept = consider(ctx, x, y, S, n6, kept);
+	kept = consider(ctx, x, y, SE, n7, kept);
 	// Staying is never closer to anything, so it is the fallback whenever a threat is in reach.
-	const threatened =
-		seesEater(perception, eats, prey) ||
-		(burning !== undefined && nearFire(ctx, actor, burning, radius));
-	return threatened ? ctx.cellAt(x, y) : NO_CELL;
+	if (kept < 0) return ctx.cellAt(x, y);
+	const d = kept % DIRS;
+	return ctx.cellAt(x + (DX[d] ?? 0), y + (DY[d] ?? 0));
 }
 
 export const fear = defineModule({
@@ -172,6 +218,9 @@ export const fear = defineModule({
 			(ctx, actor, threat, perception) => {
 				if (!diet || !edible) return FAIL;
 				const prey = edible.class.get(actor);
+				// The same answer as the scan below, without filling perception: no eater in reach.
+				if ((danger.eats.read(ctx).get(ctx.cellOf(actor)) & prey) === 0)
+					return FAIL;
 				const eats = diet.eats;
 				const count = perception.count;
 				let seen = false;
@@ -189,7 +238,7 @@ export const fear = defineModule({
 					burning?.read(ctx),
 					fireReach,
 				);
-				const here = ctx.cellAt(ctx.x(actor), ctx.y(actor));
+				const here = ctx.cellOf(actor);
 				if (cell === NO_CELL || cell === here) return FAIL;
 				return ctx.instead(ctx.step, cell);
 			},
@@ -203,7 +252,12 @@ export const fear = defineModule({
 			["wary"],
 			(ctx, actor, _none, perception) => {
 				const fire = burning?.read(ctx);
-				if (!fire || !nearFire(ctx, actor, fire, fireReach)) return FAIL;
+				if (
+					!fire ||
+					danger.fire.read(ctx).get(ctx.cellOf(actor)) === 0 ||
+					!nearFire(ctx, actor, fire, fireReach)
+				)
+					return FAIL;
 				const prey = edible ? edible.class.get(actor) : 0;
 				const cell = fleeCell(
 					ctx,
@@ -215,15 +269,14 @@ export const fear = defineModule({
 					fireReach,
 				);
 				if (cell === NO_CELL) return FAIL;
-				if (cell === ctx.cellAt(ctx.x(actor), ctx.y(actor)))
-					return ctx.instead(ctx.idle, null);
+				if (cell === ctx.cellOf(actor)) return ctx.instead(ctx.idle, null);
 				return ctx.instead(ctx.step, cell);
 			},
 		);
 
 		b.propose((ctx, actor, perception, out) => {
 			if (!wary.has(actor)) return;
-			const here = ctx.cellAt(ctx.x(actor), ctx.y(actor));
+			const here = ctx.cellOf(actor);
 			const prey = edible ? edible.class.get(actor) : 0;
 			const eats = diet?.eats;
 			const hunted =

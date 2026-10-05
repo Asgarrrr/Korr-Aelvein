@@ -28,7 +28,7 @@ Budgets (Bun 1.4.3, Apple M5 Pro; prototype in brackets):
 | Cached-action re-execution | <= 120 ns per actor turn | ~95 ns |
 | Bulk tick range scan | <= 20 µs per floor | 10 µs |
 | World RSS | <= 160 MB | 113 MB |
-| Floor snapshot / validated floor restore | <= 0.1 ms / <= 0.15 ms | 68 µs / 107 µs |
+| Floor snapshot / fast floor restore | <= 0.1 ms / <= 0.2 ms | 68 µs / 107 µs |
 | Floor hash | <= 0.5 ms | 227 µs |
 
 Determinism: same seed and inputs give the same world hash
@@ -369,6 +369,38 @@ then a red-team and a blue-team review of the diff before the next slice.
    load: a fast path (checksum and structure) for the server's own saves,
    held to the restore budget; full validation for external images, after a
    crash, and in tests.
+
+## 4b. Closing state (after slice 6)
+
+Every section 1 budget is met on the reference world (`bun
+bench/reference.ts`, Bun 1.4.3, M5 Pro): world round 57-59 / 59-61 ms,
+player floor 3.4 ms, P=64 actor turn 108-113 ns, range scan ~5 µs,
+snapshot 88-96 µs (reused buffer; the tightest margin), fast restore
+~0.16 ms, floor hash ~70 µs, running RSS ~151 MB. Same seed and permuted floor order give the same hash.
+
+Deviations from the plan as written:
+- The tick budget bounds the query range scan. A floor's whole tick phase
+  costs ~190 µs, mostly fear, scent and metabolism.
+- The restore budget, first 0.15 ms, is 0.2 ms (user decision): the fast
+  check, used only on images the server wrote itself, also refuses any
+  slot, cell, grid link or stairs link off the floor, so a sealed but wrong
+  image cannot corrupt another floor. The full check (~0.4 ms) serves external images,
+  crash recovery and tests; it is the default.
+- The snapshot budget holds when the caller reuses one buffer per floor.
+- The binary heap missed the cached-turn budget (172 ns): the scheduler
+  now sorts each round's due actors once, with a heap for in-round
+  reschedules.
+- `ReadCtx.cellOf`, `approach` and action `requires` were added after the
+  freeze, each as a deliberate, pinned edit.
+- World generation runs with events off: its spawns have no client.
+
+RSS is the tightest budget: per-call allocation in a hot path shows up as
+RSS, not time (an 8-element array per flee cost +60–100 MB).
+
+Open, for world generation (`world/`): spawning compiles the species on
+every call, so building 50 floors peaks at ~450 MB RSS (145 MB with a GC
+per floor). Generation should compile each species once. Next: export
+the World API from `@korr/engine` and host it in `apps/server`.
 
 ## 5. Proposed CLAUDE.md changes
 

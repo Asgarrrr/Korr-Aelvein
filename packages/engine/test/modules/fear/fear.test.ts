@@ -243,6 +243,9 @@ test("without hunger, fear still sets up and a rat only wanders", () => {
 	expect(path([fear, wander])).toEqual(path([wander]));
 });
 
+// Danger set on every cell, as fear's tick would stamp it around the scene the test builds.
+const ALERT = { read: () => ({ get: () => 0xff }) };
+
 // Slot 0 is the prey; slot 1, id THREAT, the creature it may flee.
 const THREAT = 9 as EntityId;
 const fleeWith = (hunger: boolean) => {
@@ -257,7 +260,7 @@ const fleeWith = (hunger: boolean) => {
 					? { eats: { get: (s: number) => eats[s] ?? 0 } }
 					: { class: { get: (s: number) => classes[s] ?? 0 } },
 		query: () => ({ has: () => true }),
-		cells: () => ({ eats: {} }),
+		cells: () => ({ eats: ALERT, fire: ALERT }),
 		tick() {},
 		propose() {},
 		action: (
@@ -278,6 +281,7 @@ const ctxWith = (crowded = false) =>
 		x: () => 5,
 		y: () => 5,
 		cellAt: (x: number, y: number) => y * 32 + x,
+		cellOf: () => 5 * 32 + 5,
 		holdsActor: () => crowded,
 		instead: () => ALTERNATE,
 	}) as unknown as ActionCtx;

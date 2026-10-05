@@ -94,6 +94,10 @@ export class Context implements ActionCtx {
 		return this.#engine.grid.cellAt(x, y);
 	}
 
+	cellOf(slot: Slot): Cell {
+		return (this.#engine.grid.cellOf[slot] ?? 0) as Cell;
+	}
+
 	// Off the floor holds nothing, as a step there fails rather than throws.
 	holdsActor(cell: Cell): boolean {
 		if (cell === NO_CELL) return false;

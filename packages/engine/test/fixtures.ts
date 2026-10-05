@@ -75,6 +75,7 @@ function backwards(ctx: WriteCtx): WriteCtx {
 		x: (slot) => real.x(slot),
 		y: (slot) => real.y(slot),
 		cellAt: (x, y) => real.cellAt(x, y),
+		cellOf: (slot) => real.cellOf(slot),
 		holdsActor: (cell) => real.holdsActor(cell),
 		approach: (actor, x, y) => real.approach(actor, x, y),
 		rng: (subject, n, bound) => real.rng(subject, n, bound),

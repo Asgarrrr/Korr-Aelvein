@@ -3,10 +3,13 @@ import {
 	EVENT_CAP_PER_TURN,
 	ID_FLOOR_STRIDE,
 	LOD_PERIODS,
+	MAX_TICK,
 	TICKS_PER_TURN,
 } from "../config";
-import { knownBits } from "../ecs/storage";
+import { ACTOR, ALIVE, indexInsert, knownBits, PLAYER } from "../ecs/storage";
 import { type Engine, FLOOR_STAGE } from "../engine";
+import { END } from "../space/grid";
+import { validLink } from "../travel/link";
 import {
 	COUNTER,
 	EMITTED,
@@ -43,6 +46,7 @@ import {
 	checkLive,
 	checkVitality,
 	describe,
+	type Links,
 	OK,
 	playersSeen,
 	type Rows,
@@ -57,6 +61,9 @@ export function checkVersion(version: number | undefined): void {
 
 const sums = new Int32Array(2);
 
+// "fast" stops after the header, framing and checksum; "full" also checks every row and inbox entry.
+export type LoadCheck = "fast" | "full";
+
 // Reads only the image: a bad one throws before any engine state changes.
 // Fills `index` with the floor's id index, which readFloor then adopts, and returns how many
 // players stand on the floor.
@@ -66,6 +73,7 @@ export function checkFloor(
 	floor: number,
 	round: number,
 	index: Int32Array,
+	check: LoadCheck,
 ): number {
 	const fail = (why: string): never => {
 		throw new Error(`floor ${floor} image: ${why}`);
@@ -175,6 +183,31 @@ export function checkFloor(
 		intentTarget: int32(engine.intentTarget),
 		known: knownBits(storage.maskWords, engine.components.size),
 	};
+	if (check === "fast")
+		return indexRows(
+			rows,
+			index,
+			{
+				free: int32(storage.free),
+				freeCount,
+				nextAt: int32(scheduler.nextAt),
+				now,
+				heads: int32(grid.heads),
+				cells: grid.cells,
+				links: {
+					word: engine.link.word,
+					bit: engine.link.bit,
+					floor: uint8(engine.link.floor),
+					x: int16(engine.link.x),
+					y: int16(engine.link.y),
+				},
+				floor,
+				floors: storage.floors,
+				width: grid.width,
+				height: grid.height,
+			},
+			fail,
+		);
 	const code =
 		checkFree(rows, int32(storage.free), freeCount, engine.checkFreed) ||
 		checkLive(
@@ -246,12 +279,93 @@ export function checkFloor(
 	return playersSeen();
 }
 
+// The id index readFloor adopts, and the player count; a repeated id would leave a row no id reaches.
+// Beyond unique ids, the fast check guarantees only that every slot and cell the engine will
+// index is on this floor (free list, cell heads, grid links, cells), that live actors are due in
+// [now, MAX_TICK], and that stairs lead to another floor's cell. Other row values go unchecked.
+function indexRows(
+	rows: Rows,
+	index: Int32Array,
+	guard: {
+		readonly free: Int32Array;
+		readonly freeCount: number;
+		readonly nextAt: Int32Array;
+		readonly now: number;
+		readonly heads: Int32Array;
+		readonly cells: number;
+		readonly links: Links;
+		readonly floor: number;
+		readonly floors: number;
+		readonly width: number;
+		readonly height: number;
+	},
+	fail: (why: string) => never,
+): number {
+	const { base, highWater, maskWords, ids, masks, cellOf, next, prev } = rows;
+	const { free, freeCount, nextAt, now, heads, cells, links } = guard;
+	// Most worlds keep the link bit in the first mask word, which the loop has already read.
+	const linkInFirst = links.word === 0;
+	// One unsigned compare per range: below base wraps past highWater.
+	for (let i = 0; i < freeCount; i++) {
+		const slot = free[i] ?? 0;
+		if (!((slot - base) >>> 0 < highWater))
+			fail(`free slot ${slot} out of range`);
+	}
+	for (let c = 0; c < cells; c++) {
+		const slot = heads[c] ?? END;
+		if (!((slot - base) >>> 0 < highWater || slot === END))
+			fail(`cell ${c} lists slot ${slot}, outside this floor`);
+	}
+	index.fill(0);
+	let players = 0;
+	for (let row = 0; row < highWater; row++) {
+		const mask = masks[row * maskWords] ?? 0;
+		if ((mask & ALIVE) === 0) continue;
+		if ((mask & PLAYER) !== 0) players++;
+		const id = ids[row] ?? 0;
+		if (!indexInsert(index, 0, ids, base, id, base + row))
+			fail(`id ${id} is held by two slots`);
+		const cell = cellOf[row] ?? 0;
+		if (!(cell >>> 0 < cells))
+			fail(`slot ${base + row} sits in cell ${cell}, off the floor`);
+		const due = nextAt[row] ?? 0;
+		if ((mask & ACTOR) !== 0 && !(due >= now && due <= MAX_TICK))
+			fail(`actor in slot ${base + row} next acts at ${due}`);
+		const after = next[row] ?? END;
+		const before = prev[row] ?? END;
+		if (!((after - base) >>> 0 < highWater || after === END))
+			fail(`slot ${base + row} links to slot ${after}, outside this floor`);
+		if (!((before - base) >>> 0 < highWater || before === END))
+			fail(`slot ${base + row} links to slot ${before}, outside this floor`);
+		const linkWord = linkInFirst
+			? mask
+			: (masks[row * maskWords + links.word] ?? 0);
+		if (
+			(linkWord & links.bit) !== 0 &&
+			!validLink(
+				guard.floor,
+				links.floor[row] ?? 0,
+				links.x[row] ?? 0,
+				links.y[row] ?? 0,
+				guard.floors,
+				guard.width,
+				guard.height,
+			)
+		)
+			fail(
+				`slot ${base + row} has a link to floor ${links.floor[row]} that leads nowhere`,
+			);
+	}
+	return players;
+}
+
 // Into a live world, between rounds only, and only while no entity left or headed for the floor
 // since the image: either would be duplicated or lost.
 export function loadFloor(
 	engine: Engine,
 	image: Uint8Array,
 	floor: number,
+	check: LoadCheck = "full",
 ): void {
 	if (!engine.stage.every((stage) => stage === FLOOR_STAGE.waiting))
 		throw new Error(`floor ${floor} image: loads only at a round boundary`);
@@ -261,6 +375,7 @@ export function loadFloor(
 		floor,
 		engine.round,
 		engine.checkIndex,
+		check,
 	);
 	const header = new Int32Array(image.buffer, image.byteOffset, FLOOR_HEADER);
 	if (header[STAGE] !== FLOOR_STAGE.waiting)

@@ -203,6 +203,9 @@ test("wary rats never step into fire, with or without hunger or stoats; without 
 	expect(burned).toBeGreaterThan(0);
 });
 
+// Danger set on every cell, as fear's tick would stamp it around the scene the test builds.
+const ALERT = { read: () => ({ get: () => 0xff }) };
+
 test("avoid fails once no cell near burns, even with an eater in sight", () => {
 	let avoid: ActionFn<"none"> | undefined;
 	let lit = true;
@@ -222,7 +225,7 @@ test("avoid fails once no cell near burns, even with an eater in sight", () => {
 					? { eats: { get: (s: number) => (s === 1 ? foodClass.meat : 0) } }
 					: { class: { get: (s: number) => (s === 0 ? foodClass.meat : 0) } },
 		query: () => ({ has: () => true }),
-		cells: () => ({ eats: {}, fire: {} }),
+		cells: () => ({ eats: ALERT, fire: ALERT }),
 		tick() {},
 		propose() {},
 		action: (
@@ -240,6 +243,7 @@ test("avoid fails once no cell near burns, even with an eater in sight", () => {
 		x: () => 5,
 		y: () => 5,
 		cellAt: (x: number, y: number) => y * side + x,
+		cellOf: () => 5 * side + 5,
 		holdsActor: () => false,
 		instead: () => ALTERNATE,
 	} as unknown as ActionCtx;

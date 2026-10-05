@@ -43,13 +43,13 @@ export const fire = defineModule({
 			const lit = embers.slots(ctx);
 			for (let i = 0; i < lit.length; i++) {
 				const s = lit.at(i);
-				const cell = ctx.cellAt(ctx.x(s), ctx.y(s));
+				const cell = ctx.cellOf(s);
 				left.set(cell, cfg.emberLeft);
 				source.set(cell, NO_ENTITY);
 			}
 			for (let i = 0; i < lit.length; i++) {
 				const s = lit.at(i);
-				const cell = ctx.cellAt(ctx.x(s), ctx.y(s));
+				const cell = ctx.cellOf(s);
 				const id = ctx.idOf(s);
 				const held = source.get(cell);
 				if (held === NO_ENTITY || id < held) source.set(cell, id);

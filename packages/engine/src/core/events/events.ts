@@ -79,10 +79,15 @@ export class EventLog {
 		else this.size[floor] = size + 1;
 	}
 
+	bytes(floor: number): number {
+		return (this.rings[floor] ?? EMPTY).byteLength;
+	}
+
 	drain(floor: number, visit: EventVisitor): void {
 		const ring = this.rings[floor] ?? EMPTY;
 		const wrap = ring.length / FIELDS - 1;
-		for (let size = this.size[floor] ?? 0; size > 0; size--) {
+		const batch = this.size[floor] ?? 0;
+		for (let size = batch; size > 0; size--) {
 			const head = this.head[floor] ?? 0;
 			const at = head * FIELDS;
 			this.head[floor] = (head + 1) & wrap;
@@ -94,6 +99,13 @@ export class EventLog {
 				ring[at + B] ?? 0,
 				ring[at + TIME] ?? 0,
 			);
+		}
+		// A burst (a floor's generation spawns thousands) would otherwise hold its ring forever.
+		let fit = FIRST_RING;
+		while (fit < 2 * batch) fit *= 2;
+		if (ring.length > fit * FIELDS) {
+			this.rings[floor] = new Int32Array(fit * FIELDS);
+			this.head[floor] = 0;
 		}
 	}
 
