@@ -27,8 +27,8 @@ test("holdsActor answers for the floor of the creature asking", () => {
 		config: {},
 		setup(b) {
 			const eyes = b.query(["eye"]);
-			b.tick((ctx, floor) => {
-				if (eyes.slots(floor).length > 0)
+			b.tick((ctx) => {
+				if (eyes.slots(ctx).length > 0)
 					seen.push(ctx.holdsActor(ctx.cellAt(0, 0)));
 			});
 		},

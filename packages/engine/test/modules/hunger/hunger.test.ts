@@ -157,7 +157,7 @@ test("a hungry rat walks around a rat standing between it and the food", () => {
 		width: 8,
 		height: 8,
 		modules: [hunger, fear, flora],
-		species,
+		species: { mushroom: species.mushroom },
 	});
 	world.spawn(0, ratAt(hungerConfig.hungryBelow - 100), 0, 3);
 	world.spawn(0, rat, 1, 3);
@@ -173,7 +173,7 @@ test("a hungry rat skips a taken detour and takes the free one", () => {
 		width: 8,
 		height: 8,
 		modules: [hunger, fear, flora],
-		species,
+		species: { mushroom: species.mushroom },
 	});
 	world.spawn(0, ratAt(hungerConfig.hungryBelow - 100), 0, 3);
 	world.spawn(0, rat, 1, 3);

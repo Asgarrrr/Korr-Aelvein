@@ -241,7 +241,7 @@ for (const [what, kind, target, floors] of [
 				height: 8,
 				modules: [napper(kind, target, viaInstead)],
 			});
-			world.spawn(0, BODY, 0, 0);
+			world.spawn(0, { actor: true, components: {} }, 0, 0);
 			expect(() => world.runRounds(1)).toThrow(/rest\/nap .*target/);
 			expect(() => world.save()).toThrow(/poisoned/);
 		});

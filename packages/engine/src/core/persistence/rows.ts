@@ -31,14 +31,17 @@ const DEAD_VALUE = 21;
 const IDLE_NEXT_AT = 22;
 const IDLE_INTENT = 23;
 const ABSENT_VALUE = 24;
+const VITALITY = 27;
 
-// The slot and the value a failed check reports: plain numbers, so the hot loops close over nothing.
-const problem = new Int32Array(2);
+// The slot and values a failed check reports: plain numbers, so the hot loops close over nothing.
+const PROBLEM_FIELDS = 3;
+const problem = new Int32Array(PROBLEM_FIELDS);
 // checkLive leaves the live count here for checkLists.
 const tally = new Int32Array(1);
-const report = (code: number, slot: number, value: number) => {
+const report = (code: number, slot: number, value: number, other = 0) => {
 	problem[0] = slot;
 	problem[1] = value;
+	problem[2] = other;
 	return code;
 };
 
@@ -94,6 +97,8 @@ export function describe(code: number): string {
 			return `dead slot ${slot} keeps a value in saved column ${value}`;
 		case UNKNOWN_BITS:
 			return `slot ${slot} has unknown mask bits in word ${value}`;
+		case VITALITY:
+			return `slot ${slot} has hp ${value} outside (0, ${problem[2] ?? 0}]`;
 		case TWO_ACTORS:
 			return `cell ${value} holds two actors, the second in slot ${slot}`;
 		default:
@@ -308,6 +313,24 @@ export function checkDead(
 			const slot = free[i] ?? 0;
 			if (column[slot - rows.base] !== 0) return report(DEAD_VALUE, slot, c);
 		}
+	}
+	return OK;
+}
+
+export function checkVitality(
+	rows: Rows,
+	word: number,
+	bit: number,
+	hp: Int16Array,
+	max: Int16Array,
+): number {
+	const { base, highWater, maskWords, masks } = rows;
+	for (let row = 0; row < highWater; row++) {
+		if (((masks[row * maskWords + word] ?? 0) & bit) === 0) continue;
+		const left = hp[row] ?? 0;
+		const top = max[row] ?? 0;
+		if (!(left > 0 && left <= top))
+			return report(VITALITY, base + row, left, top);
 	}
 	return OK;
 }

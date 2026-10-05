@@ -1,7 +1,8 @@
 import type { AnyModule } from "../api";
-import type { Column, Fields, FieldValue } from "../ecs/schema";
+import type { Column, FieldKind, Fields, FieldValue } from "../ecs/schema";
 import { ACTOR } from "../ecs/storage";
 import type { Component } from "../engine";
+import { type CoreSchema, checkVitality } from "../health/vitality";
 
 export interface SpeciesShape {
 	readonly actor: boolean;
@@ -24,6 +25,7 @@ export function compileSpecies(
 	components: ReadonlyMap<string, Component>,
 	maskWords: number,
 ): CompiledSpecies {
+	checkVitality(species.components.vitality);
 	const mask = new Int32Array(maskWords);
 	if (species.actor) mask[0] = ACTOR;
 	const columns: Column[] = [];
@@ -53,7 +55,9 @@ export function compileSpecies(
 	};
 }
 
-type SchemaUnion<M extends readonly AnyModule[]> = M[number]["schema"];
+type SchemaUnion<M extends readonly AnyModule[]> =
+	| M[number]["schema"]
+	| CoreSchema;
 type KeysOf<T> = T extends unknown ? keyof T & string : never;
 type FieldsOf<T, N extends string> = T extends unknown
 	? N extends keyof T
@@ -76,7 +80,7 @@ export interface Species<M extends readonly AnyModule[]> {
 	readonly components: {
 		readonly [N in ComponentName<M>]?: {
 			readonly [F in FieldName<M, N>]?: FieldValue<
-				FieldsOf<SchemaUnion<M>, N>[F]
+				FieldsOf<SchemaUnion<M>, N>[F] & FieldKind
 			>;
 		};
 	};

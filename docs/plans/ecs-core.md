@@ -91,8 +91,8 @@ workers stay possible later with no design change.
 
 ### D4. Queries: range scan
 
-- A query is an all-of mask. `q.slots(floor)` scans `[base, base+highWater)`
-  with a mask test. Valid only for the current callback.
+- A query is an all-of mask. `q.slots(ctx)` scans the context's floor,
+  `[base, base+highWater)`, with a mask test. Valid only for the current callback.
 - 10 µs per floor. No list memory, no maintenance, no swap-remove order.
 - Upgrade path (same API): cached lists when one scan exceeds 5% of the
   round budget.
@@ -253,6 +253,8 @@ export const hunger = defineModule({
   its round, `lodPeriods`.
 - Rebuilt on load: id map, scheduler order. Transient: events, candidate and
   perception buffers.
+- Load validation checks structure and value ranges, never the meaning of a
+  module's fields: that would put module rules in core.
 - Hash: 2-lane `imul` hash per floor image, combined in floor order. On
   demand only (tests, replays, save checksum).
 
@@ -327,7 +329,13 @@ then a red-team and a blue-team review of the diff before the next slice.
 4. **Fire (3rd mechanic, freeze the core API).** Cell columns with an owned
    previous-turn buffer, core `vitality` and `harm`, death by burning, fear
    reads fire cells.
-   Before freezing: `FieldView` generic over `Slot | Cell` for cell reads.
+   Frozen cell API (measured: fire tick 430 -> ~21 us per floor): per-floor,
+   per-kind reader/writer objects bound through `read(ctx)`/`write(ctx)`,
+   `next(cell)` skipping zero words, cheap `cellAt`, grid occupancy through
+   `firstAt`/`nextAt`. Raw arrays were rejected: a slot indexes a cell array
+   without a cast. Queries take `ctx`, so a tick cannot scan another floor.
+   A previous-turn buffer is derived, not saved, and readable only in its
+   owner's tick. Fire walks burning cells, not every row.
    Tests: `fire-burns` (pinned death turn, cause fire); `fear-avoids-fire`;
    spread order-independent; `runs-without-fire`.
 5. **Floors, migration, decision LOD.** Several floors, lockstep rounds,

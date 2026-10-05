@@ -16,8 +16,8 @@ const spy = defineModule({
 		diet = readDiet(b);
 		const seen = b.write("seen");
 		const rows = b.query(["seen"]);
-		b.tick((_ctx, floor) => {
-			const list = rows.slots(floor);
+		b.tick((ctx) => {
+			const list = rows.slots(ctx);
 			for (let i = 0; i < list.length; i++) {
 				const s = list.at(i);
 				seen.eats[s] = diet?.eats.get(s) ?? 0;
@@ -80,4 +80,84 @@ test("reading a component the module owns throws", () => {
 			modules: [selfReader],
 		}),
 	).toThrow(/owns diet/);
+});
+
+// Owns the fire cells: each `spark` row keeps its own cell at left 5, source itself.
+const kiln = defineModule({
+	name: "kiln",
+	schema: { spark: {} },
+	cells: { fire: { left: "u8", source: "entity" } },
+	config: {},
+	setup(b) {
+		const fire = b.cells("fire");
+		const rows = b.query(["spark"]);
+		b.tick((ctx) => {
+			const list = rows.slots(ctx);
+			for (let i = 0; i < list.length; i++) {
+				const s = list.at(i);
+				const cell = ctx.cellAt(ctx.x(s), ctx.y(s));
+				fire.left.write(ctx).set(cell, 5);
+				fire.source.write(ctx).set(cell, ctx.idOf(s));
+			}
+		});
+	},
+});
+const gauge = defineModule({
+	name: "gauge",
+	schema: { feel: { left: "u8", source: "entity" } },
+	config: {},
+	setup(b) {
+		const fire = b.read("fire");
+		const feel = b.write("feel");
+		const rows = b.query(["feel"]);
+		b.tick((ctx) => {
+			const list = rows.slots(ctx);
+			for (let i = 0; i < list.length; i++) {
+				const s = list.at(i);
+				const cell = ctx.cellAt(ctx.x(s), ctx.y(s));
+				feel.left[s] = fire ? fire.left.read(ctx).get(cell) : 99;
+				feel.source[s] = fire ? fire.source.read(ctx).get(cell) : 99;
+			}
+		});
+	},
+});
+
+test("a cell contract reads as a cell view of the owner's values, or undefined without it", () => {
+	const feel = (modules: readonly (typeof kiln | typeof gauge)[]) => {
+		const world = createWorld({
+			seed: 1,
+			floors: 2,
+			width: 4,
+			height: 4,
+			modules,
+		});
+		world.spawn(1, { actor: false, components: { spark: {} } }, 0, 0);
+		const spark = world.spawn(
+			1,
+			{ actor: false, components: { spark: {} } },
+			2,
+			1,
+		);
+		const near = world.spawn(
+			1,
+			{ actor: false, components: { feel: {} } },
+			2,
+			1,
+		);
+		const away = world.spawn(
+			0,
+			{ actor: false, components: { feel: {} } },
+			2,
+			1,
+		);
+		world.runRounds(1);
+		return [near, away].flatMap((id) => [
+			world.peek("feel", "left", id),
+			world.peek("feel", "source", id) === spark
+				? "spark"
+				: world.peek("feel", "source", id),
+		]);
+	};
+	expect(feel([kiln, gauge])).toEqual([5, "spark", 0, 0]);
+	expect(feel([gauge])).toEqual([99, 99, 99, 99]);
 });

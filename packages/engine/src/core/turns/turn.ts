@@ -4,17 +4,19 @@ import {
 	type ProposeFn,
 	type TargetKind,
 	type TargetOf,
-	type TickFn,
 } from "../api";
 import { MAX_ALTERNATES, MAX_TICK, TICKS_PER_TURN } from "../config";
 import { type Cell, type EntityId, NO_CELL, type Slot } from "../ecs/ids";
 import {
 	type ActionEntry,
+	type Buffer,
 	type Engine,
 	type Hook,
 	KIND_CODE,
 	NO_ACTION,
+	type TickHook,
 } from "../engine";
+import { applyHarm } from "../health/harm";
 import { applyDeferred } from "../lifecycle/lifecycle";
 
 export function runFloor(e: Engine, floor: number): void {
@@ -27,12 +29,20 @@ export function runFloor(e: Engine, floor: number): void {
 	tickCtx.setFloor(floor);
 	const audit = e.audit;
 	audit?.startFloor(floor);
+	const from = floor * e.grid.stride;
+	const to = from + e.grid.cells;
 	for (let i = 0; i < e.ticks.length; i++) {
-		const tick = e.ticks[i] as Hook<TickFn>;
+		const tick = e.ticks[i] as TickHook;
+		const buffers = tick.buffers;
+		for (let b = 0; b < buffers.length; b++) {
+			const { current, previous } = buffers[b] as Buffer;
+			previous.set(current.subarray(from, to), from);
+		}
 		tickCtx.setModule(tick.moduleKey);
 		audit?.before(floor, tick.moduleKey, true);
-		tick.run(tickCtx, floor);
+		tick.run(tickCtx);
 		audit?.after();
+		applyHarm(e, floor);
 		applyDeferred(e, floor);
 	}
 
@@ -44,6 +54,7 @@ export function runFloor(e: Engine, floor: number): void {
 		const id = (ids[slot] ?? 0) as EntityId;
 		e.now[floor] = time;
 		const cost = act(e, floor, slot);
+		applyHarm(e, floor);
 		applyDeferred(e, floor);
 		if (ids[slot] !== id) continue;
 		if (time + cost > MAX_TICK)

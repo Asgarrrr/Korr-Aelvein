@@ -24,8 +24,8 @@ const gardener = (reverse: boolean) =>
 			const patch = b.write("patch");
 			const rows = b.query(["patch"]);
 			const sprout = b.species(seed);
-			b.tick((ctx, floor) => {
-				const list = rows.slots(floor);
+			b.tick((ctx) => {
+				const list = rows.slots(ctx);
 				const slots: Slot[] = [];
 				for (let i = 0; i < list.length; i++) slots.push(list.at(i));
 				if (reverse) slots.reverse();
@@ -101,8 +101,8 @@ const sower = defineModule({
 			SpeciesRef,
 			SpeciesRef,
 		];
-		b.tick((ctx, floor) => {
-			const list = rows.slots(floor);
+		b.tick((ctx) => {
+			const list = rows.slots(ctx);
 			let first: EntityId | undefined;
 			let second: EntityId | undefined;
 			for (let i = 0; i < list.length; i++) {

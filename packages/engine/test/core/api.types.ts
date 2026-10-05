@@ -1,5 +1,5 @@
 // Checked by `tsc` only: each @ts-expect-error fails the typecheck if its line compiles.
-import { defineModule } from "../../src/core/api";
+import { defineModule, type EntityId, type Slot } from "../../src/core/api";
 import type { Species } from "../../src/core/lifecycle/species";
 import { createWorld } from "../../src/core/world";
 import { modules } from "../../src/registry";
@@ -70,5 +70,34 @@ defineModule({
 		});
 		// @ts-expect-error satiety is not in contracts/
 		b.read("satiety");
+	},
+});
+
+defineModule({
+	name: "fireReader",
+	schema: {},
+	cells: { glow: { v: "u8" } },
+	config: {},
+	setup(b) {
+		const was = b.previous("glow");
+		// @ts-expect-error only owned cells are buffered
+		b.previous("fire");
+		const fire = b.read("fire");
+		b.query(["vitality"]);
+		// @ts-expect-error vitality is core-owned: no module writes it
+		b.write("vitality");
+		b.tick((ctx) => {
+			const cell = ctx.cellAt(0, 0);
+			was.v.read(ctx).get(cell);
+			// @ts-expect-error a previous buffer is read-only
+			was.v.write(ctx);
+			if (!fire) return;
+			const source: EntityId = fire.source.read(ctx).get(cell);
+			ctx.harm(source, fire.left.read(ctx).get(cell), source);
+			// @ts-expect-error a cell reader reads a cell, not a slot
+			fire.left.read(ctx).get(0 as Slot);
+			// @ts-expect-error a contract cell view has no writer
+			fire.left.write(ctx);
+		});
 	},
 });

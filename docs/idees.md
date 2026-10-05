@@ -30,6 +30,8 @@ quand la spec est mise à jour pour l'inclure.
 - Marée qui monte dans le donjon.
 - Lumière comme ressource.
 - Échos des runs passés qui rejouent leurs actions.
+- Morsure via `harm` et carcasses : la prédation blesse au lieu de tuer, le corps reste comme nourriture.
+- Les créatures évitent d'entrer dans le feu même sans la peur, quand elles se déplacent pour une autre raison.
 
 ## Outillage
 

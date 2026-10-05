@@ -316,6 +316,17 @@ const cases: [string, Edit, RegExp][] = [
 		set32(satiety, freeRow, 3),
 		/dead slot \d+ keeps a value/,
 	],
+	["vitality hp 0", set16Field(engine.vitality.hp, ratRow, 0), /hp 0 /],
+	[
+		"vitality hp above its max",
+		set16Field(engine.vitality.hp, ratRow, 11),
+		/hp 11 outside \(0, 10\]/,
+	],
+	[
+		"vitality on a row without it",
+		set16Field(engine.vitality.max, itemRow, 4),
+		/component it does not have/,
+	],
 	["broken back link", set32(grid.prev, itemRow, 12345), /links back/],
 	[
 		"entity listed under another cell",

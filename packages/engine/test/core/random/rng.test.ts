@@ -62,8 +62,8 @@ test("cell draws differ across floors and from entity draws", () => {
 		setup(b) {
 			const out = b.write("roll");
 			const rows = b.query(["roll"]);
-			b.tick((ctx, floor) => {
-				const list = rows.slots(floor);
+			b.tick((ctx) => {
+				const list = rows.slots(ctx);
 				for (let i = 0; i < list.length; i++) {
 					const s = list.at(i);
 					const cell = ctx.cellAt(1, 0);

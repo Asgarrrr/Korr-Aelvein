@@ -3,7 +3,6 @@ import { moss } from "../../../src/content/species/moss";
 import { stoat } from "../../../src/content/species/stoat";
 import { type AnyModule, defineModule, type Slot } from "../../../src/core/api";
 import { CAP } from "../../../src/core/config";
-import type { Engine } from "../../../src/core/engine";
 import { spawn } from "../../../src/core/lifecycle/lifecycle";
 import { createEngine } from "../../../src/core/setup/registration";
 import { createWorld } from "../../../src/core/world";
@@ -25,8 +24,8 @@ const culprit = (phase: Phase, write: () => Write | undefined) =>
 				if (phase === "action") write()?.(actor);
 				return TURN;
 			});
-			b.tick((_ctx, floor) => {
-				const list = rows.slots(floor);
+			b.tick((ctx) => {
+				const list = rows.slots(ctx);
 				if (phase === "tick")
 					for (let i = 0; i < list.length; i++) write()?.(list.at(i));
 			});
@@ -71,65 +70,6 @@ for (const phase of ["tick", "propose", "action"] as const)
 		);
 	});
 
-const coreTargets: [string, (e: Engine) => Write][] = [
-	[
-		"x",
-		(e) => (slot) => {
-			e.grid.x[slot] = 3;
-		},
-	],
-	[
-		"masks",
-		(e) => (slot) => {
-			e.storage.masks[slot] = 0;
-		},
-	],
-	[
-		"ids",
-		(e) => (slot) => {
-			e.storage.ids[slot] = 99;
-		},
-	],
-	[
-		"nextAt",
-		(e) => (slot) => {
-			e.scheduler.nextAt[slot] = 5000;
-		},
-	],
-	[
-		"intent",
-		(e) => (slot) => {
-			e.intentKey[slot] = 1;
-		},
-	],
-	[
-		"cells",
-		(e) => () => {
-			e.grid.heads[0] = 0;
-		},
-	],
-];
-
-for (const [name, target] of coreTargets)
-	test(`a module writing the core column ${name} throws in audit mode`, () => {
-		let write: Write | undefined;
-		const engine = createEngine(
-			{
-				seed: 1,
-				floors: 1,
-				width: 4,
-				height: 4,
-				popCap: 16,
-				events: true,
-				audit: true,
-			},
-			[culprit("tick", () => write)],
-		);
-		write = target(engine);
-		spawn(engine, 0, { actor: true, components: { mark: {} } }, 2, 2, 0);
-		expect(() => engine.runRound()).toThrow(new RegExp(`culprit.*${name}`));
-	});
-
 const ranged = (kind: "i8" | "u8" | "i16" | "u16" | "i32", value: number) =>
 	defineModule({
 		name: "ranged",
@@ -138,8 +78,8 @@ const ranged = (kind: "i8" | "u8" | "i16" | "u16" | "i32", value: number) =>
 		setup(b) {
 			const gauge = b.write("gauge");
 			const rows = b.query(["gauge"]);
-			b.tick((_ctx, floor) => {
-				const list = rows.slots(floor);
+			b.tick((ctx) => {
+				const list = rows.slots(ctx);
 				for (let i = 0; i < list.length; i++) gauge.v[list.at(i)] = value;
 			});
 		},
@@ -180,8 +120,8 @@ const bulk = (name: string, use: (v: Uint8Array, first: Slot) => void) =>
 		setup(b) {
 			const gauge: Gauge = b.write("gauge");
 			const rows = b.query(["gauge"]);
-			b.tick((_ctx, floor) => {
-				const list = rows.slots(floor);
+			b.tick((ctx) => {
+				const list = rows.slots(ctx);
 				if (list.length > 0) use(gauge.v, list.at(0));
 			});
 		},
@@ -324,8 +264,8 @@ test("a stray write to the row the next spawn will take throws in audit mode", (
 			const gauge = b.write("gauge");
 			const rows = b.query(["gauge"]);
 			const pup = b.species({ actor: false, components: {} });
-			b.tick((ctx, floor) => {
-				const list = rows.slots(floor);
+			b.tick((ctx) => {
+				const list = rows.slots(ctx);
 				if (list.length !== 1) return;
 				const s = list.at(0);
 				gauge.v[s + 1] = 9;
@@ -355,8 +295,8 @@ test("a write to a killed entity's freed slot throws in audit mode", () => {
 		setup(b) {
 			const gauge = b.write("gauge");
 			const rows = b.query(["gauge"]);
-			b.tick((ctx, floor) => {
-				const list = rows.slots(floor);
+			b.tick((ctx) => {
+				const list = rows.slots(ctx);
 				if (list.length === 2) {
 					const s = list.at(1);
 					ctx.kill(ctx.idOf(s), ctx.idOf(s));

@@ -11,8 +11,8 @@ export const flora = defineModule({
 		const plants = b.query(["sprout"]);
 		const yields = b.species(cfg.yields);
 
-		b.tick((ctx, floor) => {
-			const rows = plants.slots(floor);
+		b.tick((ctx) => {
+			const rows = plants.slots(ctx);
 			const { period, left } = sprout;
 			for (let i = 0; i < rows.length; i++) {
 				const s = rows.at(i);

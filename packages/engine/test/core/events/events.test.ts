@@ -144,7 +144,7 @@ test("event types are name keys, the same in any registry", () => {
 			width: 4,
 			height: 4,
 			modules: list,
-			species: game.species,
+			species: { mushroom: game.species.mushroom },
 		}).eventType("hunger/ate"),
 	);
 	expect(first).toBe(hashName("hunger/ate") | 0);

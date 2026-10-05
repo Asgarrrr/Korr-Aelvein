@@ -3,5 +3,8 @@ import type { GameSpecies } from "./types";
 
 export const mushroom = {
 	actor: false,
-	components: { edible: { nutrition: 300, class: foodClass.forage } },
+	components: {
+		edible: { nutrition: 300, class: foodClass.forage },
+		flammable: { burn: 2 },
+	},
 } satisfies GameSpecies;

@@ -17,7 +17,7 @@ const TURN = 100;
 
 const seen = new Map<string, object>();
 const refs = new Map<string, { index?: number; key?: number }>();
-let builder: Builder<Schema> | undefined;
+let builder: Builder<Schema, Schema> | undefined;
 const collector = defineModule({
 	name: "collector",
 	schema: { mark: { n: "u8" } },
@@ -28,6 +28,9 @@ const collector = defineModule({
 		const spot = b.cells("spot");
 		seen.set("cell columns", spot);
 		seen.set("cell field", spot.v);
+		const previous = b.previous("spot");
+		seen.set("previous", previous);
+		seen.set("previous field", previous.v);
 		seen.set("builder", b);
 		const rows = b.query(["mark"]);
 		seen.set("query", rows);
@@ -44,9 +47,9 @@ const collector = defineModule({
 		refs.set("action", act);
 		refs.set("event", b.event("ping"));
 		refs.set("species", b.species({ actor: false, components: {} }));
-		b.tick((ctx, floor) => {
+		b.tick((ctx) => {
 			seen.set("tick ctx", ctx);
-			seen.set("slot list", rows.slots(floor));
+			seen.set("slot list", rows.slots(ctx));
 		});
 		b.propose((ctx, _actor, perception, out) => {
 			seen.set("propose ctx", ctx);
@@ -88,6 +91,8 @@ test("nothing handed to a module exposes engine state", () => {
 		"columns",
 		"field view",
 		"perception",
+		"previous",
+		"previous field",
 		"propose ctx",
 		"query",
 		"slot list",
@@ -149,7 +154,12 @@ test("a module cannot change which floor or module its context runs for", () => 
 test("module-facing prototypes and views cannot be patched", () => {
 	collect();
 	for (const [name, object] of seen) {
-		if (name === "columns" || name === "view" || name === "cell columns")
+		if (
+			name === "columns" ||
+			name === "view" ||
+			name === "cell columns" ||
+			name === "previous"
+		)
 			continue;
 		const proto = Object.getPrototypeOf(object) as Record<string, unknown>;
 		expect({ name, frozen: Object.isFrozen(proto) }).toEqual({
@@ -166,6 +176,8 @@ test("module-facing prototypes and views cannot be patched", () => {
 	expect(Object.isFrozen(seen.get("columns"))).toBe(true);
 	expect(Object.isFrozen(seen.get("cell columns"))).toBe(true);
 	expect(Object.isFrozen(seen.get("cell field"))).toBe(true);
+	expect(Object.isFrozen(seen.get("previous"))).toBe(true);
+	expect(Object.isFrozen(seen.get("previous field"))).toBe(true);
 });
 
 type Write = "kill" | "emit" | "spawn" | "instead";
@@ -215,10 +227,11 @@ test("a tick cannot call instead", () => {
 
 test("a builder used after setup throws", () => {
 	collect();
-	const b = builder as Builder<Schema>;
+	const b = builder as Builder<Schema, Schema>;
 	expect(() => b.query(["mark"])).toThrow(/after setup/);
 	expect(() => b.write("mark")).toThrow(/after setup/);
 	expect(() => b.read("diet")).toThrow(/after setup/);
+	expect(() => b.previous("spot")).toThrow(/after setup/);
 	expect(() => b.tick(() => {})).toThrow(/after setup/);
 	expect(() => b.propose(() => {})).toThrow(/after setup/);
 	expect(() => b.action("late", "none", () => TURN)).toThrow(/after setup/);

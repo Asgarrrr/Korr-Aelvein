@@ -1,4 +1,4 @@
-import type { Contracts } from "../../contracts";
+import type { CellContracts, Contracts } from "../../contracts";
 import type {
 	ActionFn,
 	ActionRef,
@@ -6,10 +6,12 @@ import type {
 	Builder,
 	CellColumns,
 	CellField,
+	CellReadView,
+	CellView,
+	ContractView,
 	EventRef,
 	ProposeFn,
 	Query,
-	ReadView,
 	SpeciesRef,
 	TargetKind,
 	TickFn,
@@ -17,14 +19,15 @@ import type {
 import { Audit } from "../audit/audit";
 import { checked } from "../audit/checked";
 import { MaskQuery } from "../ecs/query";
-import type { Column, Columns, Schema } from "../ecs/schema";
+import type { Column, Columns, FieldKind, Schema } from "../ecs/schema";
 import { createColumn } from "../ecs/schema";
 import { readView } from "../ecs/view";
-import { CORE, CORE_KEY, Engine } from "../engine";
+import { type Buffer, CORE, CORE_KEY, Engine } from "../engine";
+import { coreSchema } from "../health/vitality";
 import { compileSpecies, type SpeciesShape } from "../lifecycle/species";
 import { sectionsOf } from "../persistence/image";
 import { hashName } from "../random/rng";
-import { CellColumn } from "../space/cells";
+import { cellField, cellView } from "../space/cells";
 import { canonical, frozenCopy } from "./canonical";
 
 export interface WorldShape {
@@ -45,8 +48,8 @@ export function createEngine(
 ): Engine {
 	const names = new Set<string>([CORE]);
 	const keys = new Set<number>([CORE_KEY]);
-	const componentNames: string[] = [];
-	const owners = new Map<string, string>();
+	const componentNames = Object.keys(coreSchema);
+	const owners = new Map(componentNames.map((name) => [name, CORE]));
 	for (const module of modules) {
 		if (names.has(module.name))
 			throw new Error(`duplicate module name ${module.name}`);
@@ -156,7 +159,7 @@ export function createEngine(
 		.sort()
 		.map((name) => `${JSON.stringify(name)}:${table.get(name)}`);
 	engine.fingerprint = hashName(
-		`[${configs.join(",")}]{${named.join(",")}}[${resolved.join(",")}]`,
+		`${canonical(coreSchema, CORE)}[${configs.join(",")}]{${named.join(",")}}[${resolved.join(",")}]`,
 	);
 	engine.sections = sectionsOf(engine);
 	if (shape.audit) engine.audit = new Audit(engine, modules);
@@ -178,6 +181,7 @@ class ModuleBuilder implements Builder<Schema, Schema> {
 	readonly #moduleKey: number;
 	readonly #resolve: (wanted: string | SpeciesShape) => SpeciesRef;
 	readonly #audit: boolean;
+	readonly #buffers: Buffer[] = [];
 	#sealed = false;
 
 	constructor(
@@ -208,31 +212,66 @@ class ModuleBuilder implements Builder<Schema, Schema> {
 	}
 
 	cells<N extends string>(name: N): CellColumns<Schema[N]> {
-		const module = this.#open();
-		const columns = this.#engine.cellColumns.get(name);
-		if (!columns || !Object.hasOwn(module.cells ?? {}, name))
-			throw new Error(`${module.name} does not own cells ${name}`);
+		const columns = this.#ownedCells(name);
 		const { grid } = this.#engine;
-		const fields: Record<string, CellField> = {};
-		for (const [field, column] of Object.entries(columns)) {
-			const array = this.#audit ? checked(column, `${name}.${field}`) : column;
-			fields[field] = new CellColumn(array, grid.stride, grid.cells);
-		}
+		const fields: Record<string, CellField<FieldKind>> = {};
+		for (const [field, column] of Object.entries(columns))
+			fields[field] = cellField(
+				column,
+				grid.stride,
+				grid.cells,
+				this.#audit ? `${name}.${field}` : undefined,
+			);
 		return Object.freeze(fields) as CellColumns<Schema[N]>;
 	}
 
-	read<N extends keyof Contracts>(name: N): ReadView<Contracts[N]> | undefined {
+	previous<N extends string>(name: N): CellReadView<Schema[N]> {
+		const columns = this.#ownedCells(name);
+		const kinds = this.#module.cells?.[name] ?? {};
+		const { grid, storage } = this.#engine;
+		const views: Record<string, CellView<FieldKind>> = {};
+		for (const [field, current] of Object.entries(columns)) {
+			if (this.#buffers.some((buffer) => buffer.current === current))
+				throw new Error(`${name} is already buffered`);
+			const kind = kinds[field] ?? "i32";
+			const previous = createColumn(kind, storage.floors * grid.stride);
+			this.#buffers.push({ current, previous });
+			views[field] = cellView(
+				previous,
+				grid.stride,
+				grid.cells,
+				this.#moduleKey,
+			);
+		}
+		return Object.freeze(views) as CellReadView<Schema[N]>;
+	}
+
+	read<N extends keyof Contracts | keyof CellContracts>(
+		name: N,
+	): ContractView<N> | undefined {
 		const module = this.#open();
-		if (Object.hasOwn(module.schema, name))
+		if (
+			Object.hasOwn(module.schema, name) ||
+			Object.hasOwn(module.cells ?? {}, name)
+		)
 			throw new Error(`${module.name} owns ${name}: use write, not read`);
-		const component = this.#engine.components.get(name);
+		const { grid, cellColumns, components } = this.#engine;
+		const cells = cellColumns.get(name);
+		if (cells) {
+			const views: Record<string, CellView<FieldKind>> = {};
+			for (const [field, column] of Object.entries(cells))
+				views[field] = cellView(column, grid.stride, grid.cells);
+			return Object.freeze(views) as ContractView<N>;
+		}
+		const component = components.get(name);
 		if (!component) return undefined;
-		return readView(component.columns) as ReadView<Contracts[N]>;
+		return readView(component.columns) as ContractView<N>;
 	}
 
 	query(names: readonly string[]): Query {
 		const module = this.#open();
-		return new MaskQuery(
+		// The core hands modules only its own contexts, which carry the floor slots() reads.
+		const query = new MaskQuery(
 			this.#engine.storage,
 			names.map((name) => {
 				const component = this.#engine.components.get(name);
@@ -243,11 +282,14 @@ class ModuleBuilder implements Builder<Schema, Schema> {
 				return component.bit;
 			}),
 		);
+		return query as unknown as Query;
 	}
 
 	tick(run: TickFn): void {
 		this.#open();
-		this.#engine.ticks.push({ moduleKey: this.#moduleKey, run });
+		// Shared with `previous`, which may be called after `tick` during setup.
+		const buffers = this.#buffers;
+		this.#engine.ticks.push({ moduleKey: this.#moduleKey, run, buffers });
 	}
 
 	action<K extends TargetKind>(
@@ -277,6 +319,14 @@ class ModuleBuilder implements Builder<Schema, Schema> {
 		if (this.#sealed)
 			throw new Error(`${this.#module.name} used its builder after setup`);
 		return this.#module;
+	}
+
+	#ownedCells(name: string): Readonly<Record<string, Column>> {
+		const module = this.#open();
+		const columns = this.#engine.cellColumns.get(name);
+		if (!columns || !Object.hasOwn(module.cells ?? {}, name))
+			throw new Error(`${module.name} does not own cells ${name}`);
+		return columns;
 	}
 
 	#owned(name: string) {

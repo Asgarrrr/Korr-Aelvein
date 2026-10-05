@@ -6,8 +6,11 @@ import {
 	type Builder,
 	defineModule,
 	type ModuleDef,
+	NONE,
 	type Schema,
+	type Slot,
 	type SpeciesShape,
+	type WriteCtx,
 } from "../src/core/api";
 import { createWorld } from "../src/core/world";
 import { modules } from "../src/registry";
@@ -45,7 +48,53 @@ export function populatedWorld(
 	return { world, rats };
 }
 
-// Same module, same name and RNG keys, but every query lists its rows last to first.
+type CoreCtx = WriteCtx & {
+	readonly floor: number;
+	checkWritable(what: string): void;
+	inTickOf(module: number): boolean;
+};
+
+function backwards(ctx: WriteCtx): WriteCtx {
+	const real = ctx as CoreCtx;
+	const before = new Map<Slot, Slot>();
+	const flipped: CoreCtx = {
+		get floor() {
+			return real.floor;
+		},
+		checkWritable: (what) => real.checkWritable(what),
+		inTickOf: (module) => real.inTickOf(module),
+		step: real.step,
+		idle: real.idle,
+		width: real.width,
+		height: real.height,
+		isAlive: (id) => real.isAlive(id),
+		slotOf: (id) => real.slotOf(id),
+		idOf: (slot) => real.idOf(slot),
+		x: (slot) => real.x(slot),
+		y: (slot) => real.y(slot),
+		cellAt: (x, y) => real.cellAt(x, y),
+		holdsActor: (cell) => real.holdsActor(cell),
+		rng: (subject, n, bound) => real.rng(subject, n, bound),
+		rngCell: (cell, n, bound) => real.rngCell(cell, n, bound),
+		kill: (id, cause) => real.kill(id, cause),
+		harm: (target, amount, cause) => real.harm(target, amount, cause),
+		spawn: (species, x, y, cause) => real.spawn(species, x, y, cause),
+		emit: (event, cause, a, b) => real.emit(event, cause, a, b),
+		firstAt(cell) {
+			let last = NONE;
+			for (let s = real.firstAt(cell); s !== NONE; s = real.nextAt(s)) {
+				before.set(s, last);
+				last = s;
+			}
+			return last;
+		},
+		nextAt: (slot) => before.get(slot) ?? NONE,
+	};
+	return flipped;
+}
+
+// Same module, same name and RNG keys, but every query lists its rows last to first and
+// every tick walks each cell's occupants last to first.
 export function reversed<S extends Schema, C, K extends Schema>(
 	module: ModuleDef<S, C, K>,
 ): ModuleDef<S, C, K> {
@@ -55,8 +104,9 @@ export function reversed<S extends Schema, C, K extends Schema>(
 			const flipped: Builder<S, K> = {
 				write: (name) => b.write(name),
 				cells: (name) => b.cells(name),
+				previous: (name) => b.previous(name),
 				read: (name) => b.read(name),
-				tick: (run) => b.tick(run),
+				tick: (run) => b.tick((ctx) => run(backwards(ctx))),
 				action: (name, kind, run) => b.action(name, kind, run),
 				propose: (run) => b.propose(run),
 				event: (name) => b.event(name),
@@ -65,8 +115,8 @@ export function reversed<S extends Schema, C, K extends Schema>(
 					const inner = b.query(names);
 					return {
 						has: (slot) => inner.has(slot),
-						slots(floor) {
-							const list = inner.slots(floor);
+						slots(ctx) {
+							const list = inner.slots(ctx);
 							const last = list.length - 1;
 							return { length: list.length, at: (i) => list.at(last - i) };
 						},
@@ -86,8 +136,8 @@ export const probe = defineModule({
 	setup(b) {
 		const where = b.write("where");
 		const rows = b.query(["where"]);
-		b.tick((ctx, floor) => {
-			const list = rows.slots(floor);
+		b.tick((ctx) => {
+			const list = rows.slots(ctx);
 			for (let i = 0; i < list.length; i++) {
 				const s = list.at(i);
 				where.x[s] = ctx.x(s);

@@ -34,7 +34,7 @@ test("a sprout yields a mushroom on its own cell every period rounds", () => {
 		width: 8,
 		height: 8,
 		modules: [hunger, flora, probe],
-		species: { ...species, mushroom: tracked },
+		species: { mushroom: tracked },
 	});
 	const sprout = world.spawn(0, moss, 5, 2);
 

@@ -28,6 +28,7 @@ import {
 	checkIntent,
 	checkLists,
 	checkLive,
+	checkVitality,
 	describe,
 	OK,
 	type Rows,
@@ -151,6 +152,13 @@ export function checkFloor(
 			sections.filter((s) => s.kind === ROWS).map(byUnit),
 		) ||
 		checkIntent(rows, grid.cells, storage.floors, engine.actions) ||
+		checkVitality(
+			rows,
+			engine.vitality.word,
+			engine.vitality.bit,
+			int16(engine.vitality.hp),
+			int16(engine.vitality.max),
+		) ||
 		checkAbsent(
 			rows,
 			[...engine.components.values()].map(({ bit, columns }) => {

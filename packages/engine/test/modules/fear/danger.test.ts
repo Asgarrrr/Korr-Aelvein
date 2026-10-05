@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { species } from "../../../src/content/species";
 import { cheese } from "../../../src/content/species/cheese";
+import { ember } from "../../../src/content/species/ember";
+import { moss } from "../../../src/content/species/moss";
 import { rat } from "../../../src/content/species/rat";
 import { stoat } from "../../../src/content/species/stoat";
 import {
@@ -10,6 +12,7 @@ import {
 	defineModule,
 	type EntityId,
 	type ModuleDef,
+	NO_CELL,
 	type Schema,
 } from "../../../src/core/api";
 import { PERCEPTION_RADIUS } from "../../../src/core/config";
@@ -30,8 +33,8 @@ function alwaysAlert<S extends Schema, C, K extends Schema>(
 		...module,
 		setup(b, cfg) {
 			const alert: Builder<S, K> = {
-				...b,
 				write: (name) => b.write(name),
+				previous: (name) => b.previous(name),
 				read: (name) => b.read(name),
 				query: (names) => b.query(names),
 				tick: (run) => b.tick(run),
@@ -41,15 +44,14 @@ function alwaysAlert<S extends Schema, C, K extends Schema>(
 				species: (wanted) => b.species(wanted),
 				cells(name) {
 					const real = b.cells(name);
-					const fields: Record<string, CellField> = {};
+					const fields: Record<string, CellField<"u8">> = {};
 					for (const [field, column] of Object.entries(real) as [
 						string,
-						CellField,
+						CellField<"u8">,
 					][])
 						fields[field] = {
-							get: () => 0xff,
-							set: (ctx, cell, value) => column.set(ctx, cell, value),
-							clear: (ctx) => column.clear(ctx),
+							read: () => ({ get: () => 0xff, next: () => NO_CELL }),
+							write: (ctx) => column.write(ctx),
 						};
 					return fields as typeof real;
 				},
@@ -65,7 +67,11 @@ const tracked = <T extends { components: object }>(shape: T) => ({
 	components: { ...shape.components, where: {} },
 });
 
-const outcomes = (seed: number, list: readonly AnyModule[]) => {
+const outcomes = (
+	seed: number,
+	list: readonly AnyModule[],
+	burning = false,
+) => {
 	const world = createWorld({
 		seed,
 		floors: 1,
@@ -101,6 +107,10 @@ const outcomes = (seed: number, list: readonly AnyModule[]) => {
 	for (let i = 0; i < 16; i++)
 		ids.push(world.spawn(0, tracked(rat), ...free()));
 	for (let i = 0; i < 20; i++) world.spawn(0, cheese, roll(), roll());
+	if (burning) {
+		for (let i = 0; i < 4; i++) world.spawn(0, ember, ...free());
+		for (let i = 0; i < 120; i++) world.spawn(0, moss, roll(), roll());
+	}
 	world.runRounds(120);
 	return ids.map((id) =>
 		world.alive(id)
@@ -122,6 +132,22 @@ test("skipping perception on calm cells changes no decision", () => {
 			seed,
 			fates: outcomes(seed, alert),
 		});
+});
+
+test("with fire burning, skipping perception on calm cells changes no decision", () => {
+	const alert = modules.map(
+		(m): AnyModule => (m === fear ? alwaysAlert(fear) : m),
+	);
+	let burned = 0;
+	for (let seed = 1; seed <= 6; seed++) {
+		const fates = outcomes(seed, modules, true);
+		expect({ seed, fates }).toEqual({
+			seed,
+			fates: outcomes(seed, alert, true),
+		});
+		burned += fates.filter((f) => f === "dead").length;
+	}
+	expect(burned).toBeGreaterThan(0);
 });
 
 const MOUSE = {
@@ -215,8 +241,8 @@ test("an eater spawned mid-round slips past the pre-check: the limit it relies o
 				...stoat,
 				components: { ...stoat.components, satiety: { value: 1 } },
 			});
-			b.tick((ctx, floor) => {
-				const list = rows.slots(floor);
+			b.tick((ctx) => {
+				const list = rows.slots(ctx);
 				for (let i = 0; i < list.length; i++) {
 					const s = list.at(i);
 					if ((lure.done[s] ?? 0) !== 0) continue;

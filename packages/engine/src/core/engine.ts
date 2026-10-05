@@ -12,6 +12,8 @@ import type { EntityId } from "./ecs/ids";
 import type { Column } from "./ecs/schema";
 import { INDEX_SIZE, type MaskBit, Storage } from "./ecs/storage";
 import { EventLog } from "./events/events";
+import { Harms } from "./health/harm";
+import { coreSchema } from "./health/vitality";
 import { DeferredKills, DeferredSpawns } from "./lifecycle/deferred";
 import type { CompiledSpecies } from "./lifecycle/species";
 import { Checksum } from "./persistence/checksum";
@@ -44,6 +46,22 @@ export interface ActionEntry {
 export interface Hook<F> {
 	readonly moduleKey: number;
 	readonly run: F;
+}
+
+export interface Buffer {
+	readonly current: Column;
+	readonly previous: Column;
+}
+
+export interface TickHook extends Hook<TickFn> {
+	readonly buffers: readonly Buffer[];
+}
+
+export interface Vitality {
+	readonly hp: Int16Array;
+	readonly max: Int16Array;
+	readonly word: number;
+	readonly bit: number;
 }
 
 export interface EngineOptions {
@@ -86,11 +104,13 @@ export class Engine {
 	readonly components = new Map<string, Component>();
 	readonly cellColumns = new Map<string, Readonly<Record<string, Column>>>();
 	readonly actions: ActionEntry[] = [];
-	readonly ticks: Hook<TickFn>[] = [];
+	readonly ticks: TickHook[] = [];
 	readonly proposers: Hook<ProposeFn>[] = [];
 	readonly eventNames = new Map<number, string>();
 	readonly species: CompiledSpecies[] = [];
 
+	readonly vitality: Vitality;
+	readonly harms = new Harms();
 	readonly kills = new DeferredKills();
 	readonly spawns = new DeferredSpawns();
 	readonly perception: PerceptionBuffer;
@@ -113,6 +133,18 @@ export class Engine {
 		this.scheduler = new Scheduler(this.storage);
 		this.intentKey = this.storage.column("i32") as Int32Array;
 		this.intentTarget = this.storage.column("i32") as Int32Array;
+		const { bit, word } = this.storage.componentBit(this.components.size);
+		const { hp, max } = coreSchema.vitality;
+		this.vitality = {
+			hp: this.storage.column(hp) as Int16Array,
+			max: this.storage.column(max) as Int16Array,
+			word,
+			bit,
+		};
+		this.components.set("vitality", {
+			bit: { word, bit },
+			columns: Object.freeze({ hp: this.vitality.hp, max: this.vitality.max }),
+		});
 		this.now = new Int32Array(options.floors);
 		this.popCap = options.popCap;
 		this.floorSums = new Int32Array(2 * options.floors);

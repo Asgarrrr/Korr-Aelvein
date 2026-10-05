@@ -1,6 +1,7 @@
 import { species } from "../src/content/species";
 import { cheese } from "../src/content/species/cheese";
 import { rat } from "../src/content/species/rat";
+import type { AnyModule } from "../src/core/api";
 import type { EntityId } from "../src/core/ecs/ids";
 import { bounded, draw, PHASE, SUBJECT } from "../src/core/random/rng";
 import { createWorld } from "../src/core/world";
@@ -14,13 +15,17 @@ const P95 = 0.95;
 const NS_PER_MS = 1e6;
 const MS_DECIMALS = 3;
 
-export function benchFloor(satiety: number, popCap?: number) {
+export function benchFloor(
+	satiety: number,
+	popCap?: number,
+	list: readonly AnyModule[] = modules,
+) {
 	const world = createWorld({
 		seed: SEED,
 		floors: 1,
 		width: SIDE,
 		height: SIDE,
-		modules,
+		modules: list,
 		species,
 		...(popCap === undefined ? {} : { popCap }),
 	});

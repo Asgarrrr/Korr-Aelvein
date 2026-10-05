@@ -7,13 +7,12 @@ export interface SlotList {
 	at(i: number): Slot;
 }
 
-export interface Query {
-	has(slot: Slot): boolean;
-	// Fills one list shared by every call: never nest two loops over the same query.
-	slots(floor: number): SlotList;
+// Structural, so core/ecs needs no context type: the core passes its own contexts.
+interface OnFloor {
+	readonly floor: number;
 }
 
-export class MaskQuery implements Query, SlotList {
+export class MaskQuery implements SlotList {
 	length = 0;
 	readonly #list = new Int32Array(CAP);
 	readonly #words: Int32Array;
@@ -42,7 +41,8 @@ export class MaskQuery implements Query, SlotList {
 		return true;
 	}
 
-	slots(floor: number): SlotList {
+	slots(ctx: OnFloor): SlotList {
+		const floor = ctx.floor;
 		const start = floor * CAP;
 		const end = start + (this.#storage.highWater[floor] ?? 0);
 		const list = this.#list;

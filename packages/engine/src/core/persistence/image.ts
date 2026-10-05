@@ -3,7 +3,7 @@ import type { Column } from "../ecs/schema";
 import type { Engine } from "../engine";
 import type { Checksum } from "./checksum";
 
-export const FORMAT_VERSION = 4;
+export const FORMAT_VERSION = 5;
 export const WORD = 4;
 export const VERSION = 0;
 export const FINGERPRINT = 1;
@@ -99,6 +99,8 @@ export function imageWords(
 // Folds the floor exactly as its image reads, minus the checksum words, into engine.floorSums.
 export function floorChecksum(engine: Engine, floor: number): void {
 	const { storage, sections, sum } = engine;
+	if (engine.harms.count !== 0)
+		throw new Error("a snapshot was taken with harm still pending");
 	const highWater = storage.highWater[floor] ?? 0;
 	const freeCount = storage.freeCount[floor] ?? 0;
 	sum.reset();

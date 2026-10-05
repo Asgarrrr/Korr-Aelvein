@@ -3,5 +3,5 @@ export const schema = {
 } as const;
 
 export const cells = {
-	danger: { eats: "u8" },
+	danger: { eats: "u8", fire: "u8" },
 } as const;

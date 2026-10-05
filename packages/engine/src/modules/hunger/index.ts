@@ -50,8 +50,8 @@ export const hunger = defineModule({
 		const food = b.query(["edible"]);
 		const ate = b.event("ate");
 
-		b.tick((ctx, floor) => {
-			const rows = fed.slots(floor);
+		b.tick((ctx) => {
+			const rows = fed.slots(ctx);
 			const value = satiety.value;
 			const decay = cfg.decayPerTurn;
 			for (let i = 0; i < rows.length; i++) {

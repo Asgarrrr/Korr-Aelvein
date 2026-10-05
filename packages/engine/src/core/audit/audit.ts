@@ -58,6 +58,10 @@ export class Audit {
 		core(scheduler.nextAt, "nextAt");
 		core(engine.intentKey, "intent.key");
 		core(engine.intentTarget, "intent.target");
+		for (const [field, column] of Object.entries(
+			engine.components.get("vitality")?.columns ?? {},
+		))
+			core(column, `vitality.${field}`);
 		for (const module of modules) {
 			const key = hashName(module.name);
 			this.#modules.set(key, module.name);

@@ -31,7 +31,7 @@ export class Grid {
 	}
 
 	cellAt(x: number, y: number): Cell {
-		if (!Number.isInteger(x) || !Number.isInteger(y))
+		if ((x | 0) !== x || (y | 0) !== y)
 			throw new Error(`cell (${x}, ${y}) is not an integer position`);
 		if (x < 0 || y < 0 || x >= this.width || y >= this.height) return NO_CELL;
 		return (y * this.width + x) as Cell;

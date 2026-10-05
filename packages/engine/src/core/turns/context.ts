@@ -36,6 +36,8 @@ export class Context implements ActionCtx {
 	#floor = 0;
 	readonly #engine: Engine;
 	readonly #phase: Phase;
+	readonly width: number;
+	readonly height: number;
 
 	constructor(
 		engine: Engine,
@@ -45,6 +47,8 @@ export class Context implements ActionCtx {
 	) {
 		this.#engine = engine;
 		this.#phase = phase;
+		this.width = engine.grid.width;
+		this.height = engine.grid.height;
 		Object.freeze(this);
 	}
 
@@ -58,6 +62,10 @@ export class Context implements ActionCtx {
 
 	setModule(module: number): void {
 		this.#module = module;
+	}
+
+	inTickOf(module: number): boolean {
+		return this.#phase === PHASE.tick && this.#module === module;
 	}
 
 	isAlive(id: EntityId): boolean {
@@ -93,6 +101,19 @@ export class Context implements ActionCtx {
 		return grid.holdsOtherActor(this.#floor, cell, NONE);
 	}
 
+	firstAt(cell: Cell): Slot {
+		const grid = this.#engine.grid;
+		if (cell >>> 0 >= grid.cells) {
+			if (cell === NO_CELL) return NONE;
+			throw new Error(`firstAt: cell ${cell} is not on the floor`);
+		}
+		return (grid.heads[this.#floor * grid.cells + cell] ?? NONE) as Slot;
+	}
+
+	nextAt(slot: Slot): Slot {
+		return (this.#engine.grid.next[slot] ?? NONE) as Slot;
+	}
+
 	rng(subject: EntityId, n: number, bound: number): number {
 		return this.#roll(SUBJECT.entity, subject, n, bound);
 	}
@@ -107,6 +128,16 @@ export class Context implements ActionCtx {
 	kill(id: EntityId, cause: EntityId): void {
 		this.checkWritable("kill");
 		this.#engine.kills.push(id, cause);
+	}
+
+	harm(target: EntityId, amount: number, cause: EntityId): void {
+		this.checkWritable("harm");
+		const i32 = (v: number) => (v | 0) === v;
+		if (!(i32(target) && i32(cause) && i32(amount) && amount >= 1))
+			throw new Error(
+				`harm amount ${amount} must be an i32 >= 1, with i32 ids`,
+			);
+		this.#engine.harms.push(target, cause, amount);
 	}
 
 	spawn(species: SpeciesRef, x: number, y: number, cause: EntityId): void {

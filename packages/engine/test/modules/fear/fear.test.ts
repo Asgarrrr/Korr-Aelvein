@@ -259,8 +259,8 @@ const fleeWith = (hunger: boolean) => {
 		cells: () => ({ eats: {} }),
 		tick() {},
 		propose() {},
-		action: (_name: string, _kind: string, run: ActionFn<"entity">) => {
-			flee = run;
+		action: (name: string, _kind: string, run: ActionFn<"entity">) => {
+			if (name === "flee") flee = run;
 			return { index: 0 };
 		},
 	} as unknown as Builder<typeof fear.schema>;

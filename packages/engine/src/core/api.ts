@@ -1,6 +1,6 @@
-import type { Contracts } from "../contracts";
+import type { CellContracts, Contracts } from "../contracts";
 import type { Cell, EntityId, Slot } from "./ecs/ids";
-import type { Query } from "./ecs/query";
+import type { SlotList } from "./ecs/query";
 import type {
 	Columns,
 	FieldKind,
@@ -8,12 +8,13 @@ import type {
 	FieldValue,
 	Schema,
 } from "./ecs/schema";
+import type { CoreSchema } from "./health/vitality";
 import type { SpeciesShape } from "./lifecycle/species";
 
 export { PERCEPTION_RADIUS } from "./config";
 export type { Cell, EntityId, Slot } from "./ecs/ids";
-export { NO_CELL, NONE } from "./ecs/ids";
-export type { Query, SlotList } from "./ecs/query";
+export { NO_CELL, NO_ENTITY, NONE } from "./ecs/ids";
+export type { SlotList } from "./ecs/query";
 export type { Schema } from "./ecs/schema";
 export type { SpeciesShape } from "./lifecycle/species";
 
@@ -50,6 +51,9 @@ export const ALTERNATE = -2 as Sentinel;
 export interface ReadCtx {
 	readonly step: ActionRef<"cell">;
 	readonly idle: ActionRef<"none">;
+	// A floor's cells are numbered y * width + x.
+	readonly width: number;
+	readonly height: number;
 	isAlive(id: EntityId): boolean;
 	slotOf(id: EntityId): Slot;
 	idOf(slot: Slot): EntityId;
@@ -57,6 +61,9 @@ export interface ReadCtx {
 	y(slot: Slot): number;
 	cellAt(x: number, y: number): Cell;
 	holdsActor(cell: Cell): boolean;
+	// The entities in a cell, in grid list order: NONE ends the walk.
+	firstAt(cell: Cell): Slot;
+	nextAt(slot: Slot): Slot;
 	// n is the caller's draw index: reusing it repeats the draw, also across an alternate chain.
 	rng(subject: EntityId, n: number, bound: number): number;
 	rngCell(cell: Cell, n: number, bound: number): number;
@@ -64,6 +71,8 @@ export interface ReadCtx {
 
 export interface WriteCtx extends ReadCtx {
 	kill(id: EntityId, cause: EntityId): void;
+	// Applied by the core after this callback; a target without vitality ignores it.
+	harm(target: EntityId, amount: number, cause: EntityId): void;
 	spawn(species: SpeciesRef, x: number, y: number, cause: EntityId): void;
 	emit(event: EventRef, cause: EntityId, a: number, b: number): void;
 }
@@ -100,13 +109,20 @@ export type ActionFn<K extends TargetKind> = (
 	target: TargetOf[K],
 	perception: Perception,
 ) => number;
-export type TickFn = (ctx: WriteCtx, floor: number) => void;
+export type TickFn = (ctx: WriteCtx) => void;
 export type ProposeFn = (
 	ctx: ReadCtx,
 	actor: Slot,
 	perception: Perception,
 	out: Candidates,
 ) => void;
+
+export interface Query {
+	has(slot: Slot): boolean;
+	// The rows on ctx's floor. Fills one list shared by every call: never nest two loops
+	// over the same query.
+	slots(ctx: ReadCtx): SlotList;
+}
 
 export interface FieldView<K extends FieldKind> {
 	get(slot: Slot): FieldValue<K>;
@@ -116,27 +132,58 @@ export type ReadView<F extends Fields> = {
 	readonly [K in keyof F]: FieldView<F[K]>;
 };
 
-// A cell column on the floor the context runs for: `cell` is that floor's own index.
-// Reading NO_CELL gives zero, like stepping there fails; any other bad cell throws.
-export interface CellField {
-	get(ctx: ReadCtx, cell: Cell): number;
-	set(ctx: WriteCtx, cell: Cell, value: number): void;
-	clear(ctx: WriteCtx): void;
+// One floor's slice of a cell column, valid in the current callback only.
+export interface CellReader<K extends FieldKind> {
+	// NO_CELL reads zero, like stepping there fails; any other cell off the floor throws.
+	get(cell: Cell): FieldValue<K>;
+	// The first cell after `cell` holding a nonzero value, or NO_CELL: start at NO_CELL.
+	next(cell: Cell): Cell;
 }
 
-export type CellColumns<F extends Fields> = {
-	readonly [K in keyof F]: CellField;
+export interface CellWriter<K extends FieldKind> extends CellReader<K> {
+	set(cell: Cell, value: FieldValue<K>): void;
+	clear(): void;
+}
+
+export interface CellView<K extends FieldKind> {
+	read(ctx: ReadCtx): CellReader<K>;
+}
+
+export interface CellField<K extends FieldKind> extends CellView<K> {
+	write(ctx: WriteCtx): CellWriter<K>;
+}
+
+export type CellReadView<F extends Fields> = {
+	readonly [K in keyof F]: CellView<F[K]>;
 };
+
+export type CellColumns<F extends Fields> = {
+	readonly [K in keyof F]: CellField<F[K]>;
+};
+
+export type ContractView<N extends keyof Contracts | keyof CellContracts> =
+	N extends keyof CellContracts
+		? CellReadView<CellContracts[N]>
+		: N extends keyof Contracts
+			? ReadView<Contracts[N]>
+			: never;
 
 type NoCells = Readonly<Record<never, Fields>>;
 
 export interface Builder<S extends Schema, K extends Schema = NoCells> {
 	write<N extends keyof S & string>(name: N): Columns<S[N]>;
 	cells<N extends keyof K & string>(name: N): CellColumns<K[N]>;
-	// Undefined when no registered module owns the component.
-	read<N extends keyof Contracts>(name: N): ReadView<Contracts[N]> | undefined;
+	// The core copies the owned cells here just before each of this module's ticks, so a tick
+	// reads last round's values while it writes this round's. Readable in that tick only.
+	previous<N extends keyof K & string>(name: N): CellReadView<K[N]>;
+	// Undefined when no registered module owns the component or cells.
+	read<N extends keyof Contracts | keyof CellContracts>(
+		name: N,
+	): ContractView<N> | undefined;
 	// A contract component only narrows the rows: the query grants no write access to it.
-	query(names: readonly ((keyof S & string) | keyof Contracts)[]): Query;
+	query(
+		names: readonly ((keyof S & string) | keyof Contracts | keyof CoreSchema)[],
+	): Query;
 	tick(run: TickFn): void;
 	action<K extends TargetKind>(
 		name: string,

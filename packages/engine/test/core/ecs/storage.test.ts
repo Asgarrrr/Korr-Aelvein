@@ -10,8 +10,8 @@ const reaper = defineModule({
 	setup(b) {
 		const doomed = b.write("doomed");
 		const rows = b.query(["doomed"]);
-		b.tick((ctx, floor) => {
-			const list = rows.slots(floor);
+		b.tick((ctx) => {
+			const list = rows.slots(ctx);
 			const fuse = doomed.fuse;
 			for (let i = 0; i < list.length; i++) {
 				const s = list.at(i);

@@ -6,5 +6,6 @@ export const stoat = {
 	components: {
 		satiety: { value: 800 },
 		diet: { eats: foodClass.meat },
+		vitality: { hp: 16, max: 16 },
 	},
 } satisfies GameSpecies;
