@@ -23,7 +23,12 @@ export class GameWorld<M extends readonly AnyModule[]> implements World<M> {
 	// saved: the scheduler's order already rules out a double or out-of-order turn.
 	private readonly played = new Set<number>();
 
-	constructor(private readonly engine: Engine) {}
+	// An ES private field: a TS `private` would still leave the engine reachable at runtime.
+	readonly #engine: Engine;
+
+	constructor(engine: Engine) {
+		this.#engine = engine;
+	}
 
 	spawn(
 		floor: number,
@@ -33,7 +38,7 @@ export class GameWorld<M extends readonly AnyModule[]> implements World<M> {
 		values?: Species<M>["components"],
 	): EntityId {
 		this.checkMutable();
-		return spawn(this.engine, floor, species, x, y, false, values);
+		return spawn(this.#engine, floor, species, x, y, false, values);
 	}
 
 	spawnPlayer(
@@ -44,24 +49,24 @@ export class GameWorld<M extends readonly AnyModule[]> implements World<M> {
 		values?: Species<M>["components"],
 	): EntityId {
 		this.checkMutable();
-		return spawn(this.engine, floor, species, x, y, true, values);
+		return spawn(this.#engine, floor, species, x, y, true, values);
 	}
 
 	runRounds(n: number): void {
 		this.run(() => {
-			for (let i = 0; i < n; i++) this.engine.runRound();
+			for (let i = 0; i < n; i++) this.#engine.runRound();
 		});
 	}
 
 	advance(): readonly EntityId[] {
 		this.checkMutable();
 		this.played.clear();
-		return this.run(() => Object.freeze(advance(this.engine)));
+		return this.run(() => Object.freeze(advance(this.#engine)));
 	}
 
 	input(player: EntityId, action: string, target: number | null): void {
 		this.checkMutable();
-		const e = this.engine;
+		const e = this.#engine;
 		const floor = e.storage.floorOf(player);
 		const slot = floor < 0 ? NONE : e.storage.slotOf(floor, player);
 		if (slot === NONE || this.played.has(floor) || dueOn(e, floor) !== slot)
@@ -98,7 +103,7 @@ export class GameWorld<M extends readonly AnyModule[]> implements World<M> {
 	loadFloor(floor: number, bytes: Uint8Array, options?: LoadOptions): void {
 		this.checkMutable();
 		const image = bytes.byteOffset % WORD === 0 ? bytes : bytes.slice();
-		loadFloor(this.engine, image, this.checkFloor(floor), options?.check);
+		loadFloor(this.#engine, image, this.checkFloor(floor), options?.check);
 	}
 
 	private run<T>(body: () => T): T {
@@ -113,12 +118,12 @@ export class GameWorld<M extends readonly AnyModule[]> implements World<M> {
 
 	alive(id: EntityId): boolean {
 		this.checkHealthy();
-		return this.engine.storage.floorOf(id) >= 0;
+		return this.#engine.storage.floorOf(id) >= 0;
 	}
 
 	locate(id: EntityId): Location {
 		this.checkHealthy();
-		const { storage, grid, inbox } = this.engine;
+		const { storage, grid, inbox } = this.#engine;
 		const floor = storage.floorOf(id);
 		if (floor >= 0) {
 			const slot = storage.slotOf(floor, id);
@@ -133,7 +138,7 @@ export class GameWorld<M extends readonly AnyModule[]> implements World<M> {
 		id: EntityId,
 	): number {
 		this.checkHealthy();
-		const { storage, components } = this.engine;
+		const { storage, components } = this.#engine;
 		const floor = storage.floorOf(id);
 		const slot = floor < 0 ? NONE : storage.slotOf(floor, id);
 		const entry = components.get(component);
@@ -146,18 +151,18 @@ export class GameWorld<M extends readonly AnyModule[]> implements World<M> {
 
 	hash(): string {
 		this.checkHealthy();
-		engineDigest(this.engine);
-		return hashHex(this.engine.digest);
+		engineDigest(this.#engine);
+		return hashHex(this.#engine.digest);
 	}
 
 	saveFloor(floor: number, into?: Uint8Array): Uint8Array {
 		this.checkHealthy();
-		return saveFloor(this.engine, this.checkFloor(floor), into);
+		return saveFloor(this.#engine, this.checkFloor(floor), into);
 	}
 
 	save(): Uint8Array {
 		this.checkHealthy();
-		return saveWorld(this.engine);
+		return saveWorld(this.#engine);
 	}
 
 	// Each event is consumed before its visitor runs, so a throwing visitor never sees it twice.
@@ -165,7 +170,7 @@ export class GameWorld<M extends readonly AnyModule[]> implements World<M> {
 		this.checkMutable();
 		this.draining = true;
 		try {
-			this.engine.events.drain(this.checkFloor(floor), visit);
+			this.#engine.events.drain(this.checkFloor(floor), visit);
 		} finally {
 			this.draining = false;
 		}
@@ -174,14 +179,14 @@ export class GameWorld<M extends readonly AnyModule[]> implements World<M> {
 	eventType(name: string): number {
 		this.checkHealthy();
 		const type = hashName(name) | 0;
-		if (this.engine.eventNames.get(type) !== name)
+		if (this.#engine.eventNames.get(type) !== name)
 			throw new Error(`no event ${name}`);
 		return type;
 	}
 
 	setEvents(floor: number, on: boolean): void {
 		this.checkMutable();
-		this.engine.events.enabled[this.checkFloor(floor)] = on ? 1 : 0;
+		this.#engine.events.enabled[this.checkFloor(floor)] = on ? 1 : 0;
 	}
 
 	private checkHealthy(): void {
@@ -195,7 +200,7 @@ export class GameWorld<M extends readonly AnyModule[]> implements World<M> {
 		if (this.draining)
 			throw new Error("world is draining events: it cannot change now");
 		// A getter in a spawn's species or values runs mid-spawn.
-		if (this.engine.spawning)
+		if (this.#engine.spawning)
 			throw new Error(
 				"a spawn is reading its species and values: the world cannot change now",
 			);
@@ -206,7 +211,7 @@ export class GameWorld<M extends readonly AnyModule[]> implements World<M> {
 			!(
 				Number.isInteger(floor) &&
 				floor >= 0 &&
-				floor < this.engine.storage.floors
+				floor < this.#engine.storage.floors
 			)
 		)
 			throw new Error(`no floor ${floor}`);

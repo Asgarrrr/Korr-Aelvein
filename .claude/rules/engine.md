@@ -70,7 +70,7 @@ slot across all columns. An `EntityId` names an entity for life.
 | Path | Holds |
 |---|---|
 | `api.ts` | The only engine surface a module sees. Frozen. |
-| `world.ts`, `game-world.ts` | `World` API (not yet exported: `src/index.ts` is empty); call guards. |
+| `world.ts`, `game-world.ts` | `World` API (exported for the game only: `createGame`, `loadGame` in `src/game.ts`); call guards. |
 | `engine.ts` | All engine state; `coreColumns`; registers `core/step`, `core/idle`, `core/travel`. |
 | `setup/registration.ts` | Ownership checks, `ModuleBuilder`, fingerprint, carried columns (from `coreColumns`). |
 | `turns/turn.ts` | Tick phase, actor loop, `decide`, `execute` (`requires`, alternates), `step` body. |
@@ -155,8 +155,8 @@ typecheck lists any you miss.
   keep it. Re-pin only when the result is meant to change; say so in the
   commit body.
 - `createWorld` with the game registry but no `species` table throws in
-  setup ("flora spawns mushroom…"). Tests spread `game` from
-  `test/fixtures.ts`.
+  setup ("flora spawns mushroom…"). Callers use `createGame` / `loadGame`;
+  tests spread `game` (`src/game.ts`, re-exported by `test/fixtures.ts`).
 - Config holds integers and name strings only. A boolean or float throws
   when the world is built (`setup/canonical.ts`).
 - `Query.slots(ctx)` fills one list shared by all calls. Never nest two

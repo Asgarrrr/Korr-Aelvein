@@ -36,6 +36,7 @@ quand la spec est mise à jour pour l'inclure.
 ## Outillage
 
 - Config en JSON, modifiable sans toucher au code : éditeur de niveaux, modding, réglages à chaud.
+- API moteur pour le serveur (snapshots) : lister les entités d'un étage, connaître l'espèce d'une entité, typer le sens des payloads `a`/`b` de chaque événement, exporter `TICKS_PER_TURN` au premier appelant.
 
 ## Visuel
 

@@ -142,17 +142,31 @@ export function createWorld<const M extends readonly AnyModule[]>(
 	return new GameWorld<M>(build(options));
 }
 
+type LoadTable<M extends readonly AnyModule[]> = {
+	readonly modules: M;
+	readonly species?: Readonly<Record<string, Species<M>>>;
+} & LoadOptions;
+
 export function loadWorld<const M extends readonly AnyModule[]>(
 	bytes: Uint8Array,
-	options: {
-		readonly modules: M;
-		readonly species?: Readonly<Record<string, Species<M>>>;
-	} & LoadOptions,
+	options: LoadTable<M>,
 ): World<M> {
+	return new GameWorld<M>(loadEngine(bytes, options));
+}
+
+// The World keeps its engine private: tests that inspect a loaded engine start here.
+export function loadEngine<const M extends readonly AnyModule[]>(
+	bytes: Uint8Array,
+	options: LoadTable<M>,
+): Engine {
 	const { header, hash, images } = readWorld(bytes);
 	const { round, events, ...shape } = header;
-	const { check = "full", ...table } = options;
-	const engine = build({ ...shape, ...table });
+	const { check = "full", modules, species } = options;
+	const engine = build({
+		...shape,
+		modules,
+		...(species === undefined ? {} : { species }),
+	});
 	const indexes = images.map(() => new Int32Array(INDEX_SIZE));
 	const sums = new Int32Array(2 * images.length);
 	const players = new Int32Array(images.length);
@@ -189,5 +203,5 @@ export function loadWorld<const M extends readonly AnyModule[]>(
 	if (problem !== undefined) throw new Error(`save file: ${problem}`);
 	engine.round = round;
 	engine.events.enabled.set(events);
-	return new GameWorld<M>(engine);
+	return engine;
 }
