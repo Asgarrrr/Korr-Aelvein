@@ -1,7 +1,4 @@
-// Enforces the structural rules of CLAUDE.md that Biome cannot express:
-// the module graph inside the engine, relative imports escaping their
-// package, and the file size limit. Undeclared dependencies, Node modules
-// and determinism are Biome rules (see biome.json).
+// CLAUDE.md rules that Biome cannot express; the rest lives in biome.json.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 

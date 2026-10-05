@@ -64,6 +64,26 @@ row fits, that is a design question: propose a new row before coding.
     `.ts` edit by Claude; `scripts/githooks/pre-commit` runs `verify` before
     every commit (enabled by `bun install`). Never bypass with `--no-verify`.
 
+## Comments
+
+Claude over-comments by default, and new code copies the comment density of
+the code around it: every needless comment breeds more.
+
+- Default to no comment. Code shows *how*; a comment carries only a *why*
+  the code cannot show: a non-obvious constraint, a deliberate deviation, a
+  gotcha, a workaround and its reason.
+- Never narrate the code, restate names, types or signatures, or mark the
+  end of a block.
+- Never write history: "fixed", "now uses", "previously", "added for",
+  "as requested". A comment must read correctly to someone who never saw
+  the diff. Change context goes in the commit message.
+- Never write plans or justifications: no "for later", "in case we need",
+  "TODO". Ideas go to `docs/idees.md`.
+- One or two short lines. No comment blocks, no docstrings that repeat the
+  signature.
+- Before committing a multi-file change, run the `comment-cleanup` skill on
+  the diff.
+
 ## Commands
 
 - verify: `bun run verify` — lint, architecture check, typecheck, tests,
