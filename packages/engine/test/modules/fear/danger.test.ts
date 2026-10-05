@@ -210,15 +210,14 @@ test("danger marks every cell within reach of a creature that eats a wary class"
 		modules.filter((m) => m.name !== "wander"),
 		species,
 	);
-	spawn(engine, 0, rat, 1, 1, 0);
-	const hunter = spawn(engine, 0, stoat, 10, 10, 0);
+	spawn(engine, 0, rat, 1, 1);
+	const hunter = spawn(engine, 0, stoat, 10, 10);
 	spawn(
 		engine,
 		0,
 		{ ...rat, components: { diet: rat.components.diet } },
 		18,
 		2,
-		0,
 	);
 	engine.runRound();
 	const danger = engine.cellColumns.get("danger")?.eats as Uint8Array;

@@ -26,19 +26,26 @@ export class GameWorld<M extends readonly AnyModule[]> implements World<M> {
 
 	constructor(private readonly engine: Engine) {}
 
-	spawn(floor: number, species: Species<M>, x: number, y: number): EntityId {
+	spawn(
+		floor: number,
+		species: string | Species<M>,
+		x: number,
+		y: number,
+		values?: Species<M>["components"],
+	): EntityId {
 		this.checkMutable();
-		return spawn(this.engine, floor, species, x, y, this.now(floor));
+		return spawn(this.engine, floor, species, x, y, false, values);
 	}
 
 	spawnPlayer(
 		floor: number,
-		species: Species<M>,
+		species: string | Species<M>,
 		x: number,
 		y: number,
+		values?: Species<M>["components"],
 	): EntityId {
 		this.checkMutable();
-		return spawn(this.engine, floor, species, x, y, this.now(floor), true);
+		return spawn(this.engine, floor, species, x, y, true, values);
 	}
 
 	runRounds(n: number): void {
@@ -93,11 +100,6 @@ export class GameWorld<M extends readonly AnyModule[]> implements World<M> {
 		this.checkMutable();
 		const image = bytes.byteOffset % WORD === 0 ? bytes : bytes.slice();
 		loadFloor(this.engine, image, this.checkFloor(floor), options?.check);
-	}
-
-	// A floor's own clock: mid-round, a newcomer acts no earlier than the floor has reached.
-	private now(floor: number): number {
-		return this.engine.now[this.checkFloor(floor)] ?? 0;
 	}
 
 	private run<T>(body: () => T): T {
@@ -198,6 +200,11 @@ export class GameWorld<M extends readonly AnyModule[]> implements World<M> {
 		this.checkHealthy();
 		if (this.draining)
 			throw new Error("world is draining events: it cannot change now");
+		// A getter in a spawn's species or values runs mid-spawn.
+		if (this.engine.spawning)
+			throw new Error(
+				"a spawn is reading its species and values: the world cannot change now",
+			);
 	}
 
 	private checkFloor(floor: number): number {

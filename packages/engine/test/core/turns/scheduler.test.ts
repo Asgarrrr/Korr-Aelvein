@@ -148,7 +148,7 @@ test("a round that would end past MAX_TICK refuses to start", () => {
 		{ seed: 1, floors: 1, width: 4, height: 4, popCap: 4, events: true },
 		[],
 	);
-	spawn(engine, 0, { actor: true, components: {} }, 0, 0, 0);
+	spawn(engine, 0, { actor: true, components: {} }, 0, 0);
 	const last = Math.floor(MAX_TICK / TICKS_PER_TURN) - 1;
 	engine.round = last;
 	engine.runRound();

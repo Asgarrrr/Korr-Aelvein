@@ -52,12 +52,21 @@ export interface LoadOptions {
 }
 
 export interface World<M extends readonly AnyModule[]> {
-	spawn(floor: number, species: Species<M>, x: number, y: number): EntityId;
-	spawnPlayer(
+	// `values` override the species' own for this entity. A registered component the species
+	// lacks throws; one no module registers is skipped, as in a shape.
+	spawn(
 		floor: number,
-		species: Species<M>,
+		species: string | Species<M>,
 		x: number,
 		y: number,
+		values?: Species<M>["components"],
+	): EntityId;
+	spawnPlayer(
+		floor: number,
+		species: string | Species<M>,
+		x: number,
+		y: number,
+		values?: Species<M>["components"],
 	): EntityId;
 	// Throws when a player becomes due: a world with players moves through advance and input.
 	runRounds(n: number): void;

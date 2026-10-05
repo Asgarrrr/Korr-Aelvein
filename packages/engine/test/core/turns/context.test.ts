@@ -35,8 +35,8 @@ test("holdsActor answers for the floor of the creature asking", () => {
 		},
 	});
 	const engine = createEngine(shape(2), [looker]);
-	spawn(engine, 0, { actor: true, components: {} }, 0, 0, 0);
-	spawn(engine, 1, { actor: false, components: { eye: {} } }, 2, 2, 0);
+	spawn(engine, 0, { actor: true, components: {} }, 0, 0);
+	spawn(engine, 1, { actor: false, components: { eye: {} } }, 2, 2);
 	engine.runRound();
 	expect(seen).toEqual([false]);
 });
@@ -84,7 +84,7 @@ test("a step to the actor's own cell fails, so its decision is forgotten", () =>
 		},
 	});
 	const engine = createEngine(shape(1), [still]);
-	const id = spawn(engine, 0, { actor: true, components: {} }, 1, 1, 0);
+	const id = spawn(engine, 0, { actor: true, components: {} }, 1, 1);
 	const slot = engine.storage.slotOf(0, id) as Slot;
 	engine.runRound();
 	expect(engine.grid.x[slot]).toBe(1);
@@ -115,8 +115,8 @@ test("an action sees perception as it is when the action runs", () => {
 		},
 	});
 	const engine = createEngine(shape(1), [watcher]);
-	const actor = spawn(engine, 0, { actor: true, components: {} }, 0, 1, 0);
-	spawn(engine, 0, { actor: false, components: {} }, 1, 1, 0);
+	const actor = spawn(engine, 0, { actor: true, components: {} }, 0, 1);
+	spawn(engine, 0, { actor: false, components: {} }, 1, 1);
 	engine.runRound();
 	const slot = engine.storage.slotOf(0, actor);
 	engine.grid.move(0, slot, engine.grid.cellAt(3, 1));

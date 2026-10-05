@@ -3,33 +3,60 @@ import { type Cell, type EntityId, NO_CELL, NONE } from "../ecs/ids";
 import type { Column } from "../ecs/schema";
 import { PLAYER } from "../ecs/storage";
 import type { Engine } from "../engine";
+import { frozenCopy } from "../setup/canonical";
 import { validLink } from "../travel/link";
 import {
 	type CompiledSpecies,
+	checkField,
+	checkHealth,
+	checkKey,
 	compileSpecies,
 	type SpeciesShape,
+	speciesError,
 } from "./species";
 
 const NO_CAUSE = 0 as EntityId;
 
-// Compiled on every call: a direct spawn is setup work, and a cache would serve an edited object stale.
+export type SpawnValues = SpeciesShape["components"];
+
+// A shape compiles on every call, from a frozen copy so its getters run once: a direct spawn is
+// setup work, and a cache would serve an edited object stale. A name is the fast path.
 export function spawn(
 	e: Engine,
 	floor: number,
-	species: SpeciesShape,
+	species: string | SpeciesShape,
 	x: number,
 	y: number,
-	at: number,
 	player = false,
+	values?: SpawnValues,
 ): EntityId {
 	const cell = checkSpawn(e, floor, x, y);
-	const compiled = compileSpecies(species, e.components, e.storage.maskWords);
+	let compiled: CompiledSpecies | undefined;
+	let count = 0;
+	// World refuses every change while set: a getter must not move the world under this spawn.
+	e.spawning = true;
+	try {
+		compiled =
+			typeof species === "string"
+				? e.speciesByName.get(species)
+				: compileSpecies(
+						frozenCopy(species),
+						e.components,
+						e.storage.maskWords,
+					);
+		if (!compiled) throw new Error(`no species ${species} in this world`);
+		if (values !== undefined) count = readValues(e, compiled, values);
+	} finally {
+		e.spawning = false;
+	}
+	// A floor's own clock: mid-round, a newcomer acts no earlier than the floor has reached.
+	const at = e.now[floor] ?? 0;
 	if (player && !compiled.actor) throw new Error("a player must be an actor");
 	if (compiled.actor && e.grid.holdsOtherActor(floor, cell, NONE))
 		throw new Error(`spawn at (${x}, ${y}): the cell holds an actor`);
 	if (crowded(e, floor))
 		throw new Error(`floor ${floor} is at its popCap (${e.popCap})`);
-	const id = place(e, floor, compiled, x, y, at);
+	const id = place(e, floor, compiled, x, y, at, count);
 	if (player) {
 		const { masks, maskWords } = e.storage;
 		const word = e.storage.slotOf(floor, id) * maskWords;
@@ -38,6 +65,65 @@ export function spawn(
 	}
 	e.emit(floor, e.spawned, NO_CAUSE, id, 0);
 	return id;
+}
+
+// The species' field checks, and vitality with the values applied; place checks the link.
+function readValues(
+	e: Engine,
+	species: CompiledSpecies,
+	values: SpawnValues,
+): number {
+	const { spawnColumns, spawnValues } = e;
+	const { label } = species;
+	let count = 0;
+	for (const componentName in values) {
+		checkKey(componentName, label);
+		// As in a shape: a component no registered module owns is skipped.
+		const component = e.components.get(componentName);
+		if (!component) continue;
+		const { word, bit } = component.bit;
+		if (((species.mask[word] ?? 0) & bit) === 0)
+			throw speciesError(
+				label,
+				`values for ${componentName}, which the species lacks`,
+			);
+		const fields = values[componentName];
+		for (const field in fields) {
+			const value = fields[field];
+			spawnColumns[count] = checkField(
+				component,
+				componentName,
+				field,
+				value,
+				label,
+			);
+			spawnValues[count] = value ?? 0;
+			count++;
+		}
+	}
+	const { hp, max, word, bit } = e.vitality;
+	if (((species.mask[word] ?? 0) & bit) !== 0)
+		checkHealth(
+			given(e, count, hp, ownValue(species, hp)),
+			given(e, count, max, ownValue(species, max)),
+			label,
+		);
+	return count;
+}
+
+function given(
+	e: Engine,
+	count: number,
+	column: Column,
+	otherwise: number,
+): number {
+	for (let i = 0; i < count; i++)
+		if (e.spawnColumns[i] === column) return e.spawnValues[i] ?? 0;
+	return otherwise;
+}
+
+function ownValue(species: CompiledSpecies, column: Column): number {
+	return species.values[species.columns.indexOf(column)] ?? 0;
 }
 
 export function checkSpawn(
@@ -66,26 +152,22 @@ export function place(
 	x: number,
 	y: number,
 	at: number,
+	overrides: number,
 ): EntityId {
 	if (species.actor && at > MAX_TICK)
 		throw new Error(`time ${at} exceeds ${MAX_TICK}`);
 	const link = species.link;
 	const { grid } = e;
-	if (
-		link &&
-		!validLink(
-			floor,
-			link[0] ?? 0,
-			link[1] ?? 0,
-			link[2] ?? 0,
-			e.storage.floors,
-			grid.width,
-			grid.height,
-		)
-	)
-		throw new Error(
-			`a link on floor ${floor} to floor ${link[0]} at (${link[1]}, ${link[2]}) leads nowhere`,
-		);
+	if (link) {
+		const to = given(e, overrides, e.link.floor, link[0] ?? 0);
+		const toX = given(e, overrides, e.link.x, link[1] ?? 0);
+		const toY = given(e, overrides, e.link.y, link[2] ?? 0);
+		const { floors } = e.storage;
+		if (!validLink(floor, to, toX, toY, floors, grid.width, grid.height))
+			throw new Error(
+				`a link on floor ${floor} to floor ${to} at (${toX}, ${toY}) leads nowhere`,
+			);
+	}
 	const storage = e.storage;
 	const slot = storage.alloc(floor);
 	grid.insert(floor, slot, x, y);
@@ -96,6 +178,9 @@ export function place(
 		masks[base + w] = (masks[base + w] ?? 0) | (mask[w] ?? 0);
 	for (let i = 0; i < columns.length; i++)
 		(columns[i] as Column)[slot] = values[i] ?? 0;
+	const { spawnColumns, spawnValues } = e;
+	for (let i = 0; i < overrides; i++)
+		(spawnColumns[i] as Column)[slot] = spawnValues[i] ?? 0;
 	if (species.actor) {
 		e.scheduler.nextAt[slot] = at;
 		e.scheduler.push(floor, slot);
@@ -146,7 +231,7 @@ export function applyDeferred(e: Engine, floor: number): void {
 				(species.actor && grid.holdsOtherActor(floor, grid.cellAt(x, y), NONE))
 			)
 				continue;
-			const id = place(e, floor, species, x, y, at);
+			const id = place(e, floor, species, x, y, at, 0);
 			const cause = (spawns.causes[n] ?? 0) as EntityId;
 			e.emit(floor, e.spawned, cause, id, 0);
 		}

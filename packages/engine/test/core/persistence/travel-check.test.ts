@@ -251,7 +251,7 @@ for (const [name, edit, error] of cases)
 test("stairs leading to their own floor, off the floor or on an actor never load", () => {
 	const make = (to: number, x: number, actor: boolean) => {
 		const e = engineAt(0);
-		const id = spawn(e, 0, stairsTo(1, 1, 1), 2, 2, 0);
+		const id = spawn(e, 0, stairsTo(1, 1, 1), 2, 2);
 		const slot = e.storage.slotOf(0, id);
 		e.link.floor[slot] = to;
 		e.link.x[slot] = x;
@@ -271,7 +271,7 @@ test("stairs leading to their own floor, off the floor or on an actor never load
 
 test("a player bit on a creature that does not act never loads", () => {
 	const e = engineAt(0);
-	const id = spawn(e, 0, { actor: false, components: {} }, 2, 2, 0);
+	const id = spawn(e, 0, { actor: false, components: {} }, 2, 2);
 	const at = e.storage.slotOf(0, id) * e.storage.maskWords;
 	e.storage.masks[at] = (e.storage.masks[at] ?? 0) | PLAYER;
 	expect(() => loadFloor(engineAt(0), saveFloor(e, 0), 0)).toThrow(

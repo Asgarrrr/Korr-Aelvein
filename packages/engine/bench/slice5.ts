@@ -53,10 +53,10 @@ function build(withPlayer: boolean, satiety: number): Engine {
 			if (taken[y * SIDE + x]) continue;
 			taken[y * SIDE + x] = 1;
 			const player = withPlayer && f === 0 && rats === RATS;
-			spawn(e, f, body, x, y, 0, player);
+			spawn(e, f, body, x, y, player);
 			rats++;
 		}
-		for (let i = 0; i < CHEESE; i++) spawn(e, f, cheese, coord(), coord(), 0);
+		for (let i = 0; i < CHEESE; i++) spawn(e, f, cheese, coord(), coord());
 	}
 	return e;
 }
@@ -156,8 +156,8 @@ function overhead(withPlayer: boolean): number {
 	);
 	const body = { actor: true, components: {} };
 	for (let i = 0; i < RATS; i++)
-		spawn(e, far, body, i % SIDE, Math.floor(i / SIDE), 0);
-	if (withPlayer) spawn(e, 0, body, 0, 0, 0, true);
+		spawn(e, far, body, i % SIDE, Math.floor(i / SIDE));
+	if (withPlayer) spawn(e, 0, body, 0, 0, true);
 	const samples: number[] = [];
 	for (let r = -WARMUP; r < ROUNDS; r++) {
 		startRound(e);

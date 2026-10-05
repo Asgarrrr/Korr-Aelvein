@@ -155,7 +155,7 @@ test("a departure the receiving floor has already passed throws", () => {
 			},
 			[climber, probe],
 		);
-		const slot = e.storage.slotOf(0, spawn(e, 0, climberBody, 3, 3, 0));
+		const slot = e.storage.slotOf(0, spawn(e, 0, climberBody, 3, 3));
 		e.round = round;
 		e.stage[1] = stage;
 		e.leaveFloor = 1;

@@ -20,6 +20,23 @@ export type FieldValue<K extends FieldKind> = K extends "entity"
 	? EntityId
 	: number;
 
+const I8 = 0x80;
+const U8 = 0x100;
+const I16 = 0x8000;
+const U16 = 0x10000;
+const I32 = 0x80000000;
+
+// A typed array wraps what it cannot hold, so a value outside the kind would be stored as another.
+// Anything but a column fits nothing.
+export function fitsColumn(column: unknown, value: number): boolean {
+	if (column instanceof Uint8Array) return value >= 0 && value < U8;
+	if (column instanceof Uint16Array) return value >= 0 && value < U16;
+	if (column instanceof Int8Array) return value >= -I8 && value < I8;
+	if (column instanceof Int16Array) return value >= -I16 && value < I16;
+	if (column instanceof Int32Array) return value >= -I32 && value < I32;
+	return false;
+}
+
 export function createColumn(kind: FieldKind, length: number): Column {
 	switch (kind) {
 		case "i8":

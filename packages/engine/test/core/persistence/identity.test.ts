@@ -15,9 +15,9 @@ const forge = (edit: (e: ReturnType<typeof createEngine>) => void) => {
 		[],
 	);
 	const body = { actor: true, components: {} };
-	spawn(e, 0, body, 0, 0, 0);
-	spawn(e, 0, body, 1, 0, 0);
-	spawn(e, 1, body, 0, 0, 0);
+	spawn(e, 0, body, 0, 0);
+	spawn(e, 0, body, 1, 0);
+	spawn(e, 1, body, 0, 0);
 	edit(e);
 	return saveWorld(e);
 };

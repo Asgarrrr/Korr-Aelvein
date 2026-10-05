@@ -81,6 +81,6 @@ for (const [name, target] of coreTargets)
 			[culprit(() => write)],
 		);
 		write = target(engine);
-		spawn(engine, 0, { actor: true, components: { mark: {} } }, 2, 2, 0);
+		spawn(engine, 0, { actor: true, components: { mark: {} } }, 2, 2);
 		expect(() => engine.runRound()).toThrow(new RegExp(`culprit.*${name}`));
 	});

@@ -215,7 +215,7 @@ for (const scalar of ["highWater", "freeCount", "counters"] as const)
 			const array = engine.storage[scalar];
 			array[0] = (array[0] ?? 0) + 1;
 		};
-		spawn(engine, 0, { actor: false, components: { gauge: {} } }, 0, 0, 0);
+		spawn(engine, 0, { actor: false, components: { gauge: {} } }, 0, 0);
 		expect(() => engine.runRound()).toThrow(new RegExp(scalar));
 	});
 
@@ -231,14 +231,7 @@ for (const [writer, victim] of [
 			}),
 		]);
 		for (const floor of [0, 1])
-			spawn(
-				engine,
-				floor,
-				{ actor: false, components: { gauge: {} } },
-				0,
-				0,
-				0,
-			);
+			spawn(engine, floor, { actor: false, components: { gauge: {} } }, 0, 0);
 		expect(() => engine.runRound()).toThrow(
 			new RegExp(`floor ${victim} changed while floor ${writer} ran`),
 		);
@@ -251,7 +244,7 @@ test("the last floor writing above an earlier floor's high water throws at round
 		}),
 	]);
 	for (const floor of [0, 1])
-		spawn(engine, floor, { actor: false, components: { gauge: {} } }, 0, 0, 0);
+		spawn(engine, floor, { actor: false, components: { gauge: {} } }, 0, 0);
 	expect(() => engine.runRound()).toThrow(/gauge\.v at slot 3 .*floor 0/);
 });
 
