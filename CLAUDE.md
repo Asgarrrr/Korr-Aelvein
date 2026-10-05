@@ -32,6 +32,7 @@ row fits, that is a design question: propose a new row before coding.
 | Foundation rule: grid, turns, actions, arbitration, death, events, RNG | `packages/engine/src/core/` |
 | One mechanic: its needs, components, systems, tuning data | `packages/engine/src/modules/<mechanic>/` |
 | Type read by two or more modules | `packages/engine/src/contracts/` |
+| Which modules run, in which order | `packages/engine/src/registry.ts` |
 | Floor and world generation | `packages/engine/src/world/` |
 | Message between web and server | `packages/protocol/src/` |
 | Connections, sessions, persistence, hosting the engine | `apps/server/src/` |
@@ -48,12 +49,14 @@ row fits, that is a design question: propose a new row before coding.
 - When adding code, name the table row that justifies its location. If the
   change pushes a file past the limit, propose the split in the same change.
 - `scripts/check-architecture.ts` enforces the boundaries, the file limit,
-  determinism and the theme rule, as part of `verify`. Never weaken it to
+  engine determinism and color literals, as part of `verify`. Sizes and
+  durations outside `theme.ts` are caught in review only. Never weaken it to
   get green: fix the code, or propose a rule change.
 
 ## Commands
 
-- verify: `bun run verify` — lint, typecheck, tests, build. The definition of done.
+- verify: `bun run verify` — lint, architecture check, typecheck, tests,
+  build. The definition of done.
 - test: `bun run test` — single file: `bun test <path>` from the package dir
 - dev: `bun run dev` — server on :3000, web on Vite's port, `/ws` proxied
 - lint fix: `bun run lint:fix`
@@ -88,7 +91,8 @@ row fits, that is a design question: propose a new row before coding.
 - A module never imports another module. Shared types live in `contracts/`,
   and only once a second module reads them. Contracts hold no logic.
 - A module writes only its own components.
-- Module order comes from one explicit list in core, never from file order.
+- Module order comes from one explicit list in `registry.ts`, never from
+  file order. It is the only file outside `modules/` that imports a module.
 - Every random draw derives from hash(seed, module, turn, entity). Adding a
   module must not shift other modules' draws.
 - Integer math in the engine. No `Math.pow`, `Math.exp` or other
