@@ -1,7 +1,6 @@
 import { CAP, ID_FLOOR_STRIDE } from "../config";
 import { ALIVE } from "../ecs/storage";
 import type { Engine } from "../engine";
-import { ID } from "../travel/inbox";
 
 // Each floor checks only its own rows; across floors an id must live in one place and have been
 // issued by its origin floor.
@@ -17,9 +16,7 @@ export function identityProblem(engine: Engine): string | undefined {
 		const end = f * CAP + (highWater[f] ?? 0);
 		for (let s = f * CAP; s < end; s++)
 			if (((masks[s * maskWords] ?? 0) & ALIVE) !== 0) all[n++] = ids[s] ?? 0;
-		const list = inbox.words(f);
-		for (let i = 0; i < inbox.count(f); i++)
-			all[n++] = list[i * inbox.width + ID] ?? 0;
+		for (let i = 0; i < inbox.count(f); i++) all[n++] = inbox.id(f, i);
 	}
 	const seen = all.subarray(0, n).sort();
 	for (let i = 0; i < n; i++) {

@@ -1,10 +1,9 @@
 import { FAIL } from "../api";
 import { MAX_TICK, STAIR_TIME, TICKS_PER_TURN } from "../config";
 import { type Cell, type EntityId, NO_CELL, NONE, type Slot } from "../ecs/ids";
-import { PLAYER } from "../ecs/storage";
 import { type Engine, FLOOR_STAGE, NO_FLOOR } from "../engine";
+import { attach, detach } from "../lifecycle/membership";
 import { mix } from "../random/rng";
-import { ENTRY_HEAD, ID, TIME, X, Y } from "./inbox";
 
 if (STAIR_TIME < TICKS_PER_TURN)
 	throw new Error(
@@ -47,28 +46,14 @@ export function depart(
 		throw new Error(
 			`arrival at ${arrival} on floor ${to}, which has passed ${round * TICKS_PER_TURN}`,
 		);
-	const { storage, inbox, carried } = e;
-	const id = storage.ids[slot] ?? 0;
-	const at = inbox.insert(to, arrival, id, e.leaveX, e.leaveY);
-	const list = inbox.words(to);
-	const words = storage.maskWords;
-	for (let w = 0; w < words; w++)
-		list[at + ENTRY_HEAD + w] = storage.masks[slot * words + w] ?? 0;
-	const body = at + ENTRY_HEAD + words;
-	for (let c = 0; c < carried.length; c++)
-		list[body + c] = carried[c]?.[slot] ?? 0;
-	if (((storage.masks[slot * words] ?? 0) & PLAYER) !== 0) {
-		e.players[floor] = (e.players[floor] ?? 0) - 1;
-		e.players[to] = (e.players[to] ?? 0) + 1;
-	}
+	const id = (e.storage.ids[slot] ?? 0) as EntityId;
+	e.inbox.post(to, arrival, id, e.leaveX, e.leaveY, slot);
 	// Summed, not chained: posts from other floors land in an order the floor order decides.
 	const passage = mix(mix(mix(id, time), floor), to);
 	e.traffic[floor] = ((e.traffic[floor] ?? 0) + passage) | 0;
 	e.traffic[to] = ((e.traffic[to] ?? 0) + passage) | 0;
-	e.grid.remove(floor, slot);
-	e.scheduler.remove(floor, slot);
-	storage.release(floor, slot);
-	e.emit(floor, e.departed, id as EntityId, id, to);
+	detach(e, floor, slot);
+	e.emit(floor, e.departed, id, id, to);
 }
 
 // Lands every entry due before `end`; one with no free cell or slot waits for a later round.
@@ -80,20 +65,19 @@ export function ingest(
 ): void {
 	const { inbox } = e;
 	if (inbox.count(floor) === 0) return;
-	const list = inbox.words(floor);
 	// Arrivals only fill the floor: once one finds no cell or slot, none after it will.
 	let blocked = false;
-	inbox.keep(floor, (at) => {
-		const time = list[at + TIME] ?? 0;
+	inbox.keep(floor, (n) => {
+		const time = inbox.time(floor, n);
 		if (time >= end || blocked) return true;
 		const cell = e.storage.full(floor)
 			? NO_CELL
-			: freeCell(e, floor, list[at + X] ?? 0, list[at + Y] ?? 0);
+			: freeCell(e, floor, inbox.x(floor, n), inbox.y(floor, n));
 		if (cell === NO_CELL) {
 			blocked = true;
 			return true;
 		}
-		arrive(e, floor, list, at, cell, time > start ? time : start);
+		arrive(e, floor, n, cell, time > start ? time : start);
 		return false;
 	});
 	e.now[floor] = start;
@@ -102,25 +86,15 @@ export function ingest(
 function arrive(
 	e: Engine,
 	floor: number,
-	list: Int32Array,
-	at: number,
+	n: number,
 	cell: Cell,
 	time: number,
 ): void {
-	const { storage, carried, grid } = e;
-	const id = (list[at + ID] ?? 0) as EntityId;
+	const { storage, inbox, grid } = e;
+	const id = inbox.id(floor, n);
 	const slot = storage.adopt(floor, id);
-	const words = storage.maskWords;
-	for (let w = 0; w < words; w++)
-		storage.masks[slot * words + w] = list[at + ENTRY_HEAD + w] ?? 0;
-	const body = at + ENTRY_HEAD + words;
-	for (let c = 0; c < carried.length; c++) {
-		const column = carried[c];
-		if (column) column[slot] = list[body + c] ?? 0;
-	}
-	grid.insert(floor, slot, cell % grid.width, (cell / grid.width) | 0);
-	e.scheduler.nextAt[slot] = time;
-	e.scheduler.push(floor, slot);
+	inbox.land(floor, n, slot);
+	attach(e, floor, slot, cell % grid.width, (cell / grid.width) | 0, time);
 	e.now[floor] = time;
 	e.emit(floor, e.arrived, id, id, 0);
 }

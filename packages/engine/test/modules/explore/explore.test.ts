@@ -21,6 +21,7 @@ import { modules } from "../../../src/registry";
 import {
 	decider,
 	decisions,
+	forwardBuilder,
 	game,
 	idleRounds,
 	populatedWorld,
@@ -258,16 +259,7 @@ function alwaysNear<S extends Schema, C, K extends Schema>(
 		...module,
 		setup(b, cfg) {
 			const near: Builder<S, K> = {
-				write: (name) => b.write(name),
-				previous: (name) => b.previous(name),
-				read: (name) => b.read(name),
-				query: (names) => b.query(names),
-				tick: (run) => b.tick(run),
-				action: (name, kind, requires, run) =>
-					b.action(name, kind, requires, run),
-				propose: (run) => b.propose(run),
-				event: (name) => b.event(name),
-				species: (wanted) => b.species(wanted),
+				...forwardBuilder(b),
 				cells(name) {
 					const real = b.cells(name);
 					const fields: Record<string, CellField<"u8">> = {};

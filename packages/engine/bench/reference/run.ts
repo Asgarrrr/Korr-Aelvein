@@ -3,6 +3,7 @@ import { NONE } from "../../src/core/ecs/ids";
 import { type Engine, FLOOR_STAGE } from "../../src/core/engine";
 import { advance, playerTurn, startRound } from "../../src/core/turns/round";
 import { beginFloor, runActors } from "../../src/core/turns/turn";
+import { forwardBuilder } from "../../test/fixtures";
 
 export class TickClock {
 	readonly spent: Float64Array;
@@ -22,16 +23,7 @@ function timed<S extends Schema, C, K extends Schema>(
 		...module,
 		setup(b, cfg) {
 			const inner: Builder<S, K> = {
-				write: (name) => b.write(name),
-				cells: (name) => b.cells(name),
-				previous: (name) => b.previous(name),
-				read: (name) => b.read(name),
-				query: (names) => b.query(names),
-				action: (name, kind, requires, run) =>
-					b.action(name, kind, requires, run),
-				propose: (run) => b.propose(run),
-				event: (name) => b.event(name),
-				species: (wanted) => b.species(wanted),
+				...forwardBuilder(b),
 				tick: (run) => {
 					clock.ticks[m] = true;
 					b.tick((ctx) => {

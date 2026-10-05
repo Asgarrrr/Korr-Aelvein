@@ -34,7 +34,7 @@ import {
 import { sectionsOf } from "../persistence/image";
 import { hashName } from "../random/rng";
 import { cellField, cellView } from "../space/cells";
-import { ENTRY_HEAD } from "../travel/inbox";
+import { Inbox } from "../travel/inbox";
 import { canonical, frozenCopy } from "./canonical";
 
 export interface WorldShape {
@@ -185,20 +185,12 @@ export function createEngine(
 		`${canonical(coreSchema, CORE)}[${configs.join(",")}]{${named.join(",")}}[${resolved.join(",")}]`,
 	);
 	engine.sections = sectionsOf(engine);
-	const { storage, grid, scheduler } = engine;
-	const local = new Set<Column>([
-		storage.ids,
-		grid.x,
-		grid.y,
-		grid.cellOf,
-		grid.next,
-		grid.prev,
-		scheduler.nextAt,
-		engine.intentKey,
-		engine.intentTarget,
-	]);
+	const { storage } = engine;
+	const local = new Set<Column>(
+		engine.coreColumns.filter((c) => !c.travels).map((c) => c.column),
+	);
 	engine.carried = storage.columns.filter((column) => !local.has(column));
-	engine.inbox.width = ENTRY_HEAD + storage.maskWords + engine.carried.length;
+	engine.inbox = new Inbox(storage, engine.carried);
 	if (shape.audit) engine.audit = new Audit(engine, modules);
 	return engine;
 }

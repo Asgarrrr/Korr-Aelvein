@@ -5,6 +5,7 @@ import type { AnyModule, Builder, ModuleDef, Schema } from "../src/core/api";
 import { fear } from "../src/modules/fear";
 import { fire } from "../src/modules/fire";
 import { modules } from "../src/registry";
+import { forwardBuilder } from "../test/fixtures";
 import { benchFloor, RATS, SIDE, stats } from "./floor";
 
 const WARMUP = 20;
@@ -22,16 +23,7 @@ function timed<S extends Schema, C, K extends Schema>(
 		...module,
 		setup(b, cfg) {
 			const inner: Builder<S, K> = {
-				write: (name) => b.write(name),
-				cells: (name) => b.cells(name),
-				previous: (name) => b.previous(name),
-				read: (name) => b.read(name),
-				query: (names) => b.query(names),
-				action: (name, kind, requires, run) =>
-					b.action(name, kind, requires, run),
-				propose: (run) => b.propose(run),
-				event: (name) => b.event(name),
-				species: (wanted) => b.species(wanted),
+				...forwardBuilder(b),
 				tick: (run) =>
 					b.tick((ctx) => {
 						const start = Bun.nanoseconds();
