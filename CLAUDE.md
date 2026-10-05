@@ -60,6 +60,9 @@ row fits, that is a design question: propose a new row before coding.
     (`scripts/lint/determinism.grit`).
   - `scripts/check-architecture.ts`: the module graph, relative imports
     leaving their package, the file size limit.
+  - Hooks: `.claude/settings.json` runs the architecture check after every
+    `.ts` edit by Claude; `scripts/githooks/pre-commit` runs `verify` before
+    every commit (enabled by `bun install`). Never bypass with `--no-verify`.
 
 ## Commands
 

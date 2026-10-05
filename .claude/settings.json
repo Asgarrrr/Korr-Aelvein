@@ -1,0 +1,17 @@
+{
+	"hooks": {
+		"PostToolUse": [
+			{
+				"matcher": "Edit|Write|MultiEdit",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "f=$(jq -r \".tool_input.file_path // empty\"); case \"$f\" in \"$CLAUDE_PROJECT_DIR\"/*.ts|\"$CLAUDE_PROJECT_DIR\"/*.tsx) out=$(cd \"$CLAUDE_PROJECT_DIR\" && bun scripts/check-architecture.ts 2>&1) || { echo \"$out\" >&2; exit 2; };; esac",
+						"timeout": 30,
+						"statusMessage": "Checking architecture"
+					}
+				]
+			}
+		]
+	}
+}
