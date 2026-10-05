@@ -24,6 +24,7 @@ export function populatedWorld(
 	options: {
 		popCap?: number;
 		events?: boolean;
+		audit?: boolean;
 		species?: Readonly<Record<string, SpeciesShape>>;
 	} = {},
 ) {
@@ -45,14 +46,16 @@ export function populatedWorld(
 }
 
 // Same module, same name and RNG keys, but every query lists its rows last to first.
-export function reversed<S extends Schema, C>(
-	module: ModuleDef<S, C>,
-): ModuleDef<S, C> {
+export function reversed<S extends Schema, C, K extends Schema>(
+	module: ModuleDef<S, C, K>,
+): ModuleDef<S, C, K> {
 	return {
 		...module,
 		setup(b, cfg) {
-			const flipped: Builder<S> = {
+			const flipped: Builder<S, K> = {
 				write: (name) => b.write(name),
+				cells: (name) => b.cells(name),
+				read: (name) => b.read(name),
 				tick: (run) => b.tick(run),
 				action: (name, kind, run) => b.action(name, kind, run),
 				propose: (run) => b.propose(run),

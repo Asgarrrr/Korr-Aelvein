@@ -24,7 +24,10 @@ export function benchFloor(satiety: number, popCap?: number) {
 		species,
 		...(popCap === undefined ? {} : { popCap }),
 	});
-	const ratSpecies = { ...rat, components: { satiety: { value: satiety } } };
+	const ratSpecies = {
+		...rat,
+		components: { ...rat.components, satiety: { value: satiety } },
+	};
 	const taken = new Uint8Array(SIDE * SIDE);
 	let n = 0;
 	const coord = () =>

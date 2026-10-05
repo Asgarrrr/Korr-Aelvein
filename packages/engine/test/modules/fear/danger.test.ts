@@ -1,0 +1,252 @@
+import { expect, test } from "bun:test";
+import { species } from "../../../src/content/species";
+import { cheese } from "../../../src/content/species/cheese";
+import { rat } from "../../../src/content/species/rat";
+import { stoat } from "../../../src/content/species/stoat";
+import {
+	type AnyModule,
+	type Builder,
+	type CellField,
+	defineModule,
+	type EntityId,
+	type ModuleDef,
+	type Schema,
+} from "../../../src/core/api";
+import { PERCEPTION_RADIUS } from "../../../src/core/config";
+import { kill, spawn } from "../../../src/core/lifecycle/lifecycle";
+import { bounded, draw, PHASE, SUBJECT } from "../../../src/core/random/rng";
+import { createEngine } from "../../../src/core/setup/registration";
+import { createWorld } from "../../../src/core/world";
+import { fear } from "../../../src/modules/fear";
+import { foodClass, hungerConfig } from "../../../src/modules/hunger/config";
+import { modules } from "../../../src/registry";
+import { probe, reversed } from "../../fixtures";
+
+// Fear as if every cell were dangerous: its proposals never skip perception.
+function alwaysAlert<S extends Schema, C, K extends Schema>(
+	module: ModuleDef<S, C, K>,
+): ModuleDef<S, C, K> {
+	return {
+		...module,
+		setup(b, cfg) {
+			const alert: Builder<S, K> = {
+				...b,
+				write: (name) => b.write(name),
+				read: (name) => b.read(name),
+				query: (names) => b.query(names),
+				tick: (run) => b.tick(run),
+				action: (name, kind, run) => b.action(name, kind, run),
+				propose: (run) => b.propose(run),
+				event: (name) => b.event(name),
+				species: (wanted) => b.species(wanted),
+				cells(name) {
+					const real = b.cells(name);
+					const fields: Record<string, CellField> = {};
+					for (const [field, column] of Object.entries(real) as [
+						string,
+						CellField,
+					][])
+						fields[field] = {
+							get: () => 0xff,
+							set: (ctx, cell, value) => column.set(ctx, cell, value),
+							clear: (ctx) => column.clear(ctx),
+						};
+					return fields as typeof real;
+				},
+			};
+			module.setup(alert, cfg);
+		},
+	};
+}
+
+const SIDE = 20;
+const tracked = <T extends { components: object }>(shape: T) => ({
+	...shape,
+	components: { ...shape.components, where: {} },
+});
+
+const outcomes = (seed: number, list: readonly AnyModule[]) => {
+	const world = createWorld({
+		seed,
+		floors: 1,
+		width: SIDE,
+		height: SIDE,
+		modules: [...list, probe],
+		species,
+	});
+	let n = 0;
+	const roll = () =>
+		bounded(draw(seed, 0, PHASE.spawn, 0, SUBJECT.entity, 0, n++), SIDE);
+	const taken = new Set<number>();
+	const free = (): [number, number] => {
+		for (;;) {
+			const x = roll();
+			const y = roll();
+			if (taken.has(y * SIDE + x)) continue;
+			taken.add(y * SIDE + x);
+			return [x, y];
+		}
+	};
+	const ids: EntityId[] = [];
+	const hunting = {
+		...stoat,
+		components: {
+			...stoat.components,
+			satiety: { value: hungerConfig.hungryBelow - 1 },
+		},
+	};
+	// Stoats first: lower ids act first, so they move between fear's tick and their prey's turn.
+	for (let i = 0; i < 3; i++)
+		ids.push(world.spawn(0, tracked(hunting), ...free()));
+	for (let i = 0; i < 16; i++)
+		ids.push(world.spawn(0, tracked(rat), ...free()));
+	for (let i = 0; i < 20; i++) world.spawn(0, cheese, roll(), roll());
+	world.runRounds(120);
+	return ids.map((id) =>
+		world.alive(id)
+			? [
+					world.peek("where", "x", id),
+					world.peek("where", "y", id),
+					world.peek("satiety", "value", id),
+				]
+			: "dead",
+	);
+};
+
+test("skipping perception on calm cells changes no decision", () => {
+	const alert = modules.map(
+		(m): AnyModule => (m === fear ? alwaysAlert(fear) : m),
+	);
+	for (let seed = 1; seed <= 6; seed++)
+		expect({ seed, fates: outcomes(seed, modules) }).toEqual({
+			seed,
+			fates: outcomes(seed, alert),
+		});
+});
+
+const MOUSE = {
+	actor: true,
+	components: { edible: { nutrition: 50, class: foodClass.forage }, wary: {} },
+};
+
+test("danger does not depend on the order fear's tick visits rows", () => {
+	const hash = (list: readonly AnyModule[]) => {
+		const world = createWorld({
+			seed: 3,
+			floors: 1,
+			width: SIDE,
+			height: SIDE,
+			modules: list,
+			species,
+		});
+		// Mice are prey of the rats' class, so rats and stoats stamp different bits that overlap.
+		for (let i = 0; i < 8; i++) {
+			world.spawn(0, rat, (i * 7) % SIDE, (i * 3) % SIDE);
+			world.spawn(0, stoat, (i * 5 + 2) % SIDE, (i * 11 + 4) % SIDE);
+			world.spawn(0, MOUSE, (i * 3 + 10) % SIDE, (i * 13 + 2) % SIDE);
+		}
+		world.runRounds(60);
+		return world.hash();
+	};
+	const flipped = modules.map(
+		(m): AnyModule => (m === fear ? reversed(fear) : m),
+	);
+	expect(hash(flipped)).toBe(hash(modules));
+});
+
+test("danger marks every cell within reach of a creature that eats a wary class", () => {
+	const engine = createEngine(
+		{ seed: 1, floors: 1, width: SIDE, height: SIDE, popCap: 64, events: true },
+		modules.filter((m) => m.name !== "wander"),
+		species,
+	);
+	spawn(engine, 0, rat, 1, 1, 0);
+	const hunter = spawn(engine, 0, stoat, 10, 10, 0);
+	spawn(
+		engine,
+		0,
+		{ ...rat, components: { diet: rat.components.diet } },
+		18,
+		2,
+		0,
+	);
+	engine.runRound();
+	const danger = engine.cellColumns.get("danger")?.eats as Uint8Array;
+	// A creature moves at most one cell a round, so danger reaches one cell past perception.
+	const reach = PERCEPTION_RADIUS + 1;
+	for (let y = 0; y < SIDE; y++)
+		for (let x = 0; x < SIDE; x++) {
+			const near = Math.max(Math.abs(x - 10), Math.abs(y - 10)) <= reach;
+			expect({ x, y, v: danger[y * SIDE + x] }).toEqual({
+				x,
+				y,
+				v: near ? foodClass.meat : 0,
+			});
+		}
+	kill(engine, 0, hunter, hunter);
+	engine.runRound();
+	expect(danger.every((v) => v === 0)).toBe(true);
+});
+
+// The pre-check assumes no creature that eats appears between fear's tick and a prey's turn.
+test("no species a registered module spawns has a diet", () => {
+	const engine = createEngine(
+		{ seed: 1, floors: 1, width: 4, height: 4, popCap: 16, events: true },
+		modules,
+		species,
+	);
+	const diet = engine.components.get("diet")?.bit;
+	expect(diet).toBeDefined();
+	expect(engine.species.length).toBeGreaterThan(0);
+	for (const compiled of engine.species)
+		expect((compiled.mask[diet?.word ?? 0] ?? 0) & (diet?.bit ?? 0)).toBe(0);
+});
+
+test("an eater spawned mid-round slips past the pre-check: the limit it relies on", () => {
+	// Spawns a hungry stoat beside the first wary rat, in a tick after fear's.
+	const ambush = defineModule({
+		name: "ambush",
+		schema: { lure: { done: "u8" } },
+		config: {},
+		setup(b) {
+			const lure = b.write("lure");
+			const rows = b.query(["lure"]);
+			const hunter = b.species({
+				...stoat,
+				components: { ...stoat.components, satiety: { value: 1 } },
+			});
+			b.tick((ctx, floor) => {
+				const list = rows.slots(floor);
+				for (let i = 0; i < list.length; i++) {
+					const s = list.at(i);
+					if ((lure.done[s] ?? 0) !== 0) continue;
+					lure.done[s] = 1;
+					ctx.spawn(hunter, ctx.x(s) + 1, ctx.y(s), ctx.idOf(s));
+				}
+			});
+		},
+	});
+	const where = (list: readonly AnyModule[]) => {
+		const world = createWorld({
+			seed: 1,
+			floors: 1,
+			width: SIDE,
+			height: SIDE,
+			modules: [...list, ambush, probe],
+			species,
+		});
+		const id = world.spawn(
+			0,
+			{ ...rat, components: { ...rat.components, where: {}, lure: {} } },
+			5,
+			5,
+		);
+		world.runRounds(2);
+		return [world.peek("where", "x", id), world.peek("where", "y", id)];
+	};
+	const alert = modules.map(
+		(m): AnyModule => (m === fear ? alwaysAlert(fear) : m),
+	);
+	expect(where(alert)).toEqual([4, 5]);
+	expect(where(modules)).not.toEqual([4, 5]);
+});

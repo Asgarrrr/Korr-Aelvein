@@ -36,6 +36,16 @@
 	},
 	"overrides": [
 		{
+			"includes": ["packages/engine/src/modules/**"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noExplicitAny": "error"
+					}
+				}
+			}
+		},
+		{
 			"includes": ["packages/engine/src/**"],
 			"plugins": ["./scripts/lint/runtime.grit"]
 		},

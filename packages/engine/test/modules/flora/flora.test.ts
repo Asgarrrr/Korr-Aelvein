@@ -8,7 +8,6 @@ import { createWorld, type World } from "../../../src/core/world";
 import { flora } from "../../../src/modules/flora";
 import { hunger } from "../../../src/modules/hunger";
 import { hungerConfig } from "../../../src/modules/hunger/config";
-import { wander } from "../../../src/modules/wander";
 import { modules } from "../../../src/registry";
 import { populatedWorld, probe, reversed } from "../../fixtures";
 
@@ -94,9 +93,11 @@ const hashAfter = (list: readonly AnyModule[]) => {
 };
 
 test("flora spawns and starvation kills do not depend on row iteration order", () => {
-	expect(hashAfter([reversed(hunger), wander, reversed(flora)])).toBe(
-		hashAfter(modules),
-	);
+	const flipped = modules.map((m): AnyModule => {
+		if (m === hunger) return reversed(hunger);
+		return m === flora ? reversed(flora) : m;
+	});
+	expect(hashAfter(flipped)).toBe(hashAfter(modules));
 });
 
 test("the game runs without flora", () => {

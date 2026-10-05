@@ -1,6 +1,7 @@
 // CLAUDE.md rules that Biome cannot express; the rest lives in biome.json.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import { ALLOWED_SAMPLES, FORBIDDEN, forbiddenIn } from "./module-syntax";
 
 const ROOT = resolve(import.meta.dir, "..");
 const MAX_LINES = 400;
@@ -17,6 +18,10 @@ const REGISTRY = join(ENGINE, "registry.ts");
 // Entity storage is the foundation: it must stay usable without the rest of core.
 const ECS = join(ENGINE, "core/ecs") + sep;
 const CORE_CONFIG = join(ENGINE, "core/config.ts");
+// A module's whole view of the engine: the core API, shared contract types and its own folder.
+const API = join(ENGINE, "core/api.ts");
+const CONTRACTS = join(ENGINE, "contracts") + sep;
+const MODULES = join(ENGINE, "modules") + sep;
 
 // `import type` is erased before Bun's scanner sees it, but a type import
 // across modules is still coupling. Anchored to statement starts so that
@@ -81,15 +86,15 @@ const checkEngineImport = (file: string, target: string) => {
 			file,
 			`${from.area} must not import modules/; only registry.ts and content/ may`,
 		);
-	if (from.area === "modules" && (to.area === "content" || target === REGISTRY))
+	if (
+		from.area === "modules" &&
+		target !== API &&
+		!target.startsWith(CONTRACTS) &&
+		!target.startsWith(join(MODULES, from.module ?? "") + sep)
+	)
 		report(
 			file,
-			"modules/ must not import content/ or registry.ts; name species in config",
-		);
-	if (from.module && to.module && from.module !== to.module)
-		report(
-			file,
-			`module ${from.module} imports module ${to.module}; use contracts/ or events`,
+			`module ${from.module} imports ${relative(ENGINE, target)}; a module may import only core/api.ts, contracts/ and its own folder`,
 		);
 	if (from.area === "contracts" && to.area !== "contracts")
 		report(file, "contracts/ may only import contracts/");
@@ -120,17 +125,35 @@ for (const dir of workspaces) {
 				);
 			if (file.startsWith(ENGINE)) checkEngineImport(file, target);
 		}
+		if (file.startsWith(MODULES))
+			for (const what of new Set(forbiddenIn(source)))
+				report(file, `${what} is forbidden in modules/`);
 	}
 }
 
 // A known violation must still be reported, or an edit to this script could disable the rule unnoticed.
 const probe = join(ENGINE, "modules/probe/index.ts");
 const before = errors.length;
-for (const spec of ["../../content/species/rat", "../../registry"])
+for (const spec of [
+	"../../content/species/rat",
+	"../../registry",
+	"../../core/engine",
+	"../hunger/schema",
+	"../../core/api",
+	"../../contracts",
+	"./schema",
+])
 	checkEngineImport(probe, resolveImport(probe, spec));
-if (errors.length - before !== 2)
-	report(probe, "the modules -> content/registry rule did not fire");
+if (errors.length - before !== 4)
+	report(probe, "the modules import rule did not fire exactly 4 times");
 else errors.length = before;
+
+for (const { what, samples } of FORBIDDEN)
+	for (const sample of samples)
+		if (!forbiddenIn(sample).includes(what))
+			report(probe, `the ${what} rule misses "${sample}"`);
+for (const what of ALLOWED_SAMPLES.flatMap(forbiddenIn))
+	report(probe, `the ${what} rule fires on allowed code`);
 
 const ecsProbe = join(ECS, "probe.ts");
 const ecsBefore = errors.length;

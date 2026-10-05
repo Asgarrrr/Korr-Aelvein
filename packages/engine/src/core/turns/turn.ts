@@ -24,11 +24,15 @@ export function runFloor(e: Engine, floor: number): void {
 	e.events.startTurn(floor);
 
 	const tickCtx = e.tickCtx;
-	tickCtx.floor = floor;
+	tickCtx.setFloor(floor);
+	const audit = e.audit;
+	audit?.startFloor(floor);
 	for (let i = 0; i < e.ticks.length; i++) {
 		const tick = e.ticks[i] as Hook<TickFn>;
-		tickCtx.module = tick.moduleKey;
+		tickCtx.setModule(tick.moduleKey);
+		audit?.before(floor, tick.moduleKey, true);
 		tick.run(tickCtx, floor);
+		audit?.after();
 		applyDeferred(e, floor);
 	}
 
@@ -47,22 +51,36 @@ export function runFloor(e: Engine, floor: number): void {
 		scheduler.delay(floor, slot, time + cost);
 	}
 	e.now[floor] = end;
+	audit?.endFloor(floor);
 }
 
 export function act(e: Engine, floor: number, slot: Slot): number {
 	e.perception.reset(floor, slot);
 	const out = e.candidates;
-	out.count = 0;
+	out.begin(e.intentKey[slot] ?? 0, e.intentTarget[slot] ?? 0);
 	const ctx = e.proposeCtx;
-	ctx.floor = floor;
+	ctx.setFloor(floor);
+	const audit = e.audit;
 	for (let i = 0; i < e.proposers.length; i++) {
 		const proposer = e.proposers[i] as Hook<ProposeFn>;
-		ctx.module = proposer.moduleKey;
+		ctx.setModule(proposer.moduleKey);
+		audit?.before(floor, proposer.moduleKey, false);
 		proposer.run(ctx, slot, e.perception, out);
+		audit?.after();
 	}
-	if (out.count === 0) return execute(e, floor, slot, e.idleIndex, 0);
-	const best = out.best();
-	return execute(e, floor, slot, out.action[best] ?? 0, out.target[best] ?? 0);
+	const best = out.count === 0 ? -1 : out.best();
+	const action = best < 0 ? e.idleIndex : out.actionAt(best);
+	const target = best < 0 ? 0 : out.targetAt(best);
+	const entry = e.actions[action] as ActionEntry;
+	e.intentKey[slot] = entry.key;
+	e.intentTarget[slot] = target;
+	const cost = execute(e, floor, slot, action, target);
+	// A failed choice must not win the next tie through inertia.
+	if (e.failed) {
+		e.intentKey[slot] = 0;
+		e.intentTarget[slot] = 0;
+	}
+	return cost;
 }
 
 export function execute(
@@ -73,16 +91,31 @@ export function execute(
 	firstTarget: number,
 ): number {
 	const ctx = e.actionCtx;
-	ctx.floor = floor;
+	ctx.setFloor(floor);
+	const audit = e.audit;
+	e.failed = false;
+	// Lazy: an action that never reads perception never fills it.
+	const perception = e.perception;
+	perception.reset(floor, slot);
 	let action = first;
 	let target = firstTarget;
 	for (let depth = 0; ; depth++) {
 		const entry = e.actions[action] as ActionEntry;
-		ctx.module = entry.moduleKey;
+		ctx.setModule(entry.moduleKey);
 		e.alternate = NO_ACTION;
 		const decoded = entry.kind === KIND_CODE.none ? null : target;
-		const result = entry.run(ctx, slot, decoded as TargetOf[TargetKind]);
-		if (result === FAIL) return TICKS_PER_TURN;
+		audit?.before(floor, entry.moduleKey, true);
+		const result = entry.run(
+			ctx,
+			slot,
+			decoded as TargetOf[TargetKind],
+			perception,
+		);
+		audit?.after();
+		if (result === FAIL) {
+			e.failed = true;
+			return TICKS_PER_TURN;
+		}
 		if (result !== ALTERNATE) {
 			if (!Number.isInteger(result) || result < 1)
 				throw new Error(`action cost ${result} is not an integer >= 1`);

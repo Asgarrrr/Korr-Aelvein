@@ -7,3 +7,9 @@ export const hungerConfig = {
 	scoreStep: 50,
 	scorePerStep: 20,
 } as const;
+
+// One bit per class: a diet's `eats` is the union of the classes it eats.
+export const foodClass = {
+	forage: 1,
+	meat: 2,
+} as const;

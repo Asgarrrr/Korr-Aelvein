@@ -5,8 +5,9 @@ import {
 	type AnyModule,
 	defineModule,
 	FAIL,
+	NO_CELL,
 } from "../../../src/core/api";
-import { MAX_ALTERNATES } from "../../../src/core/config";
+import { ID_FLOOR_STRIDE, MAX_ALTERNATES } from "../../../src/core/config";
 import { createWorld } from "../../../src/core/world";
 import { probe } from "../../fixtures";
 
@@ -206,3 +207,41 @@ test("registration rejects duplicate names, owners and action keys", () => {
 	});
 	expect(() => worldWith(twice)).toThrow(/duplicate action key/);
 });
+
+const napper = (kind: "cell" | "entity", target: number, viaInstead = false) =>
+	defineModule({
+		name: "rest",
+		schema: {},
+		config: {},
+		setup(b) {
+			const nap = b.action("nap", kind, () => TURN);
+			const doze = b.action("doze", "none", (ctx) =>
+				ctx.instead(nap, target as never),
+			);
+			b.propose((_ctx, _actor, _p, out) => {
+				if (viaInstead) out.push(doze, null, SCORE);
+				else out.push(nap, target as never, SCORE);
+			});
+		},
+	});
+
+for (const [what, kind, target, floors] of [
+	["NO_CELL as a cell", "cell", NO_CELL, 1],
+	["a cell past the floor", "cell", 64, 1],
+	["entity 0", "entity", 0, 1],
+	["an id whose counter is 0", "entity", ID_FLOOR_STRIDE, 2],
+	["an id on a floor the world lacks", "entity", ID_FLOOR_STRIDE + 1, 1],
+] as const)
+	for (const viaInstead of [false, true])
+		test(`targeting ${what}${viaInstead ? " through instead" : ""} throws before any save can hold it`, () => {
+			const world = createWorld({
+				seed: 1,
+				floors,
+				width: 8,
+				height: 8,
+				modules: [napper(kind, target, viaInstead)],
+			});
+			world.spawn(0, BODY, 0, 0);
+			expect(() => world.runRounds(1)).toThrow(/rest\/nap .*target/);
+			expect(() => world.save()).toThrow(/poisoned/);
+		});

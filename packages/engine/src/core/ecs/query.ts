@@ -15,26 +15,26 @@ export interface Query {
 
 export class MaskQuery implements Query, SlotList {
 	length = 0;
-	private readonly list = new Int32Array(CAP);
-	private readonly words: Int32Array;
-	private readonly bits: Int32Array;
+	readonly #list = new Int32Array(CAP);
+	readonly #words: Int32Array;
+	readonly #bits: Int32Array;
+	readonly #storage: Storage;
 
-	constructor(
-		private readonly storage: Storage,
-		required: readonly MaskBit[],
-	) {
+	constructor(storage: Storage, required: readonly MaskBit[]) {
+		this.#storage = storage;
 		const byWord = new Map<number, number>([[0, ALIVE]]);
 		for (const { word, bit } of required)
 			byWord.set(word, (byWord.get(word) ?? 0) | bit);
 		const words = [...byWord.keys()].sort((a, b) => a - b);
-		this.words = Int32Array.from(words);
-		this.bits = Int32Array.from(words, (w) => byWord.get(w) ?? 0);
+		this.#words = Int32Array.from(words);
+		this.#bits = Int32Array.from(words, (w) => byWord.get(w) ?? 0);
 	}
 
 	has(slot: Slot): boolean {
-		const masks = this.storage.masks;
-		const base = slot * this.storage.maskWords;
-		const { words, bits } = this;
+		const masks = this.#storage.masks;
+		const base = slot * this.#storage.maskWords;
+		const words = this.#words;
+		const bits = this.#bits;
 		for (let k = 0; k < words.length; k++) {
 			const bit = bits[k] ?? 0;
 			if (((masks[base + (words[k] ?? 0)] ?? 0) & bit) !== bit) return false;
@@ -44,13 +44,13 @@ export class MaskQuery implements Query, SlotList {
 
 	slots(floor: number): SlotList {
 		const start = floor * CAP;
-		const end = start + (this.storage.highWater[floor] ?? 0);
-		const list = this.list;
+		const end = start + (this.#storage.highWater[floor] ?? 0);
+		const list = this.#list;
 		let n = 0;
-		if (this.words.length === 1) {
-			const masks = this.storage.masks;
-			const stride = this.storage.maskWords;
-			const bit = this.bits[0] ?? 0;
+		if (this.#words.length === 1) {
+			const masks = this.#storage.masks;
+			const stride = this.#storage.maskWords;
+			const bit = this.#bits[0] ?? 0;
 			for (let s = start; s < end; s++)
 				if (((masks[s * stride] ?? 0) & bit) === bit) list[n++] = s;
 		} else {
@@ -61,6 +61,8 @@ export class MaskQuery implements Query, SlotList {
 	}
 
 	at(i: number): Slot {
-		return (this.list[i] ?? 0) as Slot;
+		return (this.#list[i] ?? 0) as Slot;
 	}
 }
+
+Object.freeze(MaskQuery.prototype);

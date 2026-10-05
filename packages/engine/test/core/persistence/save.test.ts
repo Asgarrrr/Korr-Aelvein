@@ -12,6 +12,7 @@ import {
 } from "../../../src/core/api";
 import { CAP } from "../../../src/core/config";
 import { createWorld, loadWorld } from "../../../src/core/world";
+import { fear } from "../../../src/modules/fear";
 import { flora } from "../../../src/modules/flora";
 import { hunger } from "../../../src/modules/hunger";
 import { modules } from "../../../src/registry";
@@ -72,6 +73,10 @@ test("loading with another registry, config, species table or format throws", ()
 		),
 		modules.map((m) =>
 			m === hunger ? { ...hunger, config: { ...hunger.config, max: 999 } } : m,
+		),
+		// Same width, so only the fingerprint tells the cell columns apart.
+		modules.map((m) =>
+			m === fear ? { ...fear, cells: { danger: { eats: "i8" } } as const } : m,
 		),
 	];
 	for (const list of others)

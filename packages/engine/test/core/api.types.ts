@@ -50,3 +50,25 @@ export const unknownField = {
 const world = createWorld({ seed: 1, floors: 1, width: 4, height: 4, modules });
 // @ts-expect-error wings is not a registered component
 world.spawn(0, { actor: true, components: { wings: {} } }, 0, 0);
+
+defineModule({
+	name: "reader",
+	schema: {},
+	config: {},
+	setup(b) {
+		const diet = b.read("diet");
+		if (!diet) return;
+		b.propose((_ctx, actor) => {
+			diet.eats.get(actor);
+			// @ts-expect-error a read view has no component mask
+			diet.has(actor);
+			// @ts-expect-error a read view has no writable index
+			diet.eats[actor] = 1;
+			// @ts-expect-error a read view is not a TypedArray
+			const raw: Uint8Array = diet.eats;
+			return raw;
+		});
+		// @ts-expect-error satiety is not in contracts/
+		b.read("satiety");
+	},
+});

@@ -19,7 +19,7 @@ import { game, populatedWorld } from "../../fixtures";
 
 const ratAt = (satiety: number) => ({
 	...rat,
-	components: { satiety: { value: satiety } },
+	components: { ...rat.components, satiety: { value: satiety } },
 });
 const smallWorld = (events = true) =>
 	createWorld({ seed: 1, floors: 1, width: 8, height: 8, events, ...game });

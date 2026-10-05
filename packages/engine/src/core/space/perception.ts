@@ -5,45 +5,47 @@ import { END, type Grid } from "./grid";
 
 // Filled on first read: propose cannot move anything, so a lazy fill sees the same state.
 export class PerceptionBuffer implements Perception {
-	private n = 0;
-	private stale = false;
-	private floor = 0;
-	private self = 0;
-	private ox = 0;
-	private oy = 0;
-	private readonly slots = new Int32Array(MAX_PERCEIVED);
+	#n = 0;
+	#stale = false;
+	#floor = 0;
+	#self = 0;
+	#ox = 0;
+	#oy = 0;
+	readonly #slots = new Int32Array(MAX_PERCEIVED);
+	readonly #grid: Grid;
+	readonly #entityIds: Int32Array;
 
-	constructor(
-		private readonly grid: Grid,
-		private readonly entityIds: Int32Array,
-	) {}
+	constructor(grid: Grid, entityIds: Int32Array) {
+		this.#grid = grid;
+		this.#entityIds = entityIds;
+	}
 
 	get count(): number {
-		if (this.stale) this.fill();
-		return this.n;
+		if (this.#stale) this.#fill();
+		return this.#n;
 	}
 
 	reset(floor: number, self: Slot): void {
-		this.floor = floor;
-		this.self = self;
-		this.stale = true;
+		this.#floor = floor;
+		this.#self = self;
+		this.#stale = true;
 	}
 
 	slot(i: number): Slot {
-		if (this.stale) this.fill();
-		return (this.slots[i] ?? 0) as Slot;
+		if (this.#stale) this.#fill();
+		return (this.#slots[i] ?? 0) as Slot;
 	}
 	id(i: number): EntityId {
-		if (this.stale) this.fill();
-		return (this.entityIds[this.slots[i] ?? 0] ?? 0) as EntityId;
+		if (this.#stale) this.#fill();
+		return (this.#entityIds[this.#slots[i] ?? 0] ?? 0) as EntityId;
 	}
 	dx(i: number): number {
-		if (this.stale) this.fill();
-		return (this.grid.x[this.slots[i] ?? 0] ?? 0) - this.ox;
+		if (this.#stale) this.#fill();
+		return (this.#grid.x[this.#slots[i] ?? 0] ?? 0) - this.#ox;
 	}
 	dy(i: number): number {
-		if (this.stale) this.fill();
-		return (this.grid.y[this.slots[i] ?? 0] ?? 0) - this.oy;
+		if (this.#stale) this.#fill();
+		return (this.#grid.y[this.#slots[i] ?? 0] ?? 0) - this.#oy;
 	}
 	dist(i: number): number {
 		const dx = Math.abs(this.dx(i));
@@ -52,15 +54,17 @@ export class PerceptionBuffer implements Perception {
 	}
 
 	// Part of the floor image: decides which of two equally near entities a module sees first.
-	private fill(): void {
-		this.stale = false;
-		const { grid, self, slots } = this;
+	#fill(): void {
+		this.#stale = false;
+		const grid = this.#grid;
+		const self = this.#self;
+		const slots = this.#slots;
 		const { width, height, heads, next } = grid;
 		const ox = grid.x[self] ?? 0;
 		const oy = grid.y[self] ?? 0;
-		this.ox = ox;
-		this.oy = oy;
-		const base = this.floor * grid.cells;
+		this.#ox = ox;
+		this.#oy = oy;
+		const base = this.#floor * grid.cells;
 		let n = 0;
 		for (let d = 0; d <= PERCEPTION_RADIUS; d++) {
 			const x0 = ox - d < 0 ? 0 : ox - d;
@@ -80,13 +84,15 @@ export class PerceptionBuffer implements Perception {
 						if (s === self) continue;
 						slots[n++] = s;
 						if (n === MAX_PERCEIVED) {
-							this.n = n;
+							this.#n = n;
 							return;
 						}
 					}
 				}
 			}
 		}
-		this.n = n;
+		this.#n = n;
 	}
 }
+
+Object.freeze(PerceptionBuffer.prototype);

@@ -3,7 +3,7 @@ import type { Column } from "../ecs/schema";
 import type { Engine } from "../engine";
 import type { Checksum } from "./checksum";
 
-export const FORMAT_VERSION = 3;
+export const FORMAT_VERSION = 4;
 export const WORD = 4;
 export const VERSION = 0;
 export const FINGERPRINT = 1;
@@ -27,12 +27,14 @@ export interface Section {
 	readonly words: Int32Array;
 	readonly unit: number;
 	readonly kind: number;
+	// Elements between one floor's slice and the next.
+	readonly stride: number;
 }
 
 // Save, load, size and hash all walk this one list, so they cannot drift apart.
 export function sectionsOf(engine: Engine): Section[] {
 	const { storage, grid } = engine;
-	const of = (array: Column, kind: number): Section => ({
+	const of = (array: Column, kind: number, stride: number): Section => ({
 		array,
 		words: new Int32Array(
 			array.buffer,
@@ -41,23 +43,26 @@ export function sectionsOf(engine: Engine): Section[] {
 		),
 		unit: array.BYTES_PER_ELEMENT,
 		kind,
+		stride,
 	});
+	const cellColumns = [...engine.cellColumns.values()].flatMap((columns) =>
+		Object.values(columns),
+	);
 	return [
-		of(storage.free, FREE),
-		...storage.columns.map((column) => of(column, ROWS)),
-		of(storage.masks, MASKS),
-		of(grid.heads, CELLS),
+		of(storage.free, FREE, CAP),
+		...storage.columns.map((column) => of(column, ROWS, CAP)),
+		of(storage.masks, MASKS, CAP * storage.maskWords),
+		of(grid.heads, CELLS, grid.cells),
+		...cellColumns.map((column) => of(column, CELLS, grid.stride)),
 	];
 }
 
 export function sectionStart(
-	engine: Engine,
+	_engine: Engine,
 	section: Section,
 	floor: number,
 ): number {
-	if (section.kind === MASKS) return floor * CAP * engine.storage.maskWords;
-	if (section.kind === CELLS) return floor * engine.grid.cells;
-	return floor * CAP;
+	return floor * section.stride;
 }
 
 export function sectionCount(

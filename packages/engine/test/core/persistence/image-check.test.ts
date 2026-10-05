@@ -2,9 +2,11 @@ import { expect, test } from "bun:test";
 import { species } from "../../../src/content/species";
 import { cheese } from "../../../src/content/species/cheese";
 import { moss } from "../../../src/content/species/moss";
-import { CAP } from "../../../src/core/config";
+import { CAP, ID_FLOOR_STRIDE } from "../../../src/core/config";
 import { ACTOR, ALIVE } from "../../../src/core/ecs/storage";
 import type { Engine } from "../../../src/core/engine";
+import { place } from "../../../src/core/lifecycle/lifecycle";
+import { compileSpecies } from "../../../src/core/lifecycle/species";
 import { Checksum } from "../../../src/core/persistence/checksum";
 import {
 	FLOOR_HEADER,
@@ -17,6 +19,7 @@ import {
 	WORD,
 } from "../../../src/core/persistence/image";
 import { loadFloor } from "../../../src/core/persistence/validate";
+import { hashName } from "../../../src/core/random/rng";
 import { createEngine } from "../../../src/core/setup/registration";
 import { END } from "../../../src/core/space/grid";
 import { createWorld } from "../../../src/core/world";
@@ -78,6 +81,8 @@ const view16 = (bytes: Uint8Array, array: unknown) =>
 	new Int16Array(bytes.buffer, (at.get(array) ?? 0) * WORD);
 const view32 = (bytes: Uint8Array, array: unknown) =>
 	new Int32Array(bytes.buffer, (at.get(array) ?? 0) * WORD);
+const keyOf = (name: string) => hashName(name) | 0;
+const satiety = engine.components.get("satiety")?.columns.value;
 
 // Rows to corrupt, found in the image itself.
 const masks = view32(image, storage.masks);
@@ -90,6 +95,24 @@ const ratRow = rows.find((r) => isLive(r) && isActor(r)) ?? -1;
 const [itemRow = -1, otherItemRow = -1] = rows.filter(
 	(r) => isLive(r) && !isActor(r),
 );
+const lacks = (name: string) => {
+	const bit = engine.components.get(name)?.bit ?? { word: 0, bit: 0 };
+	return rows.find(
+		(r) => isLive(r) && ((masks[r * words + bit.word] ?? 0) & bit.bit) === 0,
+	);
+};
+const dietless = lacks("diet") ?? -1;
+const inedible = lacks("edible") ?? -1;
+const set16Field =
+	(array: unknown, index: number, value: number): Edit =>
+	(copy) => {
+		view16(copy, array)[index] = value;
+	};
+const set8 =
+	(array: unknown, index: number, value: number): Edit =>
+	(copy) => {
+		new Uint8Array(copy.buffer, (at.get(array) ?? 0) * WORD)[index] = value;
+	};
 const freeList = view32(image, storage.free);
 const freeRow = freeList[0] ?? -1;
 const cellOf = view32(image, grid.cellOf);
@@ -115,7 +138,15 @@ const set16 =
 	};
 
 test("the corruption probes found the rows they need", () => {
-	expect([ratRow, itemRow, otherItemRow, freeRow, loneRow]).not.toContain(-1);
+	expect([
+		ratRow,
+		itemRow,
+		otherItemRow,
+		freeRow,
+		loneRow,
+		dietless,
+		inedible,
+	]).not.toContain(-1);
 	expect(emptyCell).toBeDefined();
 	expect(() => loadFloor(freshEngine(), image, 0)).not.toThrow();
 });
@@ -176,6 +207,115 @@ const cases: [string, Edit, RegExp][] = [
 		/outside this floor/,
 	],
 	["list cycle", set32(grid.next, itemRow, itemRow), /twice or in a cycle/],
+	[
+		"intent naming no registered action",
+		set32(engine.intentKey, ratRow, 12345),
+		/intends unknown action 12345/,
+	],
+	[
+		"no intent but a target",
+		(copy) => {
+			view32(copy, engine.intentKey)[ratRow] = 0;
+			view32(copy, engine.intentTarget)[ratRow] = 7;
+		},
+		/intends target 7/,
+	],
+	[
+		"a targetless intent with a target",
+		(copy) => {
+			view32(copy, engine.intentKey)[ratRow] = keyOf("core/idle");
+			view32(copy, engine.intentTarget)[ratRow] = 5;
+		},
+		/intends target 5/,
+	],
+	[
+		"a step intent off the floor",
+		(copy) => {
+			view32(copy, engine.intentKey)[ratRow] = keyOf("core/step");
+			view32(copy, engine.intentTarget)[ratRow] = grid.cells;
+		},
+		new RegExp(`intends target ${grid.cells}`),
+	],
+	[
+		"an entity intent with no entity",
+		(copy) => {
+			view32(copy, engine.intentKey)[ratRow] = keyOf("hunger/eat");
+			view32(copy, engine.intentTarget)[ratRow] = 0;
+		},
+		/intends target 0/,
+	],
+	[
+		"an entity intent with a negative target",
+		(copy) => {
+			view32(copy, engine.intentKey)[ratRow] = keyOf("hunger/eat");
+			view32(copy, engine.intentTarget)[ratRow] = -5;
+		},
+		/intends target -5/,
+	],
+	[
+		"an entity intent outside the id encoding",
+		(copy) => {
+			view32(copy, engine.intentKey)[ratRow] = keyOf("hunger/eat");
+			view32(copy, engine.intentTarget)[ratRow] = ID_FLOOR_STRIDE;
+		},
+		new RegExp(`intends target ${ID_FLOOR_STRIDE}`),
+	],
+	[
+		"an intent on a creature that does not act",
+		set32(engine.intentKey, itemRow, keyOf("core/idle")),
+		/does not act/,
+	],
+	[
+		"a next turn on a creature that does not act",
+		set32(scheduler.nextAt, itemRow, ROUND * 100),
+		/does not act/,
+	],
+	[
+		"a byte-wide value in a component the row does not have",
+		set8(engine.components.get("diet")?.columns.eats, dietless, 1),
+		/component it does not have/,
+	],
+	[
+		"a 16-bit value in a component the row does not have",
+		set16Field(engine.components.get("edible")?.columns.nutrition, inedible, 7),
+		/component it does not have/,
+	],
+	[
+		"a mask bit no component owns",
+		set32(storage.masks, itemRow * words, ALIVE | (1 << 30)),
+		/unknown mask bits/,
+	],
+	[
+		"an entity intent on a floor the world does not have",
+		(copy) => {
+			view32(copy, engine.intentKey)[ratRow] = keyOf("hunger/eat");
+			view32(copy, engine.intentTarget)[ratRow] = ID_FLOOR_STRIDE + 5;
+		},
+		new RegExp(`intends target ${ID_FLOOR_STRIDE + 5}`),
+	],
+	[
+		"a step intent to cell -1",
+		(copy) => {
+			view32(copy, engine.intentKey)[ratRow] = keyOf("core/step");
+			view32(copy, engine.intentTarget)[ratRow] = -1;
+		},
+		/intends target -1,/,
+	],
+	[
+		"a value in a component the row does not have",
+		set32(satiety, itemRow, 5),
+		/component it does not have/,
+	],
+	[
+		"dead slot keeps an intent",
+		set32(engine.intentKey, freeRow, keyOf("core/idle")),
+		/dead slot \d+ keeps a value/,
+	],
+	[
+		"dead slot keeps a module value",
+		set32(satiety, freeRow, 3),
+		/dead slot \d+ keeps a value/,
+	],
 	["broken back link", set32(grid.prev, itemRow, 12345), /links back/],
 	[
 		"entity listed under another cell",
@@ -195,6 +335,20 @@ for (const [name, edit, error] of cases)
 		edit(copy);
 		expect(() => loadFloor(freshEngine(), reseal(copy), 0)).toThrow(error);
 	});
+
+test("a floor image with two actors in one cell throws", () => {
+	const crowded = freshEngine(0);
+	const body = compileSpecies(
+		{ actor: true, components: {} },
+		crowded.components,
+		crowded.storage.maskWords,
+	);
+	place(crowded, 0, body, 3, 3, 0);
+	place(crowded, 0, body, 3, 3, 0);
+	expect(() => loadFloor(freshEngine(0), saveFloor(crowded, 0), 0)).toThrow(
+		/two actors/,
+	);
+});
 
 test("an edit without a new checksum throws on the checksum", () => {
 	const copy = image.slice();

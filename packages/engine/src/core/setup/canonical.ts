@@ -12,8 +12,12 @@ export function canonical(value: unknown, path: string): string {
 		return String(value);
 	}
 	if (typeof value === "string") return JSON.stringify(value);
-	if (Array.isArray(value))
+	if (Array.isArray(value)) {
+		for (let i = 0; i < value.length; i++)
+			if (!(i in value))
+				throw new Error(`${path}[${i}] is a hole in a sparse array`);
 		return `[${value.map((item, i) => canonical(item, `${path}[${i}]`)).join(",")}]`;
+	}
 	if (typeof value === "object" && value !== null && isPlain(value)) {
 		const record = value as Record<string, unknown>;
 		const keys = Object.keys(record).sort();
@@ -29,7 +33,7 @@ export function canonical(value: unknown, path: string): string {
 // The engine keeps its own frozen copy, so the caller's objects stay theirs to change.
 export function frozenCopy<T>(value: T): T {
 	if (Array.isArray(value)) return Object.freeze(value.map(frozenCopy)) as T;
-	if (typeof value === "object" && value !== null) {
+	if (typeof value === "object" && value !== null && isPlain(value)) {
 		const copy: Record<string, unknown> = {};
 		for (const [key, item] of Object.entries(value))
 			copy[key] = frozenCopy(item);

@@ -8,6 +8,14 @@ const CORE_BITS = 2;
 const WORD_SHIFT = 5;
 const WORD_MASK = 31;
 
+export function knownBits(maskWords: number, components: number): Int32Array {
+	const known = new Int32Array(maskWords);
+	for (let i = 0; i < components + CORE_BITS; i++)
+		known[i >> WORD_SHIFT] =
+			(known[i >> WORD_SHIFT] ?? 0) | (1 << (i & WORD_MASK));
+	return known;
+}
+
 export interface MaskBit {
 	readonly word: number;
 	readonly bit: number;

@@ -96,8 +96,9 @@ workers stay possible later with no design change.
 - 10 µs per floor. No list memory, no maintenance, no swap-remove order.
 - Upgrade path (same API): cached lists when one scan exceeds 5% of the
   round budget.
-- Bulk ticks write only the iterated row, or an owned cell column read from
-  its owned previous-turn buffer. Kills and spawns from a tick are deferred
+- Bulk ticks write only the iterated row, an owned cell column read from
+  its owned previous-turn buffer, or an owned cell column they clear and
+  fill by an order-independent combine (OR, max). Kills and spawns from a tick are deferred
   and applied after the tick, sorted by (cause EntityId, n). Each module test
   runs its tick on a reversed order and compares hashes.
 
@@ -151,12 +152,19 @@ neighbour order (cell order, then list order) restores verbatim.
   matches. `out.push(actionRef, target, score)` is typed by the action's
   target kind: `entity` (EntityId), `cell`, or `none`.
 - Scores are integers clamped to `[0, SCORE_MAX]`. Divide before multiply.
-- Intent = the cached (actionKey, targetKind, target), core state, persisted.
-  A candidate matching the intent gets `+INERTIA`. `SCORE_MAX + INERTIA <
-  2^15`.
+- Intent = the cached (actionKey, target) of the chosen candidate, core
+  state, persisted; the kind follows from the key. A candidate matching the
+  intent gets `+INERTIA`. `SCORE_MAX + INERTIA < 2^15`. A FAIL clears it.
+- Modules propose goal actions whose target persists across turns (eat this
+  food, flee this threat) and reach `core.step` only through `instead`. A
+  cached `core.step` to an adjacent cell is dead after one move, which would
+  defeat both inertia and LOD re-execution.
 - Tie-break: higher score, then lower `actionKey = hash("module/action")`,
   then target kind, then lower target. Registry position is never used;
   duplicate action keys throw.
+- An action also receives the actor's perception, reset before it runs (so
+  it reflects execute time) and filled only if read; a goal action needs it
+  to re-check the whole scene, e.g. fleeing every visible threat.
 - The chosen action runs in its module's write scope. It must be
   re-executable later with the same (actor, target): it re-validates and
   returns FAIL.
@@ -217,9 +225,11 @@ export const hunger = defineModule({
   index-signature view was proven to leak writes without any cast; the
   getter view costs nothing measurable.
 - Modules keep no mutable state outside registered entity or cell columns.
-- Audit mode (tests, plus a server debug flag): copies non-owned columns for
-  the touched rows around each callback and diffs element by element; range-
-  checks owned writes against the field kind. Core deferred writes run
+- Audit mode (tests only: its cost grows with rows x callbacks, so it is not
+  a server flag): copies every non-owned column of the floor around each
+  callback and diffs element by element; range-checks owned writes against
+  the field kind. Touched-row scoping was rejected: a module can write any
+  row, so it would need write tracking that costs more than the copy. Core deferred writes run
   outside module attribution.
 - Architecture check additions in `modules/**`: forbid casts to TypedArray
   or index-signature types, `as any`, `Reflect.`, `Object.assign`,
@@ -255,6 +265,8 @@ export const hunger = defineModule({
   is asserted at config load, so arrival lands in round R+1 or later. An
   arrival at or before the receiver's processed time throws.
 - In transit, every floor resolves the id to NONE.
+- Arrival clears the intent: a `Cell` target is floor-local. Entity targets
+  stay valid because ids are global.
 - A floor pauses when any player on it is due. Round R+1 starts everywhere
   once every floor finishes round R (see D13).
 
@@ -308,19 +320,29 @@ then a red-team and a blue-team review of the diff before the next slice.
    Tests: `fear-saves-prey` (median prey survival over 20 seeds higher with
    fear); `audit-catches` (fake module writing a non-owned row throws);
    `runs-without-fear`.
+   Added after review: the first cell column, fear's `danger`, cleared and
+   OR-stamped in fear's tick around creatures that eat a wary class, so a
+   calm wary creature skips the perception fill (~340 ns of fear's ~450 ns
+   per sated turn). Needs read-only queries over contract components.
 4. **Fire (3rd mechanic, freeze the core API).** Cell columns with an owned
    previous-turn buffer, core `vitality` and `harm`, death by burning, fear
    reads fire cells.
+   Before freezing: `FieldView` generic over `Slot | Cell` for cell reads.
    Tests: `fire-burns` (pinned death turn, cause fire); `fear-avoids-fire`;
    spread order-independent; `runs-without-fire`.
 5. **Floors, migration, decision LOD.** Several floors, lockstep rounds,
    inbox, `core.descend`, `lodPeriods`.
    Two player actors on different floors drive input and LOD.
+   Cached re-execution maps intent key -> action through a Map built at
+   registration; an unknown key or an invalid target means "no intent".
    Tests: `migrate-on-famine` (population arrives on floor 1 at
    `t + stairTime`); floor order permuted gives the same hash; restore one
    floor into a live world; replay of (seed, inputs) with two players gives
    the same hash.
-6. **Bench.** Reference world and the section 1 budgets.
+6. **Bench.** Reference world and the section 1 budgets. Two-tier floor
+   load: a fast path (checksum and structure) for the server's own saves,
+   held to the restore budget; full validation for external images, after a
+   crash, and in tests.
 
 ## 5. Proposed CLAUDE.md changes
 

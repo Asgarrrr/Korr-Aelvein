@@ -6,6 +6,7 @@ export const MAX_TICK = 0x7fffffff;
 export const MAX_COORD = 0x7fff;
 export const MAX_SEED = 0xffffffff;
 export const SCORE_MAX = 10_000;
+export const INERTIA = 5;
 export const MAX_ALTERNATES = 4;
 export const MAX_CANDIDATES = 256;
 export const PERCEPTION_RADIUS = 3;

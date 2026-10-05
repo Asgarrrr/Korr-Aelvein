@@ -20,6 +20,7 @@ export interface WorldOptions<M extends readonly AnyModule[]> {
 	readonly height: number;
 	readonly popCap?: number;
 	readonly events?: boolean;
+	readonly audit?: boolean;
 	readonly modules: M;
 	readonly species?: Readonly<Record<string, Species<M>>>;
 }
@@ -55,7 +56,15 @@ function build(options: WorldOptions<readonly AnyModule[]>): Engine {
 	if (!(Number.isInteger(popCap) && popCap >= 1 && popCap <= CAP))
 		throw new Error(`popCap ${popCap} outside [1, ${CAP}]`);
 	return createEngine(
-		{ seed, floors, width, height, popCap, events: options.events ?? true },
+		{
+			seed,
+			floors,
+			width,
+			height,
+			popCap,
+			events: options.events ?? true,
+			audit: options.audit ?? false,
+		},
 		options.modules,
 		options.species,
 	);

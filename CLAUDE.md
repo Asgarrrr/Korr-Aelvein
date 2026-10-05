@@ -127,8 +127,9 @@ the code around it: every needless comment breeds more.
   inputs.
 - Creatures act one at a time on the current state. Bulk systems are only
   for environment ticks (fire spread, need decay). A bulk tick writes only
-  the row it iterates, or an owned cell column read from its previous-turn
-  buffer; its kills and spawns are deferred.
+  the row it iterates, an owned cell column read from its previous-turn
+  buffer, or an owned cell column it clears and fills by an
+  order-independent combine (OR, max); its kills and spawns are deferred.
 - Events broadcast facts; they never drive behaviour. One FIFO queue per
   turn, each event records its cause, a per-turn cap throws.
 - Ordered rules (death → drop → remove) are direct core calls, not events.

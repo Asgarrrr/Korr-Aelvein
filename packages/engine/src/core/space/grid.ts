@@ -2,9 +2,12 @@ import { type Cell, NO_CELL, type Slot } from "../ecs/ids";
 import { ACTOR, type Storage } from "../ecs/storage";
 
 export const END = -1;
+const CELL_ALIGN = 4;
 
 export class Grid {
 	readonly cells: number;
+	// Each floor's slice of a byte-wide cell column starts on a word, as images copy words.
+	readonly stride: number;
 	readonly heads: Int32Array;
 	readonly x: Int16Array;
 	readonly y: Int16Array;
@@ -18,6 +21,7 @@ export class Grid {
 		readonly height: number,
 	) {
 		this.cells = width * height;
+		this.stride = Math.ceil(this.cells / CELL_ALIGN) * CELL_ALIGN;
 		this.heads = new Int32Array(storage.floors * this.cells).fill(END);
 		this.x = storage.column("i16") as Int16Array;
 		this.y = storage.column("i16") as Int16Array;

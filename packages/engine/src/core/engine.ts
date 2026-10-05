@@ -6,6 +6,7 @@ import type {
 	TargetKind,
 	TickFn,
 } from "./api";
+import type { Audit } from "./audit/audit";
 import { CAP, TICKS_PER_TURN } from "./config";
 import type { EntityId } from "./ecs/ids";
 import type { Column } from "./ecs/schema";
@@ -22,13 +23,10 @@ import { PerceptionBuffer } from "./space/perception";
 import { CandidateBuffer } from "./turns/arbitration";
 import { Context } from "./turns/context";
 import { Scheduler } from "./turns/scheduler";
+import { KIND_CODE } from "./turns/target";
 import { runFloor, step as stepTo } from "./turns/turn";
 
-export const KIND_CODE: Readonly<Record<TargetKind, number>> = {
-	none: 0,
-	entity: 1,
-	cell: 2,
-};
+export { KIND_CODE } from "./turns/target";
 
 export interface Component {
 	readonly bit: MaskBit;
@@ -36,6 +34,7 @@ export interface Component {
 }
 
 export interface ActionEntry {
+	readonly name: string;
 	readonly key: number;
 	readonly kind: number;
 	readonly moduleKey: number;
@@ -67,6 +66,8 @@ export class Engine {
 	readonly grid: Grid;
 	readonly scheduler: Scheduler;
 	readonly now: Int32Array;
+	readonly intentKey: Int32Array;
+	readonly intentTarget: Int32Array;
 	readonly popCap: number;
 	readonly events: EventLog;
 	round = 0;
@@ -83,6 +84,7 @@ export class Engine {
 	readonly checkIndex = new Int32Array(INDEX_SIZE);
 
 	readonly components = new Map<string, Component>();
+	readonly cellColumns = new Map<string, Readonly<Record<string, Column>>>();
 	readonly actions: ActionEntry[] = [];
 	readonly ticks: Hook<TickFn>[] = [];
 	readonly proposers: Hook<ProposeFn>[] = [];
@@ -101,12 +103,16 @@ export class Engine {
 	readonly spawned: EventRef;
 	alternate = NO_ACTION;
 	alternateTarget = 0;
+	failed = false;
+	audit: Audit | undefined;
 
 	constructor(options: EngineOptions) {
 		this.seed = options.seed;
 		this.storage = new Storage(options.floors, options.componentCount);
 		this.grid = new Grid(this.storage, options.width, options.height);
 		this.scheduler = new Scheduler(this.storage);
+		this.intentKey = this.storage.column("i32") as Int32Array;
+		this.intentTarget = this.storage.column("i32") as Int32Array;
 		this.now = new Int32Array(options.floors);
 		this.popCap = options.popCap;
 		this.floorSums = new Int32Array(2 * options.floors);
@@ -122,17 +128,21 @@ export class Engine {
 		this.died = this.addEvent(`${CORE}/died`);
 		this.spawned = this.addEvent(`${CORE}/spawned`);
 		this.perception = new PerceptionBuffer(this.grid, this.storage.ids);
-		this.candidates = new CandidateBuffer(this.actions);
+		this.candidates = new CandidateBuffer(
+			this.actions,
+			this.grid.cells,
+			options.floors,
+		);
 
 		const step = this.addAction(
 			CORE_KEY,
-			hashName(`${CORE}/step`),
+			`${CORE}/step`,
 			"cell",
 			(_ctx, actor, cell): number => stepTo(this, actor, cell),
 		);
 		const idle = this.addAction(
 			CORE_KEY,
-			hashName(`${CORE}/idle`),
+			`${CORE}/idle`,
 			"none",
 			() => TICKS_PER_TURN,
 		);
@@ -144,20 +154,22 @@ export class Engine {
 
 	addAction<K extends TargetKind>(
 		moduleKey: number,
-		key: number,
+		name: string,
 		kind: K,
 		run: ActionFn<K>,
 	): ActionRef<K> {
+		const key = hashName(name);
 		if (this.actions.some((a) => a.key === key))
 			throw new Error(`duplicate action key ${key}`);
 		const index = this.actions.length;
 		this.actions.push({
+			name,
 			key,
 			kind: KIND_CODE[kind],
 			moduleKey,
 			run: run as ActionFn<TargetKind>,
 		});
-		return { index } as ActionRef<K>;
+		return Object.freeze({ index }) as ActionRef<K>;
 	}
 
 	// Keyed by name hash, not registry position: adding a module never renumbers other events.
@@ -167,7 +179,7 @@ export class Engine {
 		if (taken === name) throw new Error(`duplicate event ${name}`);
 		if (taken) throw new Error(`event key collision: ${name} and ${taken}`);
 		this.eventNames.set(key, name);
-		return { key } as EventRef;
+		return Object.freeze({ key }) as EventRef;
 	}
 
 	emit(
@@ -188,6 +200,7 @@ export class Engine {
 
 	runRound(): void {
 		for (let f = 0; f < this.storage.floors; f++) runFloor(this, f);
+		this.audit?.endRound();
 		this.round++;
 	}
 }
