@@ -71,6 +71,8 @@ row fits, that is a design question: propose a new row before coding.
 - test: `bun run test` — single file: `bun test <path>` from the package dir
 - dev: `bun run dev` — server on :3000, web on Vite's port, `/ws` proxied
 - lint fix: `bun run lint:fix`
+- New worktree or clone: run `bun install` first. Without it every check
+  fails (exit 127) and the git hooks are not enabled.
 - Turborepo changes between versions: read `node_modules/turbo/docs/` before
   editing `turbo.json`.
 
