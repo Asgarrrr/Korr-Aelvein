@@ -8,7 +8,7 @@
 	"scripts": {
 		"typecheck": "tsc -p tsconfig.src.json && tsc -p .",
 		"test": "bun test --pass-with-no-tests",
-		"bench": "bun bench/slice1.ts"
+		"bench": "bun bench/slice1.ts && bun bench/slice2.ts"
 	},
 	"devDependencies": {
 		"@types/bun": "^1.4.2"

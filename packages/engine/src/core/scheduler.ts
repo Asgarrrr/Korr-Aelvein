@@ -1,6 +1,6 @@
 import { CAP } from "./config";
 import type { Slot } from "./ids";
-import type { Storage } from "./storage";
+import { ACTOR, type Storage } from "./storage";
 
 // heapPos is derived state outside the hashed columns; it holds index + 1 so 0 means absent.
 export class Scheduler {
@@ -10,7 +10,7 @@ export class Scheduler {
 	private readonly heap: Int32Array;
 	private readonly sizes: Int32Array;
 
-	constructor(storage: Storage) {
+	constructor(private readonly storage: Storage) {
 		this.nextAt = storage.column("i32") as Int32Array;
 		this.heapPos = new Int32Array(storage.floors * CAP);
 		this.ids = storage.ids;
@@ -50,6 +50,18 @@ export class Scheduler {
 	remove(floor: number, slot: Slot): void {
 		const index = (this.heapPos[slot] ?? 0) - 1;
 		if (index >= 0) this.removeAt(floor, index);
+	}
+
+	// Keys (nextAt, EntityId) are unique, so the pop order depends on the key set, never on the heap layout.
+	rebuild(floor: number): void {
+		const { masks, maskWords, highWater } = this.storage;
+		const base = floor * CAP;
+		const end = base + (highWater[floor] ?? 0);
+		let n = 0;
+		for (let s = base; s < end; s++)
+			if (((masks[s * maskWords] ?? 0) & ACTOR) !== 0) this.place(base, n++, s);
+		this.sizes[floor] = n;
+		heapify(this.heap, this.heapPos, this.nextAt, this.ids, base, n);
 	}
 
 	private removeAt(floor: number, index: number): void {
@@ -110,5 +122,53 @@ export class Scheduler {
 			index = child;
 		}
 		this.place(base, index, slot);
+	}
+}
+
+// Floyd's bottom-up build with the (nextAt, EntityId) order inlined: restore runs it on every
+// actor of the floor, inside the restore budget.
+function heapify(
+	heap: Int32Array,
+	heapPos: Int32Array,
+	nextAt: Int32Array,
+	ids: Int32Array,
+	base: number,
+	n: number,
+): void {
+	for (let start = (n >> 1) - 1; start >= 0; start--) {
+		const slot = heap[base + start] ?? 0;
+		const time = nextAt[slot] ?? 0;
+		const id = ids[slot] ?? 0;
+		let index = start;
+		for (;;) {
+			let child = 2 * index + 1;
+			if (child >= n) break;
+			let childSlot = heap[base + child] ?? 0;
+			let childTime = nextAt[childSlot] ?? 0;
+			if (child + 1 < n) {
+				const right = heap[base + child + 1] ?? 0;
+				const rightTime = nextAt[right] ?? 0;
+				if (
+					rightTime < childTime ||
+					(rightTime === childTime && (ids[right] ?? 0) < (ids[childSlot] ?? 0))
+				) {
+					child++;
+					childSlot = right;
+					childTime = rightTime;
+				}
+			}
+			if (
+				!(
+					childTime < time ||
+					(childTime === time && (ids[childSlot] ?? 0) < id)
+				)
+			)
+				break;
+			heap[base + index] = childSlot;
+			heapPos[childSlot] = index + 1;
+			index = child;
+		}
+		heap[base + index] = slot;
+		heapPos[slot] = index + 1;
 	}
 }

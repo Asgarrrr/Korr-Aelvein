@@ -11,6 +11,7 @@ export const hunger = defineModule({
 		const edible = b.write("edible");
 		const fed = b.query(["satiety"]);
 		const food = b.query(["edible"]);
+		const ate = b.event("ate");
 
 		b.tick((ctx, floor) => {
 			const rows = fed.slots(floor);
@@ -32,7 +33,9 @@ export const hunger = defineModule({
 			if (Math.max(Math.abs(dx), Math.abs(dy)) > 1) return FAIL;
 			const full = (satiety.value[actor] ?? 0) + (edible.nutrition[meal] ?? 0);
 			satiety.value[actor] = Math.min(cfg.max, full);
-			ctx.kill(target, ctx.idOf(actor));
+			const eater = ctx.idOf(actor);
+			ctx.emit(ate, eater, target, edible.nutrition[meal] ?? 0);
+			ctx.kill(target, eater);
 			return cfg.eatCost;
 		});
 

@@ -28,7 +28,7 @@ Budgets (Bun 1.4.3, Apple M5 Pro; prototype in brackets):
 | Cached-action re-execution | <= 120 ns per actor turn | ~95 ns |
 | Bulk tick range scan | <= 20 µs per floor | 10 µs |
 | World RSS | <= 160 MB | 113 MB |
-| Floor snapshot / floor restore | <= 0.1 ms each | 26 µs |
+| Floor snapshot / validated floor restore | <= 0.1 ms / <= 0.15 ms | 68 µs / 107 µs |
 | Floor hash | <= 0.5 ms | 227 µs |
 
 Determinism: same seed and inputs give the same world hash
@@ -75,8 +75,10 @@ Evolvability: a new mechanic touches its folder, `registry.ts`, at most one
   across floors.
 - `Slot` is valid only inside one core callback. It is never stored in a
   column, a candidate, a cached action, an event, the inbox or the protocol.
-- `id -> slot` is one `Map` per floor; never iterated. An id not on this
-  floor resolves to NONE.
+- `id -> slot` is one Int32 open-addressing index per floor (linear
+  probing, backward-shift deletion), rebuilt on load, never iterated. An id
+  not on this floor resolves to NONE. It rebuilds in 12 µs against 97 µs
+  for a `Map`.
 - `EntityId` and `Slot` are branded types.
 
 ### D3. Floors own their state

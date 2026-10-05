@@ -2,12 +2,15 @@ import {
 	type ActionCtx,
 	type ActionRef,
 	ALTERNATE,
+	type EventRef,
+	type SpeciesRef,
 	type TargetKind,
 	type TargetOf,
 } from "./api";
 import { targetValue } from "./candidates";
 import type { Engine } from "./engine";
 import { type Cell, type EntityId, NONE, type Slot } from "./ids";
+import { checkSpawn } from "./lifecycle";
 import {
 	bounded,
 	draw,
@@ -16,7 +19,6 @@ import {
 	SUBJECT,
 	type SubjectKind,
 } from "./rng";
-import type { SpeciesShape } from "./species";
 
 export class Context implements ActionCtx {
 	module = 0;
@@ -68,9 +70,16 @@ export class Context implements ActionCtx {
 		this.engine.kills.push(id, cause);
 	}
 
-	spawn(species: SpeciesShape, x: number, y: number, cause: EntityId): void {
-		const cell = this.engine.checkSpawn(this.floor, species, x, y);
-		this.engine.spawns.push(species, x, y, cell, cause);
+	spawn(species: SpeciesRef, x: number, y: number, cause: EntityId): void {
+		const e = this.engine;
+		const cell = checkSpawn(e, this.floor, x, y);
+		e.spawns.push(species.index, x, y, cell, cause);
+	}
+
+	emit(event: EventRef, cause: EntityId, a: number, b: number): void {
+		if (!(Number.isInteger(a) && Number.isInteger(b)))
+			throw new Error(`event payload (${a}, ${b}) must be integers`);
+		this.engine.emit(this.floor, event, cause, a, b);
 	}
 
 	instead<K extends TargetKind>(

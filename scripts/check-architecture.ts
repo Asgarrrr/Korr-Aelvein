@@ -1,5 +1,5 @@
 // CLAUDE.md rules that Biome cannot express; the rest lives in biome.json.
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -36,6 +36,22 @@ const walk = (dir: string): string[] =>
 			})
 		: [];
 
+// The bundler accepts extensionless and directory specifiers, so the rules must compare what it loads.
+const resolveImport = (file: string, spec: string) => {
+	const base = resolve(dirname(file), spec);
+	const candidates = [
+		base,
+		`${base}.ts`,
+		`${base}.tsx`,
+		join(base, "index.ts"),
+		join(base, "index.tsx"),
+	];
+	return (
+		candidates.find((path) => existsSync(path) && statSync(path).isFile()) ??
+		base
+	);
+};
+
 const importsOf = (source: string) => [
 	...transpiler.scanImports(source).map((entry) => entry.path),
 	...[...source.matchAll(TYPE_IMPORT)].flatMap(([, spec]) =>
@@ -62,6 +78,11 @@ const checkEngineImport = (file: string, target: string) => {
 			file,
 			`${from.area} must not import modules/; only registry.ts and content/ may`,
 		);
+	if (from.area === "modules" && (to.area === "content" || target === REGISTRY))
+		report(
+			file,
+			"modules/ must not import content/ or registry.ts; name species in config",
+		);
 	if (from.module && to.module && from.module !== to.module)
 		report(
 			file,
@@ -86,7 +107,7 @@ for (const dir of workspaces) {
 
 		for (const spec of importsOf(source)) {
 			if (!spec.startsWith(".")) continue;
-			const target = resolve(dirname(file), spec);
+			const target = resolveImport(file, spec);
 			if (!target.startsWith(dir + sep))
 				report(
 					file,
@@ -96,6 +117,15 @@ for (const dir of workspaces) {
 		}
 	}
 }
+
+// A known violation must still be reported, or an edit to this script could disable the rule unnoticed.
+const probe = join(ENGINE, "modules/probe/index.ts");
+const before = errors.length;
+for (const spec of ["../../content/species/rat", "../../registry"])
+	checkEngineImport(probe, resolveImport(probe, spec));
+if (errors.length - before !== 2)
+	report(probe, "the modules -> content/registry rule did not fire");
+else errors.length = before;
 
 if (errors.length > 0) {
 	console.error(`architecture check failed (${errors.length}):`);

@@ -5,6 +5,7 @@ import type { SpeciesShape } from "./species";
 export type { Cell, EntityId, Slot } from "./ids";
 export { NONE } from "./ids";
 export type { Schema } from "./schema";
+export type { SpeciesShape } from "./species";
 
 export interface TargetOf {
 	entity: EntityId;
@@ -16,6 +17,18 @@ export type TargetKind = keyof TargetOf;
 declare const actionBrand: unique symbol;
 export interface ActionRef<K extends TargetKind> {
 	readonly [actionBrand]: K;
+	readonly index: number;
+}
+
+declare const eventBrand: unique symbol;
+export interface EventRef {
+	readonly [eventBrand]: true;
+	readonly key: number;
+}
+
+declare const speciesBrand: unique symbol;
+export interface SpeciesRef {
+	readonly [speciesBrand]: true;
 	readonly index: number;
 }
 
@@ -40,7 +53,8 @@ export interface ReadCtx {
 
 export interface WriteCtx extends ReadCtx {
 	kill(id: EntityId, cause: EntityId): void;
-	spawn(species: SpeciesShape, x: number, y: number, cause: EntityId): void;
+	spawn(species: SpeciesRef, x: number, y: number, cause: EntityId): void;
+	emit(event: EventRef, cause: EntityId, a: number, b: number): void;
 }
 
 export interface ActionCtx extends WriteCtx {
@@ -101,6 +115,9 @@ export interface Builder<S extends Schema> {
 		run: ActionFn<K>,
 	): ActionRef<K>;
 	propose(run: ProposeFn): void;
+	event(name: string): EventRef;
+	// Resolved when the world is built: an unknown name throws there, not at the first spawn.
+	species(wanted: string | SpeciesShape): SpeciesRef;
 }
 
 export interface ModuleDef<S extends Schema, C> {

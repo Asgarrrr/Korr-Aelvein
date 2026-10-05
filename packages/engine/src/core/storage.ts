@@ -22,7 +22,8 @@ export class Storage {
 	readonly freeCount: Int32Array;
 	readonly free: Int32Array;
 	readonly counters: Int32Array;
-	private readonly idMaps: Map<number, Slot>[] = [];
+	// Open addressing over slots, linear probing; holds slot + 1 so 0 means empty.
+	private readonly index: Int32Array;
 
 	constructor(
 		readonly floors: number,
@@ -34,7 +35,7 @@ export class Storage {
 		this.freeCount = new Int32Array(floors);
 		this.free = new Int32Array(floors * CAP);
 		this.counters = new Int32Array(floors);
-		for (let f = 0; f < floors; f++) this.idMaps.push(new Map());
+		this.index = new Int32Array(floors * INDEX_SIZE);
 		this.ids = new Int32Array(floors * CAP);
 		this.columns.push(this.ids);
 	}
@@ -70,12 +71,12 @@ export class Storage {
 		const id = floor * ID_FLOOR_STRIDE + counter;
 		this.ids[slot] = id;
 		this.masks[slot * this.maskWords] = ALIVE;
-		this.idMap(floor).set(id, slot as Slot);
+		this.insert(floor, id, slot);
 		return slot as Slot;
 	}
 
 	release(floor: number, slot: Slot): void {
-		this.idMap(floor).delete(this.ids[slot] ?? 0);
+		this.unindex(floor, slot);
 		// Zero is every field's absent value, so the next entity in this slot starts clean.
 		const columns = this.columns;
 		for (let c = 0; c < columns.length; c++) {
@@ -90,17 +91,72 @@ export class Storage {
 	}
 
 	slotOf(floor: number, id: EntityId): Slot {
-		return this.idMap(floor).get(id) ?? NONE;
+		const { index, ids } = this;
+		const base = floor * INDEX_SIZE;
+		for (let i = home(id); ; i = (i + 1) & INDEX_MASK) {
+			const held = index[base + i] ?? 0;
+			if (held === 0) return NONE;
+			if (ids[held - 1] === id) return (held - 1) as Slot;
+		}
+	}
+
+	// Takes a floor's index built elsewhere; probe order may differ from the original run, and nothing iterates it.
+	adoptIndex(floor: number, table: Int32Array): void {
+		this.index.set(table, floor * INDEX_SIZE);
 	}
 
 	floorOf(id: EntityId): number {
-		for (let f = 0; f < this.floors; f++) if (this.idMap(f).has(id)) return f;
+		for (let f = 0; f < this.floors; f++)
+			if (this.slotOf(f, id) !== NONE) return f;
 		return -1;
 	}
 
-	private idMap(floor: number): Map<number, Slot> {
-		const map = this.idMaps[floor];
-		if (!map) throw new Error(`no floor ${floor}`);
-		return map;
+	private insert(floor: number, id: number, slot: number): void {
+		indexInsert(this.index, floor * INDEX_SIZE, this.ids, 0, id, slot);
 	}
+
+	// Backward-shift deletion: no tombstones, so probe chains never degrade.
+	private unindex(floor: number, slot: number): void {
+		const { index, ids } = this;
+		const base = floor * INDEX_SIZE;
+		let hole = home(ids[slot] ?? 0);
+		while (index[base + hole] !== slot + 1) hole = (hole + 1) & INDEX_MASK;
+		for (let j = (hole + 1) & INDEX_MASK; ; j = (j + 1) & INDEX_MASK) {
+			const held = index[base + j] ?? 0;
+			if (held === 0) break;
+			const h = home(ids[held - 1] ?? 0);
+			if (((j - h) & INDEX_MASK) >= ((j - hole) & INDEX_MASK)) {
+				index[base + hole] = held;
+				hole = j;
+			}
+		}
+		index[base + hole] = 0;
+	}
+}
+
+export const INDEX_SIZE = CAP * 2;
+const INDEX_MASK = INDEX_SIZE - 1;
+const INDEX_SHIFT = Math.clz32(INDEX_MASK);
+const GOLDEN = 0x9e3779b1;
+const home = (id: number) => Math.imul(id, GOLDEN) >>> INDEX_SHIFT;
+
+// Returns false, leaving the table unchanged, when the id is already indexed.
+// `ids[slot - idsBase]` must hold each indexed slot's id.
+export function indexInsert(
+	table: Int32Array,
+	tableBase: number,
+	ids: Int32Array,
+	idsBase: number,
+	id: number,
+	slot: number,
+): boolean {
+	let i = home(id);
+	for (;;) {
+		const held = table[tableBase + i] ?? 0;
+		if (held === 0) break;
+		if (ids[held - 1 - idsBase] === id) return false;
+		i = (i + 1) & INDEX_MASK;
+	}
+	table[tableBase + i] = slot + 1;
+	return true;
 }

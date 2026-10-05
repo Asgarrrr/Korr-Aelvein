@@ -15,10 +15,10 @@ import { createWorld } from "../../../src/core/world";
 import { hunger } from "../../../src/modules/hunger";
 import { hungerConfig } from "../../../src/modules/hunger/config";
 import { modules } from "../../../src/registry";
-import { populatedWorld } from "../../fixtures";
+import { game, populatedWorld } from "../../fixtures";
 
 const smallWorld = () =>
-	createWorld({ seed: 1, floors: 1, width: 16, height: 16, modules });
+	createWorld({ seed: 1, floors: 1, width: 16, height: 16, ...game });
 const ratAt = (satiety: number) => ({
 	...rat,
 	components: { satiety: { value: satiety } },
@@ -79,6 +79,7 @@ test("eat fails on food two cells away; next to it, it fills up to max", () => {
 		query: () => ({ has: () => true }),
 		tick() {},
 		propose() {},
+		event: () => ({ index: 0 }),
 		action: (_name: string, _kind: string, run: ActionFn<"entity">) => {
 			eat = run;
 			return { index: 0 };
@@ -94,6 +95,7 @@ test("eat fails on food two cells away; next to it, it fills up to max", () => {
 		x: (slot: number) => xs[slot] ?? 0,
 		y: () => 0,
 		kill: (id: number) => killed.push(id),
+		emit() {},
 	} as unknown as ActionCtx;
 	edible.nutrition[1] = 100;
 	edible.nutrition[2] = 100;

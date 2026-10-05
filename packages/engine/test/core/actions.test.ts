@@ -159,12 +159,15 @@ test("an actor killed by its own action is not rescheduled", () => {
 		config: {},
 		setup(b) {
 			const trace = b.write("trace");
+			const ash = b.species({
+				actor: true,
+				components: { trace: { reborn: 1 } },
+			});
 			const burn = b.action("burn", "none", (ctx, actor) => {
 				trace.calls[actor] = (trace.calls[actor] ?? 0) + 1;
 				if (trace.reborn[actor] === 0) {
 					const id = ctx.idOf(actor);
 					ctx.kill(id, id);
-					const ash = { actor: true, components: { trace: { reborn: 1 } } };
 					ctx.spawn(ash, ctx.x(actor), ctx.y(actor), id);
 				}
 				return HALF_TURN;

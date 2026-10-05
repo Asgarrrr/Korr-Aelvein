@@ -59,7 +59,7 @@ test("killed slots are reused, and a full floor throws", () => {
 	for (let i = 0; i < CAP; i++) world.spawn(0, victim, 0, 0);
 	world.runRounds(1);
 	for (let i = 0; i < CAP; i++) world.spawn(0, survivor, 0, 0);
-	expect(() => world.spawn(0, survivor, 0, 0)).toThrow(/full/);
+	expect(() => world.spawn(0, survivor, 0, 0)).toThrow(/popCap/);
 	expect(() => world.spawn(1, survivor, 0, 0)).not.toThrow();
 });
 

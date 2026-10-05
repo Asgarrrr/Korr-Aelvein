@@ -10,3 +10,4 @@ export const MAX_ALTERNATES = 4;
 export const MAX_CANDIDATES = 256;
 export const PERCEPTION_RADIUS = 3;
 export const MAX_PERCEIVED = 1024;
+export const EVENT_CAP_PER_TURN = 1 << 15;

@@ -1,6 +1,5 @@
 import { CAP } from "./config";
 import type { Cell, EntityId } from "./ids";
-import type { SpeciesShape } from "./species";
 
 const LIMIT = 2 * CAP;
 
@@ -8,7 +7,7 @@ const LIMIT = 2 * CAP;
 class DeferredList {
 	count = 0;
 	readonly order = new Int32Array(LIMIT);
-	private readonly causes = new Int32Array(LIMIT);
+	readonly causes = new Int32Array(LIMIT);
 	private readonly keys = new Int32Array(LIMIT);
 	private readonly scratch = new Int32Array(LIMIT);
 
@@ -90,7 +89,7 @@ export class DeferredKills extends DeferredList {
 }
 
 export class DeferredSpawns extends DeferredList {
-	readonly species: (SpeciesShape | undefined)[] = new Array(LIMIT);
+	readonly species = new Int32Array(LIMIT);
 	readonly xs = new Int32Array(LIMIT);
 	readonly ys = new Int32Array(LIMIT);
 
@@ -99,7 +98,7 @@ export class DeferredSpawns extends DeferredList {
 	}
 
 	push(
-		species: SpeciesShape,
+		species: number,
 		x: number,
 		y: number,
 		cell: Cell,
