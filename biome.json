@@ -15,7 +15,10 @@
 	"linter": {
 		"enabled": true,
 		"rules": {
-			"preset": "recommended"
+			"preset": "recommended",
+			"correctness": {
+				"noUndeclaredDependencies": "error"
+			}
 		}
 	},
 	"javascript": {
@@ -30,5 +33,21 @@
 				"organizeImports": "on"
 			}
 		}
-	}
+	},
+	"overrides": [
+		{
+			"includes": ["packages/engine/src/**"],
+			"plugins": ["./scripts/lint/determinism.grit"],
+			"linter": {
+				"rules": {
+					"correctness": {
+						"noNodejsModules": "error"
+					},
+					"style": {
+						"noMagicNumbers": "error"
+					}
+				}
+			}
+		}
+	]
 }

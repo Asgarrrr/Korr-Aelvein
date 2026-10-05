@@ -31,6 +31,10 @@ quand la spec est mise à jour pour l'inclure.
 - Lumière comme ressource.
 - Échos des runs passés qui rejouent leurs actions.
 
+## Outillage
+
+- Config en JSON, modifiable sans toucher au code : éditeur de niveaux, modding, réglages à chaud.
+
 ## Visuel
 
 - 3D avec textures pixel art, terrain en marches, lumière douce, palette désaturée.

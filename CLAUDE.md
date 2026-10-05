@@ -17,6 +17,9 @@ This file holds rules, not progress: progress lives in git and in the plan.
 - Extract seams from real cases, not guesses: the module interface is
   extracted at the second mechanic, the core API is frozen at the third.
   No abstraction without two real implementations (a test fake counts).
+- Values are data, rules are code. A number, name, list or color that tunes
+  the game lives in a config file; anything with an "if" is code. Never
+  encode rules in data (no conditions in config).
 - Simulation first, visuals second. A mechanic is proven in the ASCII debug
   view before it gets 3D rendering.
 - Before creating a file, helper, or type, have an `Explore` subagent on
@@ -30,7 +33,9 @@ row fits, that is a design question: propose a new row before coding.
 | What | Where |
 |---|---|
 | Foundation rule: grid, turns, actions, arbitration, death, events, RNG | `packages/engine/src/core/` |
-| One mechanic: its needs, components, systems, tuning data | `packages/engine/src/modules/<mechanic>/` |
+| One mechanic: its needs, components, systems | `packages/engine/src/modules/<mechanic>/` |
+| Tuning values of a mechanic: rates, thresholds | `packages/engine/src/modules/<mechanic>/config.ts` |
+| Species: which components, with which values | `packages/engine/src/content/species/` |
 | Type read by two or more modules | `packages/engine/src/contracts/` |
 | Which modules run, in which order | `packages/engine/src/registry.ts` |
 | Floor and world generation | `packages/engine/src/world/` |
@@ -39,7 +44,7 @@ row fits, that is a design question: propose a new row before coding.
 | 3D rendering | `apps/web/src/render/` |
 | ASCII debug view | `apps/web/src/debug/` |
 | Keys and clicks → player intents | `apps/web/src/input/` |
-| Color, size, duration | `apps/web/src/theme.ts`, never a literal elsewhere |
+| Rendering settings: sizes, durations, palette | `apps/web/src/theme.ts` |
 | Tests | `<package>/test/`, mirroring `src/` |
 | Repository tooling | `scripts/` |
 
@@ -48,10 +53,13 @@ row fits, that is a design question: propose a new row before coding.
   never `combat2.ts`.
 - When adding code, name the table row that justifies its location. If the
   change pushes a file past the limit, propose the split in the same change.
-- `scripts/check-architecture.ts` enforces the boundaries, the file limit,
-  engine determinism and color literals, as part of `verify`. Sizes and
-  durations outside `theme.ts` are caught in review only. Never weaken it to
-  get green: fix the code, or propose a rule change.
+- Enforcement, all part of `verify`. Never weaken a rule to get green: fix
+  the code, or propose a rule change.
+  - Biome (`biome.json`): undeclared dependencies everywhere; in the engine,
+    Node modules, magic numbers and nondeterministic calls
+    (`scripts/lint/determinism.grit`).
+  - `scripts/check-architecture.ts`: the module graph, relative imports
+    leaving their package, the file size limit.
 
 ## Commands
 
@@ -92,9 +100,10 @@ row fits, that is a design question: propose a new row before coding.
   and only once a second module reads them. Contracts hold no logic.
 - A module writes only its own components.
 - Module order comes from one explicit list in `registry.ts`, never from
-  file order. It is the only file outside `modules/` that imports a module.
+  file order. Only `registry.ts` and `content/` may import a module.
 - Every random draw derives from hash(seed, module, turn, entity). Adding a
   module must not shift other modules' draws.
+- Config values used by the engine are integers (3 per turn, not 0.03).
 - Integer math in the engine. No `Math.pow`, `Math.exp` or other
   transcendental functions: their precision differs between engines.
 - Entity ids are monotonic and never reused.

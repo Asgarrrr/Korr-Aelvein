@@ -1,0 +1,35 @@
+or {
+	`Math.$fn($args)` where {
+		$fn <: or {
+			`random`,
+			`pow`,
+			`exp`,
+			`expm1`,
+			`log`,
+			`log1p`,
+			`log2`,
+			`log10`,
+			`sin`,
+			`cos`,
+			`tan`,
+			`asin`,
+			`acos`,
+			`atan`,
+			`atan2`,
+			`sinh`,
+			`cosh`,
+			`tanh`,
+			`cbrt`,
+			`hypot`
+		}
+	},
+	`Math[$key]`,
+	`Date.now()`,
+	`Date($args)`,
+	`new Date($args)`,
+	`performance.now()`,
+	`crypto.getRandomValues($args)`,
+	`crypto.randomUUID()`
+} as $call where {
+	register_diagnostic(span=$call, message="Nondeterministic call in the engine: use the seeded RNG and integer math.")
+}
