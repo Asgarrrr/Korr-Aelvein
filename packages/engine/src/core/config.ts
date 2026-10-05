@@ -1,0 +1,12 @@
+export const CAP = 1 << 14;
+export const MAX_FLOORS = 64;
+export const ID_FLOOR_STRIDE = 1 << 25;
+export const TICKS_PER_TURN = 100;
+export const MAX_TICK = 0x7fffffff;
+export const MAX_COORD = 0x7fff;
+export const MAX_SEED = 0xffffffff;
+export const SCORE_MAX = 10_000;
+export const MAX_ALTERNATES = 4;
+export const MAX_CANDIDATES = 256;
+export const PERCEPTION_RADIUS = 3;
+export const MAX_PERCEIVED = 1024;

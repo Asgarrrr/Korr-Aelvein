@@ -140,9 +140,11 @@ neighbour order (cell order, then list order) restores verbatim.
 
 ### D8. Arbitration: scored candidates
 
-- Perception buffer (from slice 3): built once per acting creature. Entries
-  `slot, id, dx, dy, dist` within `perceptionRadius`, sorted by
-  (dist, EntityId). Core data only.
+- Perception buffer: built lazily, at most once per acting creature, on the
+  first read. Stores slots only; id, dx, dy and dist are derived. Order:
+  Chebyshev ring ascending, then cell scan order, then cell list order. It
+  is deterministic and part of the floor image; a per-ring sort by
+  EntityId cost 125 ns per turn for no behavioural gain.
 - `propose(actor, perception, out)` on each module whose required mask
   matches. `out.push(actionRef, target, score)` is typed by the action's
   target kind: `entity` (EntityId), `cell`, or `none`.

@@ -72,7 +72,9 @@ const checkEngineImport = (file: string, target: string) => {
 };
 
 for (const dir of workspaces) {
-	for (const file of [...walk(join(dir, "src")), ...walk(join(dir, "test"))]) {
+	for (const file of ["src", "test", "bench"].flatMap((sub) =>
+		walk(join(dir, sub)),
+	)) {
 		const source = readFileSync(file, "utf8");
 
 		const lines = source.split("\n").length - (source.endsWith("\n") ? 1 : 0);

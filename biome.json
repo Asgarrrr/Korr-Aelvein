@@ -37,6 +37,10 @@
 	"overrides": [
 		{
 			"includes": ["packages/engine/src/**"],
+			"plugins": ["./scripts/lint/runtime.grit"]
+		},
+		{
+			"includes": ["packages/engine/src/**", "packages/engine/bench/**"],
 			"plugins": ["./scripts/lint/determinism.grit"],
 			"linter": {
 				"rules": {

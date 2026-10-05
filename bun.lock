@@ -32,6 +32,9 @@
     },
     "packages/engine": {
       "name": "@korr/engine",
+      "devDependencies": {
+        "@types/bun": "^1.4.2",
+      },
     },
     "packages/protocol": {
       "name": "@korr/protocol",
