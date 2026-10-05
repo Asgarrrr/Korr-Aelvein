@@ -39,3 +39,11 @@ quand la spec est mise à jour pour l'inclure.
 
 - 3D avec textures pixel art, terrain en marches, lumière douce, palette désaturée.
 - Modèles faits dans MagicaVoxel.
+
+## Multijoueur
+
+- Modèle de tour à plusieurs joueurs : tours simultanés, minuteur, qui attend
+  qui. Le moteur reste neutre : il s'arrête quand un joueur est attendu, le
+  serveur fournit les entrées (voir `docs/plans/ecs-core.md`, D13).
+- Étages sans joueur qui avancent de façon asynchrone, à un round au plus
+  de leurs voisins.
