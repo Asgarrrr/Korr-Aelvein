@@ -19,6 +19,7 @@ import {
 	SUBJECT,
 	type SubjectKind,
 } from "../random/rng";
+import { approach as approachCell } from "../space/approach";
 import { targetValue } from "./arbitration";
 import { validTarget } from "./target";
 
@@ -100,6 +101,10 @@ export class Context implements ActionCtx {
 		if (!(Number.isInteger(cell) && cell >= 0 && cell < grid.cells))
 			throw new Error(`holdsActor: cell ${cell} is not on the floor`);
 		return grid.holdsOtherActor(this.#floor, cell, NONE);
+	}
+
+	approach(actor: Slot, x: number, y: number): Cell {
+		return approachCell(this.#engine.grid, this.#floor, actor, x, y);
 	}
 
 	firstAt(cell: Cell): Slot {

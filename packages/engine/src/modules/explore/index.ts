@@ -1,43 +1,12 @@
 import {
-	type Cell,
 	defineModule,
 	FAIL,
 	NO_CELL,
 	NONE,
 	PERCEPTION_RADIUS,
-	type ReadCtx,
-	type Slot,
 } from "../../core/api";
 import { exploreConfig } from "./config";
 import { cells } from "./schema";
-
-const DX = [-1, 0, 1, -1, 1, -1, 0, 1];
-const DY = [-1, -1, -1, 0, 0, 1, 1, 1];
-
-// The straight step toward the stairs first, then any other free step that also closes in.
-function approach(
-	ctx: ReadCtx,
-	actor: Slot,
-	dx: number,
-	dy: number,
-	dist: number,
-): Cell {
-	const x = ctx.x(actor);
-	const y = ctx.y(actor);
-	const sx = Math.sign(dx);
-	const sy = Math.sign(dy);
-	const straight = ctx.cellAt(x + sx, y + sy);
-	if (!ctx.holdsActor(straight)) return straight;
-	for (let d = 0; d < DX.length; d++) {
-		const ox = DX[d] ?? 0;
-		const oy = DY[d] ?? 0;
-		if (ox === sx && oy === sy) continue;
-		if (Math.max(Math.abs(dx - ox), Math.abs(dy - oy)) !== dist - 1) continue;
-		const cell = ctx.cellAt(x + ox, y + oy);
-		if (cell !== NO_CELL && !ctx.holdsActor(cell)) return cell;
-	}
-	return NO_CELL;
-}
 
 export const explore = defineModule({
 	name: "explore",
@@ -72,7 +41,7 @@ export const explore = defineModule({
 			}
 		});
 
-		const leave = b.action("leave", "entity", (ctx, actor, target) => {
+		const leave = b.action("leave", "entity", [], (ctx, actor, target) => {
 			const slot = ctx.slotOf(target);
 			// Only propose names stairs, and a link never leaves its entity: core.travel checks it anyway.
 			if (slot === NONE) return FAIL;
@@ -80,7 +49,7 @@ export const explore = defineModule({
 			const dy = ctx.y(slot) - ctx.y(actor);
 			const dist = Math.max(Math.abs(dx), Math.abs(dy));
 			if (dist <= 1) return ctx.instead(ctx.travel, target);
-			const cell = approach(ctx, actor, dx, dy, dist);
+			const cell = ctx.approach(actor, ctx.x(slot), ctx.y(slot));
 			// Blocked for now, not wrong: the decision stands and the turn passes.
 			return cell === NO_CELL
 				? ctx.instead(ctx.idle, null)

@@ -28,7 +28,7 @@ const chain = (length: number, last: () => number) =>
 			const refs: ActionRef<"none">[] = [];
 			for (let i = 0; i < length; i++) {
 				refs.push(
-					b.action(`link${i}`, "none", (ctx, actor) => {
+					b.action(`link${i}`, "none", ["trace"], (ctx, actor) => {
 						trace.depth[actor] = i;
 						trace.calls[actor] = (trace.calls[actor] ?? 0) + 1;
 						const next = refs[i + 1];
@@ -76,7 +76,7 @@ test("an alternate runs with the target given to ctx.instead", () => {
 		schema: { trace: { depth: "u8" } },
 		config: {},
 		setup(b) {
-			const go = b.action("go", "none", (ctx, actor) =>
+			const go = b.action("go", "none", [], (ctx, actor) =>
 				ctx.instead(ctx.step, ctx.cellAt(ctx.x(actor) + 1, ctx.y(actor))),
 			);
 			b.propose((_c, _a, _p, out) => out.push(go, null, SCORE));
@@ -164,7 +164,7 @@ test("an actor killed by its own action is not rescheduled", () => {
 				actor: true,
 				components: { trace: { reborn: 1 } },
 			});
-			const burn = b.action("burn", "none", (ctx, actor) => {
+			const burn = b.action("burn", "none", ["trace"], (ctx, actor) => {
 				trace.calls[actor] = (trace.calls[actor] ?? 0) + 1;
 				if (trace.reborn[actor] === 0) {
 					const id = ctx.idOf(actor);
@@ -201,8 +201,8 @@ test("registration rejects duplicate names, owners and action keys", () => {
 		schema: {},
 		config: {},
 		setup(b) {
-			b.action("go", "none", () => TURN);
-			b.action("go", "none", () => TURN);
+			b.action("go", "none", [], () => TURN);
+			b.action("go", "none", [], () => TURN);
 		},
 	});
 	expect(() => worldWith(twice)).toThrow(/duplicate action key/);
@@ -214,8 +214,8 @@ const napper = (kind: "cell" | "entity", target: number, viaInstead = false) =>
 		schema: {},
 		config: {},
 		setup(b) {
-			const nap = b.action("nap", kind, () => TURN);
-			const doze = b.action("doze", "none", (ctx) =>
+			const nap = b.action("nap", kind, [], () => TURN);
+			const doze = b.action("doze", "none", [], (ctx) =>
 				ctx.instead(nap, target as never),
 			);
 			b.propose((_ctx, _actor, _p, out) => {

@@ -169,6 +169,10 @@ neighbour order (cell order, then list order) restores verbatim.
 - An action also receives the actor's perception, reset before it runs (so
   it reflects execute time) and filled only if read; a goal action needs it
   to re-check the whole scene, e.g. fleeing every visible threat.
+- An action declares the components its actor must have (`requires`). The
+  core fails it, before it runs and at each `instead` hop, on an actor
+  without them; audit mode throws on a write into a component the row lacks.
+  This is what lets a player send any registered action.
 - The chosen action runs in its module's write scope. It must be
   re-executable later with the same (actor, target): it re-validates and
   returns FAIL.

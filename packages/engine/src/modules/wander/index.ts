@@ -9,7 +9,7 @@ export const wander = defineModule({
 	schema: {},
 	config: wanderConfig,
 	setup(b, cfg) {
-		const roam = b.action("roam", "none", (ctx, actor) => {
+		const roam = b.action("roam", "none", [], (ctx, actor) => {
 			const d = ctx.rng(ctx.idOf(actor), 0, DX.length);
 			const x = ctx.x(actor) + (DX[d] ?? 0);
 			const y = ctx.y(actor) + (DY[d] ?? 0);

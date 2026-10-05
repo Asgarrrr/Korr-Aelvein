@@ -20,7 +20,7 @@ const culprit = (phase: Phase, write: () => Write | undefined) =>
 		config: {},
 		setup(b) {
 			const rows = b.query(["mark"]);
-			const act = b.action("act", "none", (_ctx, actor) => {
+			const act = b.action("act", "none", [], (_ctx, actor) => {
 				if (phase === "action") write()?.(actor);
 				return TURN;
 			});

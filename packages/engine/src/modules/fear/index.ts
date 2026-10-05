@@ -168,6 +168,7 @@ export const fear = defineModule({
 		const flee = b.action(
 			"flee",
 			"entity",
+			["wary"],
 			(ctx, actor, threat, perception) => {
 				if (!diet || !edible) return FAIL;
 				const prey = edible.class.get(actor);
@@ -196,24 +197,29 @@ export const fear = defineModule({
 
 		// Targets nothing: the fire it flees moves and dies out, but the intent stays valid
 		// for as long as any burning cell is near. Staying put is a way to flee too.
-		const avoid = b.action("avoid", "none", (ctx, actor, _none, perception) => {
-			const fire = burning?.read(ctx);
-			if (!fire || !nearFire(ctx, actor, fire, fireReach)) return FAIL;
-			const prey = edible ? edible.class.get(actor) : 0;
-			const cell = fleeCell(
-				ctx,
-				actor,
-				perception,
-				diet?.eats,
-				prey,
-				fire,
-				fireReach,
-			);
-			if (cell === NO_CELL) return FAIL;
-			if (cell === ctx.cellAt(ctx.x(actor), ctx.y(actor)))
-				return ctx.instead(ctx.idle, null);
-			return ctx.instead(ctx.step, cell);
-		});
+		const avoid = b.action(
+			"avoid",
+			"none",
+			["wary"],
+			(ctx, actor, _none, perception) => {
+				const fire = burning?.read(ctx);
+				if (!fire || !nearFire(ctx, actor, fire, fireReach)) return FAIL;
+				const prey = edible ? edible.class.get(actor) : 0;
+				const cell = fleeCell(
+					ctx,
+					actor,
+					perception,
+					diet?.eats,
+					prey,
+					fire,
+					fireReach,
+				);
+				if (cell === NO_CELL) return FAIL;
+				if (cell === ctx.cellAt(ctx.x(actor), ctx.y(actor)))
+					return ctx.instead(ctx.idle, null);
+				return ctx.instead(ctx.step, cell);
+			},
+		);
 
 		b.propose((ctx, actor, perception, out) => {
 			if (!wary.has(actor)) return;

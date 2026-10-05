@@ -25,7 +25,7 @@ export const climber = defineModule({
 		const climbers = b.query(["climbs"]);
 		const stairs = b.query(["link"]);
 		const marked = b.event("marked");
-		const mark = b.action("mark", "none", (ctx, actor) => {
+		const mark = b.action("mark", "none", ["climbs"], (ctx, actor) => {
 			climbs.marks[actor] = (climbs.marks[actor] ?? 0) + 1;
 			ctx.emit(marked, ctx.idOf(actor), 0, 0);
 			return TURN;

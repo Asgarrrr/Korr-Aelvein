@@ -31,11 +31,11 @@ const fickle = (highResult = TURN, score = SCORE) =>
 		config: {},
 		setup(b) {
 			const tally = b.write("tally");
-			const low = b.action(LOW, "none", (_ctx, actor) => {
+			const low = b.action(LOW, "none", ["tally"], (_ctx, actor) => {
 				tally.low[actor] = (tally.low[actor] ?? 0) + 1;
 				return TURN;
 			});
-			const high = b.action(HIGH, "none", (_ctx, actor) => {
+			const high = b.action(HIGH, "none", ["tally"], (_ctx, actor) => {
 				tally.high[actor] = (tally.high[actor] ?? 0) + 1;
 				return highResult;
 			});
@@ -54,11 +54,16 @@ const poker = defineModule({
 	config: {},
 	setup(b) {
 		const pokes = b.write("pokes");
-		const poke = b.action("poke", "entity", (_ctx, actor, target) => {
-			pokes.last[actor] = target;
-			pokes.n[actor] = (pokes.n[actor] ?? 0) + 1;
-			return TURN;
-		});
+		const poke = b.action(
+			"poke",
+			"entity",
+			["pokes"],
+			(_ctx, actor, target) => {
+				pokes.last[actor] = target;
+				pokes.n[actor] = (pokes.n[actor] ?? 0) + 1;
+				return TURN;
+			},
+		);
 		b.propose((_ctx, actor, perception, out) => {
 			const first = (pokes.n[actor] ?? 0) === 0;
 			let top = 0;
@@ -131,11 +136,11 @@ test("the decision kept is the chosen action, not the alternate it ran", () => {
 		setup(b) {
 			const tally = b.write("tally");
 			let low: ActionRef<"none"> | undefined;
-			const high = b.action(HIGH, "none", (ctx, actor) => {
+			const high = b.action(HIGH, "none", ["tally"], (ctx, actor) => {
 				tally.high[actor] = (tally.high[actor] ?? 0) + 1;
 				return low ? ctx.instead(low, null) : TURN;
 			});
-			low = b.action(LOW, "none", (_ctx, actor) => {
+			low = b.action(LOW, "none", ["tally"], (_ctx, actor) => {
 				tally.low[actor] = (tally.low[actor] ?? 0) + 1;
 				return TURN;
 			});

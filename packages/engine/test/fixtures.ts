@@ -76,6 +76,7 @@ function backwards(ctx: WriteCtx): WriteCtx {
 		y: (slot) => real.y(slot),
 		cellAt: (x, y) => real.cellAt(x, y),
 		holdsActor: (cell) => real.holdsActor(cell),
+		approach: (actor, x, y) => real.approach(actor, x, y),
 		rng: (subject, n, bound) => real.rng(subject, n, bound),
 		rngCell: (cell, n, bound) => real.rngCell(cell, n, bound),
 		kill: (id, cause) => real.kill(id, cause),
@@ -109,7 +110,8 @@ export function reversed<S extends Schema, C, K extends Schema>(
 				previous: (name) => b.previous(name),
 				read: (name) => b.read(name),
 				tick: (run) => b.tick((ctx) => run(backwards(ctx))),
-				action: (name, kind, run) => b.action(name, kind, run),
+				action: (name, kind, requires, run) =>
+					b.action(name, kind, requires, run),
 				propose: (run) => b.propose(run),
 				event: (name) => b.event(name),
 				species: (wanted) => b.species(wanted),

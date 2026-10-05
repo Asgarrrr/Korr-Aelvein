@@ -63,6 +63,9 @@ export interface ReadCtx {
 	y(slot: Slot): number;
 	cellAt(x: number, y: number): Cell;
 	holdsActor(cell: Cell): boolean;
+	// A free step that closes the Chebyshev distance to (x, y): the straight one first, else
+	// the first in fixed neighbour order; NO_CELL when there is none.
+	approach(actor: Slot, x: number, y: number): Cell;
 	// The entities in a cell, in grid list order: NONE ends the walk.
 	firstAt(cell: Cell): Slot;
 	nextAt(slot: Slot): Slot;
@@ -187,9 +190,16 @@ export interface Builder<S extends Schema, K extends Schema = NoCells> {
 		names: readonly ((keyof S & string) | keyof Contracts | keyof CoreSchema)[],
 	): Query;
 	tick(run: TickFn): void;
+	// On an actor lacking any `requires` component the action is a FAIL; as for query, every
+	// name must be owned by a registered module.
 	action<K extends TargetKind>(
 		name: string,
 		kind: K,
+		requires: readonly (
+			| (keyof S & string)
+			| keyof Contracts
+			| keyof CoreSchema
+		)[],
 		run: ActionFn<K>,
 	): ActionRef<K>;
 	propose(run: ProposeFn): void;

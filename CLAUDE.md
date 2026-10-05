@@ -135,6 +135,8 @@ the code around it: every needless comment breeds more.
 - Ordered rules (death → drop → remove) are direct core calls, not events.
 - A module never imports another module. Shared types live in `contracts/`,
   and only once a second module reads them. Contracts hold no logic.
+- An action declares the components its actor must have; the core checks
+  them before every run.
 - A module writes only its own components. Health changes only through
   `harm`, applied by the core. A module reads another module's component
   only through a getter view typed by `contracts/`, and keeps no state

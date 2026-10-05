@@ -134,7 +134,7 @@ const still = defineModule({
 	schema: {},
 	config: {},
 	setup(b) {
-		const wait = b.action("wait", "none", () => TICKS_PER_TURN);
+		const wait = b.action("wait", "none", [], () => TICKS_PER_TURN);
 		b.propose((_ctx, _actor, _perception, out) => {
 			out.push(wait, null, 1);
 		});

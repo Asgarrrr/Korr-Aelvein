@@ -18,9 +18,11 @@ import type {
 } from "../api";
 import { Audit } from "../audit/audit";
 import { checked } from "../audit/checked";
+import { MaskBits } from "../ecs/mask";
 import { MaskQuery } from "../ecs/query";
 import type { Column, Columns, FieldKind, Schema } from "../ecs/schema";
 import { createColumn } from "../ecs/schema";
+import type { MaskBit } from "../ecs/storage";
 import { readView } from "../ecs/view";
 import { type Buffer, CORE, CORE_KEY, Engine } from "../engine";
 import { coreSchema } from "../health/vitality";
@@ -284,18 +286,10 @@ class ModuleBuilder implements Builder<Schema, Schema> {
 	}
 
 	query(names: readonly string[]): Query {
-		const module = this.#open();
 		// The core hands modules only its own contexts, which carry the floor slots() reads.
 		const query = new MaskQuery(
 			this.#engine.storage,
-			names.map((name) => {
-				const component = this.#engine.components.get(name);
-				if (!component)
-					throw new Error(
-						`${module.name} queries ${name}, which no module owns`,
-					);
-				return component.bit;
-			}),
+			this.#bits(names, "queries"),
 		);
 		return query as unknown as Query;
 	}
@@ -310,10 +304,13 @@ class ModuleBuilder implements Builder<Schema, Schema> {
 	action<K extends TargetKind>(
 		name: string,
 		kind: K,
+		requires: readonly string[],
 		run: ActionFn<K>,
 	): ActionRef<K> {
 		const full = `${this.#open().name}/${name}`;
-		return this.#engine.addAction(this.#moduleKey, full, kind, run);
+		const { storage } = this.#engine;
+		const mask = new MaskBits(storage, this.#bits(requires, "requires"));
+		return this.#engine.addAction(this.#moduleKey, full, kind, mask, run);
 	}
 
 	propose(run: ProposeFn): void {
@@ -334,6 +331,16 @@ class ModuleBuilder implements Builder<Schema, Schema> {
 		if (this.#sealed)
 			throw new Error(`${this.#module.name} used its builder after setup`);
 		return this.#module;
+	}
+
+	#bits(names: readonly string[], verb: string): MaskBit[] {
+		const module = this.#open();
+		return names.map((name) => {
+			const component = this.#engine.components.get(name);
+			if (!component)
+				throw new Error(`${module.name} ${verb} ${name}, which no module owns`);
+			return component.bit;
+		});
 	}
 
 	#ownedCells(name: string): Readonly<Record<string, Column>> {

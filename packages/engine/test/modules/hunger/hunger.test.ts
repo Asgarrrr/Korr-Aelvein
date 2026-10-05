@@ -99,7 +99,12 @@ test("eat steps toward far food, fails on itself or a class it does not eat", ()
 		tick() {},
 		propose() {},
 		event: () => ({ index: 0 }),
-		action: (_name: string, _kind: string, run: ActionFn<"entity">) => {
+		action: (
+			_name: string,
+			_kind: string,
+			_requires: unknown,
+			run: ActionFn<"entity">,
+		) => {
 			eat = run;
 			return { index: 0 };
 		},
@@ -116,8 +121,8 @@ test("eat steps toward far food, fails on itself or a class it does not eat", ()
 		idOf: (slot: number) => slot + 1,
 		x: (slot: number) => xs[slot] ?? 0,
 		y: () => 0,
-		cellAt: (x: number, y: number) => y * 16 + x,
-		holdsActor: () => false,
+		// The free cell west of the target: the actor here always stands west of its meal.
+		approach: (_actor: number, x: number, y: number) => y * 16 + x - 1,
 		kill: (id: number) => killed.push(id),
 		emit() {},
 		instead: (action: unknown, cell: number) => {

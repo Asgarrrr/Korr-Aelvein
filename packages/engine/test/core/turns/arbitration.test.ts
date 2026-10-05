@@ -15,7 +15,7 @@ const marker = (name: string, score = SCORE) =>
 		config: {},
 		setup(b) {
 			const hit = b.write(`${name}Hit`);
-			const mark = b.action("mark", "none", (_ctx, actor) => {
+			const mark = b.action("mark", "none", [`${name}Hit`], (_ctx, actor) => {
 				hit.count[actor] = (hit.count[actor] ?? 0) + 1;
 				return TURN;
 			});

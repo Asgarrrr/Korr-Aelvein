@@ -33,7 +33,7 @@ const heater = defineModule({
 				level.set(cell, level.get(cell) + (heat.add[s] ?? 0));
 			}
 		});
-		const look = b.action("look", "none", (ctx, actor) => {
+		const look = b.action("look", "none", ["seen"], (ctx, actor) => {
 			seen.level[actor] = warmth.level
 				.read(ctx)
 				.get(ctx.cellAt(ctx.x(actor), ctx.y(actor)));
@@ -80,6 +80,15 @@ test("cell columns are saved with their floor, padding and all", () => {
 		world.peek("seen", "level", watcher),
 	);
 	expect(loaded.peek("seen", "level", watcher)).toBe(16);
+});
+
+test("in audit mode, an actor without seen proposes look and records nothing", () => {
+	const world = createWorld(options(true));
+	world.spawn(0, STOVE, 5, 6);
+	world.spawn(0, { actor: true, components: { heat: { add: 1 } } }, 4, 6);
+	const watcher = world.spawn(0, WATCHER, 5, 6);
+	world.runRounds(2);
+	expect(world.peek("seen", "level", watcher)).toBeGreaterThan(0);
 });
 
 test("the hash covers cell columns", () => {
@@ -351,7 +360,7 @@ test("a previous buffer is readable only in its owner's tick", () => {
 			b.tick((ctx) => {
 				reads.push(`tick ${was.read(ctx).get(0 as Cell)}`);
 			});
-			const look = b.action("look", "none", (ctx) => {
+			const look = b.action("look", "none", [], (ctx) => {
 				expect(() => was.read(ctx)).toThrow(/only in its owner's tick/);
 				reads.push("action refused");
 				return 100;

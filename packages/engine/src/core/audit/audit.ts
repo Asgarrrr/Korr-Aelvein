@@ -1,6 +1,7 @@
 import type { AnyModule } from "../api";
 import { CAP } from "../config";
 import type { Column } from "../ecs/schema";
+import { ALIVE } from "../ecs/storage";
 import { CORE, CORE_KEY, type Engine } from "../engine";
 import { coreSchema } from "../health/vitality";
 import {
@@ -28,10 +29,18 @@ interface Target {
 	readonly name: string;
 }
 
+interface Owned {
+	readonly name: string;
+	readonly word: number;
+	readonly bit: number;
+	readonly fields: readonly (readonly [string, Column])[];
+}
+
 export class Audit {
 	readonly #engine: Engine;
 	readonly #targets: readonly Target[];
 	readonly #modules = new Map<number, string>([[CORE_KEY, CORE]]);
+	readonly #owned = new Map<number, Owned[]>();
 	readonly #saved: Int32Array;
 	readonly #from: Int32Array;
 	readonly #count: Int32Array;
@@ -67,11 +76,20 @@ export class Audit {
 		for (const module of modules) {
 			const key = hashName(module.name);
 			this.#modules.set(key, module.name);
+			const owned: Owned[] = [];
 			for (const component of Object.keys(module.schema)) {
-				const columns = engine.components.get(component)?.columns ?? {};
+				const entry = engine.components.get(component);
+				const columns = entry?.columns ?? {};
 				for (const [field, column] of Object.entries(columns))
 					labels.set(column, { owner: key, name: `${component}.${field}` });
+				if (entry)
+					owned.push({
+						name: component,
+						...entry.bit,
+						fields: Object.entries(columns),
+					});
 			}
+			this.#owned.set(key, owned);
 			for (const name of Object.keys(module.cells ?? {})) {
 				const columns = engine.cellColumns.get(name) ?? {};
 				for (const [field, column] of Object.entries(columns))
@@ -176,6 +194,26 @@ export class Audit {
 			}
 		}
 		this.#checkFree();
+		this.#checkAbsent();
+	}
+
+	// The load rule, applied at write time: a live row holds only zeros in a component it lacks.
+	#checkAbsent(): void {
+		const owned = this.#owned.get(this.#owner);
+		if (!owned) return;
+		const { masks, maskWords, highWater } = this.#engine.storage;
+		const base = this.#floor * CAP;
+		const end = base + (highWater[this.#floor] ?? 0);
+		for (const { name, word, bit, fields } of owned)
+			for (let s = base; s < end; s++) {
+				if (((masks[s * maskWords] ?? 0) & ALIVE) === 0) continue;
+				if (((masks[s * maskWords + word] ?? 0) & bit) !== 0) continue;
+				for (const [field, column] of fields)
+					if (column[s] !== 0)
+						throw new Error(
+							`audit: ${this.#name()} wrote ${name}.${field} at slot ${s}, a row without ${name}`,
+						);
+			}
 	}
 
 	// The rows the next spawns will take must be zero, or a newborn inherits a stray value

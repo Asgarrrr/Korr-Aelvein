@@ -40,7 +40,7 @@ const collector = defineModule({
 			seen.set("view", diet);
 			seen.set("field view", diet.eats);
 		}
-		const act = b.action("act", "none", (ctx) => {
+		const act = b.action("act", "none", [], (ctx) => {
 			seen.set("action ctx", ctx);
 			return TURN;
 		});
@@ -99,12 +99,18 @@ test("nothing handed to a module exposes engine state", () => {
 		"tick ctx",
 		"view",
 	]);
-	for (const [name, object] of seen) {
-		if (name === "columns") continue;
-		const values = Reflect.ownKeys(object).map(
+	const own = (object: object) =>
+		Reflect.ownKeys(object).map(
 			(key) => (object as Record<PropertyKey, unknown>)[key],
 		);
-		const leaks = values.filter(engineState);
+	for (const [name, object] of seen) {
+		if (name === "columns") continue;
+		const values = own(object);
+		// One level down too: a public helper object would carry the state it wraps.
+		const nested = values.flatMap((value) =>
+			typeof value === "object" && value !== null ? own(value) : [],
+		);
+		const leaks = [...values, ...nested].filter(engineState);
 		expect({ name, leaks }).toEqual({ name, leaks: [] });
 		expect({ name, values: Object.values(object).filter(engineState) }).toEqual(
 			{ name, values: [] },
@@ -234,7 +240,7 @@ test("a builder used after setup throws", () => {
 	expect(() => b.previous("spot")).toThrow(/after setup/);
 	expect(() => b.tick(() => {})).toThrow(/after setup/);
 	expect(() => b.propose(() => {})).toThrow(/after setup/);
-	expect(() => b.action("late", "none", () => TURN)).toThrow(/after setup/);
+	expect(() => b.action("late", "none", [], () => TURN)).toThrow(/after setup/);
 	expect(() => b.event("late")).toThrow(/after setup/);
 	expect(() => b.species("rat")).toThrow(/after setup/);
 });

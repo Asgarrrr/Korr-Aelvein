@@ -225,7 +225,12 @@ test("avoid fails once no cell near burns, even with an eater in sight", () => {
 		cells: () => ({ eats: {}, fire: {} }),
 		tick() {},
 		propose() {},
-		action: (name: string, _kind: string, run: ActionFn<"none">) => {
+		action: (
+			name: string,
+			_kind: string,
+			_requires: unknown,
+			run: ActionFn<"none">,
+		) => {
 			if (name === "avoid") avoid = run;
 			return { index: 0 };
 		},

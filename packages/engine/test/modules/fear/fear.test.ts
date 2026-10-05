@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { species } from "../../../src/content/species";
 import { cheese } from "../../../src/content/species/cheese";
+import { ember } from "../../../src/content/species/ember";
 import { rat } from "../../../src/content/species/rat";
 import { stoat } from "../../../src/content/species/stoat";
 import {
@@ -259,7 +260,12 @@ const fleeWith = (hunger: boolean) => {
 		cells: () => ({ eats: {} }),
 		tick() {},
 		propose() {},
-		action: (name: string, _kind: string, run: ActionFn<"entity">) => {
+		action: (
+			name: string,
+			_kind: string,
+			_requires: unknown,
+			run: ActionFn<"entity">,
+		) => {
 			if (name === "flee") flee = run;
 			return { index: 0 };
 		},
@@ -319,3 +325,32 @@ test("flee fails without hunger: no creature is a threat then", () => {
 	const { run } = fleeWith(false);
 	expect(run(ctxWith(), 0 as Slot, THREAT, sight(true))).toBe(FAIL);
 });
+
+for (const [action, threat] of [
+	[
+		"fear/flee",
+		{ actor: false, components: { diet: { eats: foodClass.meat } } },
+	],
+	["fear/avoid", ember],
+] as const)
+	test(`a player sending ${action} moves only if its body is wary`, () => {
+		const after = (wary: boolean) => {
+			const world = createWorld({
+				seed: 1,
+				floors: 1,
+				width: 16,
+				height: 16,
+				modules,
+				species,
+			});
+			const source = world.spawn(0, threat, 5, 5);
+			const meat = { nutrition: 1, class: foodClass.meat };
+			const components = wary ? { edible: meat, wary: {} } : { edible: meat };
+			const player = world.spawnPlayer(0, { actor: true, components }, 6, 5);
+			world.advance();
+			world.input(player, action, action === "fear/flee" ? source : null);
+			return world.locate(player);
+		};
+		expect(after(true)).not.toEqual({ floor: 0, x: 6, y: 5 });
+		expect(after(false)).toEqual({ floor: 0, x: 6, y: 5 });
+	});

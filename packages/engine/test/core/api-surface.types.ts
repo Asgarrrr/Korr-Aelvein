@@ -62,6 +62,7 @@ interface ReadCtxPin {
 	y(slot: Slot): number;
 	cellAt(x: number, y: number): Cell;
 	holdsActor(cell: Cell): boolean;
+	approach(actor: Slot, x: number, y: number): Cell;
 	firstAt(cell: Cell): Slot;
 	nextAt(slot: Slot): Slot;
 	rng(subject: EntityId, n: number, bound: number): number;
@@ -146,6 +147,11 @@ interface BuilderPin<S extends Schema, K extends Schema> {
 	action<A extends TargetKind>(
 		name: string,
 		kind: A,
+		requires: readonly (
+			| (keyof S & string)
+			| keyof Contracts
+			| keyof CoreSchema
+		)[],
 		run: ActionFn<A>,
 	): ActionRef<A>;
 	propose(run: ProposeFn): void;

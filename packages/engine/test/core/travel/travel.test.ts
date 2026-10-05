@@ -192,7 +192,7 @@ test("an actor that dies in the turn it takes the stairs never leaves", () => {
 		config: {},
 		setup(b) {
 			const rows = b.query(["doom"]);
-			const jump = b.action("jump", "none", (ctx, actor) => {
+			const jump = b.action("jump", "none", [], (ctx, actor) => {
 				ctx.kill(ctx.idOf(actor), ctx.idOf(actor));
 				return ctx.instead(ctx.travel, stairs);
 			});

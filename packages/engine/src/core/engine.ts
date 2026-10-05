@@ -9,6 +9,7 @@ import type {
 import type { Audit } from "./audit/audit";
 import { CAP, TICKS_PER_TURN } from "./config";
 import type { EntityId } from "./ecs/ids";
+import { MaskBits } from "./ecs/mask";
 import type { Column } from "./ecs/schema";
 import { INDEX_SIZE, type MaskBit, Storage } from "./ecs/storage";
 import { EventLog } from "./events/events";
@@ -43,6 +44,10 @@ export interface ActionEntry {
 	readonly key: number;
 	readonly kind: number;
 	readonly moduleKey: number;
+	readonly requires: MaskBits;
+	// The inline form of `requires` when it fits one mask word (no word: bits 0); word -1 otherwise.
+	readonly requiresWord: number;
+	readonly requiresBits: number;
 	readonly run: ActionFn<TargetKind>;
 }
 
@@ -220,22 +225,26 @@ export class Engine {
 			options.floors,
 		);
 
+		const none = new MaskBits(this.storage, []);
 		const step = this.addAction(
 			CORE_KEY,
 			`${CORE}/step`,
 			"cell",
+			none,
 			(_ctx, actor, cell): number => stepTo(this, actor, cell),
 		);
 		const idle = this.addAction(
 			CORE_KEY,
 			`${CORE}/idle`,
 			"none",
+			none,
 			() => TICKS_PER_TURN,
 		);
 		const leave = this.addAction(
 			CORE_KEY,
 			`${CORE}/travel`,
 			"entity",
+			none,
 			(_ctx, actor, stairs): number => travel(this, actor, stairs),
 		);
 		this.idleIndex = idle.index;
@@ -248,6 +257,7 @@ export class Engine {
 		moduleKey: number,
 		name: string,
 		kind: K,
+		requires: MaskBits,
 		run: ActionFn<K>,
 	): ActionRef<K> {
 		const key = hashName(name);
@@ -261,6 +271,9 @@ export class Engine {
 			key,
 			kind: KIND_CODE[kind],
 			moduleKey,
+			requires,
+			requiresWord: requires.words.length > 1 ? -1 : (requires.words[0] ?? 0),
+			requiresBits: requires.bits.length > 1 ? 0 : (requires.bits[0] ?? 0),
 			run: run as ActionFn<TargetKind>,
 		});
 		return Object.freeze({ index }) as ActionRef<K>;

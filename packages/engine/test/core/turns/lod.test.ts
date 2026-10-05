@@ -31,7 +31,7 @@ const thinker = defineModule({
 	config: {},
 	setup(b) {
 		const thinkers = b.query(["thinks"]);
-		const think = b.action("think", "none", (ctx, actor) => {
+		const think = b.action("think", "none", [], (ctx, actor) => {
 			log(attempts, ctx.idOf(actor));
 			return failing.has(round) ? FAIL : TURN;
 		});
@@ -281,10 +281,10 @@ test("a cached decision that fails gets no inertia in the decision that replaces
 		config: {},
 		setup(b) {
 			const rows = b.query(["flake"]);
-			const first = b.action("first", "none", () =>
+			const first = b.action("first", "none", [], () =>
 				now === failAt ? FAIL : TURN,
 			);
-			const second = b.action("second", "none", () => {
+			const second = b.action("second", "none", [], () => {
 				bRounds.push(now);
 				return TURN;
 			});

@@ -14,7 +14,10 @@ defineModule({
 		b.write("satiety");
 		// @ts-expect-error unknown field of an owned component
 		b.write("owned").missing;
-		const bite = b.action("bite", "entity", () => 100);
+		const bite = b.action("bite", "entity", [], () => 100);
+		b.action("gnaw", "none", ["owned", "satiety", "vitality"], () => 100);
+		// @ts-expect-error wary belongs to fear and is not in contracts/
+		b.action("cower", "none", ["wary"], () => 100);
 		b.propose((ctx, actor, perception, out) => {
 			out.push(bite, perception.id(0), 1);
 			// @ts-expect-error a raw number is not an EntityId

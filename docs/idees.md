@@ -36,8 +36,6 @@ quand la spec est mise à jour pour l'inclure.
 ## Outillage
 
 - Config en JSON, modifiable sans toucher au code : éditeur de niveaux, modding, réglages à chaud.
-- Aide du cœur pour un pas libre qui se rapproche d'une case : la faim et
-  l'exploration dupliquent aujourd'hui la même fonction `approach`.
 
 ## Visuel
 
@@ -51,5 +49,3 @@ quand la spec est mise à jour pour l'inclure.
   serveur fournit les entrées (voir `docs/plans/ecs-core.md`, D13).
 - Étages sans joueur qui avancent de façon asynchrone, à un round au plus
   de leurs voisins.
-- Quelles actions un joueur peut envoyer, à trancher avec la tranche protocole :
-  liste blanche par corps, ou actions qui vérifient les composants de leur acteur.

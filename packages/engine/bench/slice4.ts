@@ -27,7 +27,8 @@ function timed<S extends Schema, C, K extends Schema>(
 				previous: (name) => b.previous(name),
 				read: (name) => b.read(name),
 				query: (names) => b.query(names),
-				action: (name, kind, run) => b.action(name, kind, run),
+				action: (name, kind, requires, run) =>
+					b.action(name, kind, requires, run),
 				propose: (run) => b.propose(run),
 				event: (name) => b.event(name),
 				species: (wanted) => b.species(wanted),

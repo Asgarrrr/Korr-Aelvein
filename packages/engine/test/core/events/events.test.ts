@@ -110,7 +110,7 @@ test("an action's event carries the actor's own time, not the round start", () =
 		config: {},
 		setup(b) {
 			const beat = b.event("beat");
-			const go = b.action("go", "none", (ctx, actor) => {
+			const go = b.action("go", "none", [], (ctx, actor) => {
 				ctx.emit(beat, ctx.idOf(actor), 0, 0);
 				return SLOW;
 			});
@@ -324,7 +324,7 @@ const shouting = defineModule({
 		const rows = b.query(["loud"]);
 		const counts = b.write("loud");
 		const shout = b.event("shout");
-		const yell = b.action("yell", "none", (ctx, actor) => {
+		const yell = b.action("yell", "none", [], (ctx, actor) => {
 			for (let i = 0; i < (counts.n[actor] ?? 0); i++)
 				ctx.emit(shout, ctx.idOf(actor), 0, 0);
 			return 100;

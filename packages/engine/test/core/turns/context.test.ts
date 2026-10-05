@@ -98,10 +98,15 @@ test("an action sees perception as it is when the action runs", () => {
 		schema: {},
 		config: {},
 		setup(b) {
-			look = b.action("look", "none", (_ctx, _actor, _target, perception) => {
-				seen.push(perception.count > 0 ? perception.dx(0) : 0);
-				return 100;
-			});
+			look = b.action(
+				"look",
+				"none",
+				[],
+				(_ctx, _actor, _target, perception) => {
+					seen.push(perception.count > 0 ? perception.dx(0) : 0);
+					return 100;
+				},
+			);
 			const action = look;
 			b.propose((_ctx, _actor, perception, out) => {
 				if (perception.count > 0) out.push(action, null, 1);

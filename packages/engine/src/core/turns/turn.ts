@@ -164,10 +164,22 @@ export function execute(
 	// Lazy: an action that never reads perception never fills it.
 	const perception = e.perception;
 	perception.reset(floor, slot);
+	const { masks, maskWords } = e.storage;
+	const row = slot * maskWords;
 	let action = first;
 	let target = firstTarget;
 	for (let depth = 0; ; depth++) {
 		const entry = e.actions[action] as ActionEntry;
+		const word = entry.requiresWord;
+		const bits = entry.requiresBits;
+		if (
+			word < 0
+				? !entry.requires.has(slot)
+				: ((masks[row + word] ?? 0) & bits) !== bits
+		) {
+			e.failed = true;
+			return TICKS_PER_TURN;
+		}
 		ctx.setModule(entry.moduleKey);
 		e.alternate = NO_ACTION;
 		const decoded = entry.kind === KIND_CODE.none ? null : target;

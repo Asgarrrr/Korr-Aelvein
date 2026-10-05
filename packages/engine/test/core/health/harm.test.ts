@@ -159,7 +159,7 @@ test("an action's harm lands before the next creature acts", () => {
 		config: {},
 		setup(b) {
 			const fists = b.query(["fist"]);
-			const swing = b.action("swing", "entity", (ctx, actor, target) => {
+			const swing = b.action("swing", "entity", [], (ctx, actor, target) => {
 				acted.push(ctx.idOf(actor));
 				if (fists.has(actor)) ctx.harm(target, 10, ctx.idOf(actor));
 				return TURN;
@@ -211,7 +211,7 @@ test("after an action, harm applies before its deferred kills, and kills before 
 		config: {},
 		setup(b) {
 			const husk = b.species(HUSK);
-			const smash = b.action("smash", "none", (ctx, actor) => {
+			const smash = b.action("smash", "none", [], (ctx, actor) => {
 				const [a, c] = victims as [EntityId, EntityId];
 				ctx.spawn(husk, 3, 3, ctx.idOf(actor));
 				ctx.kill(a, a);

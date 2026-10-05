@@ -180,7 +180,7 @@ test("leaving mid-round lands exactly STAIR_TIME later, even on the next round's
 		setup(b) {
 			const rows = b.query(["hurry"]);
 			const stairs = b.query(["link"]);
-			const pause = b.action("pause", "none", () => {
+			const pause = b.action("pause", "none", [], () => {
 				paused = true;
 				return TURN / 2;
 			});
