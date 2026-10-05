@@ -14,6 +14,9 @@ const workspaces = ["apps", "packages"].flatMap((group) =>
 const ENGINE = join(ROOT, "packages/engine/src") + sep;
 // The composition root: the only file outside modules/ allowed to import them.
 const REGISTRY = join(ENGINE, "registry.ts");
+// Entity storage is the foundation: it must stay usable without the rest of core.
+const ECS = join(ENGINE, "core/ecs") + sep;
+const CORE_CONFIG = join(ENGINE, "core/config.ts");
 
 // `import type` is erased before Bun's scanner sees it, but a type import
 // across modules is still coupling. Anchored to statement starts so that
@@ -90,6 +93,8 @@ const checkEngineImport = (file: string, target: string) => {
 		);
 	if (from.area === "contracts" && to.area !== "contracts")
 		report(file, "contracts/ may only import contracts/");
+	if (file.startsWith(ECS) && !target.startsWith(ECS) && target !== CORE_CONFIG)
+		report(file, "core/ecs/ may only import core/ecs/ and core/config.ts");
 };
 
 for (const dir of workspaces) {
@@ -126,6 +131,17 @@ for (const spec of ["../../content/species/rat", "../../registry"])
 if (errors.length - before !== 2)
 	report(probe, "the modules -> content/registry rule did not fire");
 else errors.length = before;
+
+const ecsProbe = join(ECS, "probe.ts");
+const ecsBefore = errors.length;
+for (const spec of ["../engine", "../config", "./ids"])
+	checkEngineImport(ecsProbe, resolveImport(ecsProbe, spec));
+if (errors.length - ecsBefore !== 1)
+	report(
+		ecsProbe,
+		"the core/ecs -> rest of core rule did not fire exactly once",
+	);
+else errors.length = ecsBefore;
 
 if (errors.length > 0) {
 	console.error(`architecture check failed (${errors.length}):`);

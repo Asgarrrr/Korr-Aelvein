@@ -6,23 +6,23 @@ import type {
 	TargetKind,
 	TickFn,
 } from "./api";
-import { CandidateBuffer } from "./candidates";
-import { Checksum } from "./checksum";
 import { CAP, TICKS_PER_TURN } from "./config";
-import { Context } from "./context";
-import { DeferredKills, DeferredSpawns } from "./deferred";
-import { EventLog } from "./events";
-import { Grid } from "./grid";
-import type { WorldFields } from "./hash";
-import type { EntityId } from "./ids";
-import type { Section } from "./image";
-import { PerceptionBuffer } from "./perception";
-import { hashName, PHASE } from "./rng";
-import { Scheduler } from "./scheduler";
-import type { Column } from "./schema";
-import type { CompiledSpecies } from "./species";
-import { INDEX_SIZE, type MaskBit, Storage } from "./storage";
-import { runFloor, step as stepTo } from "./turn";
+import type { EntityId } from "./ecs/ids";
+import type { Column } from "./ecs/schema";
+import { INDEX_SIZE, type MaskBit, Storage } from "./ecs/storage";
+import { EventLog } from "./events/events";
+import { DeferredKills, DeferredSpawns } from "./lifecycle/deferred";
+import type { CompiledSpecies } from "./lifecycle/species";
+import { Checksum } from "./persistence/checksum";
+import type { WorldFields } from "./persistence/hash";
+import type { Section } from "./persistence/image";
+import { hashName, PHASE } from "./random/rng";
+import { Grid } from "./space/grid";
+import { PerceptionBuffer } from "./space/perception";
+import { CandidateBuffer } from "./turns/arbitration";
+import { Context } from "./turns/context";
+import { Scheduler } from "./turns/scheduler";
+import { runFloor, step as stepTo } from "./turns/turn";
 
 export const KIND_CODE: Readonly<Record<TargetKind, number>> = {
 	none: 0,

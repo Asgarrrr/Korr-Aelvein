@@ -1,8 +1,8 @@
 import { species } from "../src/content/species";
 import { cheese } from "../src/content/species/cheese";
 import { rat } from "../src/content/species/rat";
-import type { EntityId } from "../src/core/ids";
-import { bounded, draw, PHASE, SUBJECT } from "../src/core/rng";
+import type { EntityId } from "../src/core/ecs/ids";
+import { bounded, draw, PHASE, SUBJECT } from "../src/core/random/rng";
 import { createWorld } from "../src/core/world";
 import { modules } from "../src/registry";
 

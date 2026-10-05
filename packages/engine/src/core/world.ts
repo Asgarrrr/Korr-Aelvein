@@ -1,17 +1,17 @@
 import type { AnyModule } from "./api";
 import { CAP, MAX_COORD, MAX_FLOORS, MAX_SEED, TICKS_PER_TURN } from "./config";
+import { type EntityId, NONE } from "./ecs/ids";
+import { INDEX_SIZE } from "./ecs/storage";
 import type { Engine } from "./engine";
-import type { EventVisitor } from "./events";
-import { engineDigest, hashHex, worldDigest } from "./hash";
-import { type EntityId, NONE } from "./ids";
-import { FLOOR_HEADER, readFloor, SUM, saveFloor } from "./image";
-import { spawn } from "./lifecycle";
-import { createEngine } from "./registration";
-import { hashName } from "./rng";
-import { readWorld, saveWorld } from "./save";
-import type { ComponentName, FieldName, Species } from "./species";
-import { INDEX_SIZE } from "./storage";
-import { checkFloor } from "./validate";
+import type { EventVisitor } from "./events/events";
+import { spawn } from "./lifecycle/lifecycle";
+import type { ComponentName, FieldName, Species } from "./lifecycle/species";
+import { engineDigest, hashHex, worldDigest } from "./persistence/hash";
+import { FLOOR_HEADER, readFloor, SUM, saveFloor } from "./persistence/image";
+import { readWorld, saveWorld } from "./persistence/save";
+import { checkFloor } from "./persistence/validate";
+import { hashName } from "./random/rng";
+import { createEngine } from "./setup/registration";
 
 export interface WorldOptions<M extends readonly AnyModule[]> {
 	readonly seed: number;

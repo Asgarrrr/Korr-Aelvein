@@ -1,11 +1,13 @@
-import type { Cell, EntityId, Slot } from "./ids";
-import type { Columns, Schema } from "./schema";
-import type { SpeciesShape } from "./species";
+import type { Cell, EntityId, Slot } from "./ecs/ids";
+import type { Query } from "./ecs/query";
+import type { Columns, Schema } from "./ecs/schema";
+import type { SpeciesShape } from "./lifecycle/species";
 
-export type { Cell, EntityId, Slot } from "./ids";
-export { NONE } from "./ids";
-export type { Schema } from "./schema";
-export type { SpeciesShape } from "./species";
+export type { Cell, EntityId, Slot } from "./ecs/ids";
+export { NONE } from "./ecs/ids";
+export type { Query, SlotList } from "./ecs/query";
+export type { Schema } from "./ecs/schema";
+export type { SpeciesShape } from "./lifecycle/species";
 
 export interface TargetOf {
 	entity: EntityId;
@@ -79,17 +81,6 @@ export interface Candidates {
 		target: TargetOf[K],
 		score: number,
 	): void;
-}
-
-export interface SlotList {
-	readonly length: number;
-	at(i: number): Slot;
-}
-
-export interface Query {
-	has(slot: Slot): boolean;
-	// Fills one list shared by every call: never nest two loops over the same query.
-	slots(floor: number): SlotList;
 }
 
 export type ActionFn<K extends TargetKind> = (
