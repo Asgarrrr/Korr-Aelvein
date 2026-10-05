@@ -4,7 +4,7 @@ Turn-based tactical roguelike in the browser, with an authoritative server.
 The dungeon lives without the player: on every floor, creatures eat, hunt,
 flee and migrate whether the player is there or not.
 
-Anything outside the current scope goes to `IDEES.md`, never into code.
+Anything outside the current scope goes to `docs/idees.md`, never into code.
 This file holds rules, not progress: progress lives in git and in the plan.
 
 ## How we build
@@ -27,6 +27,8 @@ This file holds rules, not progress: progress lives in git and in the plan.
 - test: `bun run test` — single file: `bun test <path>` from the package dir
 - dev: `bun run dev` — server on :3000, web on Vite's port, `/ws` proxied
 - lint fix: `bun run lint:fix`
+- Turborepo changes between versions: read `node_modules/turbo/docs/` before
+  editing `turbo.json`.
 
 ## Architecture
 
