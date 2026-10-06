@@ -4,14 +4,14 @@ import { cheese } from "../../../src/content/species/cheese";
 import { moss } from "../../../src/content/species/moss";
 import { mushroom } from "../../../src/content/species/mushroom";
 import { rat } from "../../../src/content/species/rat";
+import { CAP } from "../../../src/core/config";
 import {
 	type AnyModule,
 	defineModule,
 	type EntityId,
 	type SpeciesShape,
-} from "../../../src/core/api";
-import { CAP } from "../../../src/core/config";
-import { createWorld, loadWorld } from "../../../src/core/world";
+} from "../../../src/core/module/api";
+import { createWorld, loadWorld } from "../../../src/core/world/world";
 import { fear } from "../../../src/modules/fear";
 import { flora } from "../../../src/modules/flora";
 import { hunger } from "../../../src/modules/hunger";

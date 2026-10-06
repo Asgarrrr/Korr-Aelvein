@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import { NONE, type Slot } from "../../../src/core/api";
 import { MAX_TICK, TICKS_PER_TURN } from "../../../src/core/config";
 import { ACTOR, Storage } from "../../../src/core/ecs/storage";
 import { spawn } from "../../../src/core/lifecycle/lifecycle";
+import { NONE, type Slot } from "../../../src/core/module/api";
 import { createEngine } from "../../../src/core/setup/registration";
 import { Scheduler } from "../../../src/core/turns/scheduler";
 

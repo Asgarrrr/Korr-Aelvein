@@ -1,20 +1,24 @@
-import type { AnyModule } from "./api";
-import { type EntityId, NONE } from "./ecs/ids";
-import { type ActionEntry, type Engine, KIND_CODE } from "./engine";
-import type { EventVisitor } from "./events/events";
-import { spawn } from "./lifecycle/lifecycle";
-import type { ComponentName, FieldName, Species } from "./lifecycle/species";
-import { engineDigest, hashHex } from "./persistence/hash";
-import { saveFloor, WORD } from "./persistence/image";
-import { saveWorld } from "./persistence/save";
-import { loadFloor } from "./persistence/validate";
-import { hashName } from "./random/rng";
-import { advance, dueOn, playerTurn } from "./turns/round";
-import { validTarget } from "./turns/target";
+import { CAP } from "../config";
+import { type EntityId, NONE } from "../ecs/ids";
+import { ALIVE } from "../ecs/storage";
+import { type ActionEntry, type Engine, KIND_CODE } from "../engine";
+import type { EventVisitor } from "../events/events";
+import { spawn } from "../lifecycle/lifecycle";
+import type { ComponentName, FieldName, Species } from "../lifecycle/species";
+import type { AnyModule } from "../module/api";
+import { engineDigest, hashHex } from "../persistence/hash";
+import { saveFloor, WORD } from "../persistence/image";
+import { saveWorld } from "../persistence/save";
+import { loadFloor } from "../persistence/validate";
+import { hashName } from "../random/rng";
+import { advance, dueOn, playerTurn } from "../turns/round";
+import { validTarget } from "../turns/target";
 import type { InputRecord, LoadOptions, Location, World } from "./world";
 
 // The World interface over one engine: the guards every call goes through.
-export class GameWorld<M extends readonly AnyModule[]> implements World<M> {
+export class GameWorld<M extends readonly AnyModule[], S extends string>
+	implements World<M, S>
+{
 	// A round that threw left its floor half-applied: nothing may build on that state.
 	private poisoned = false;
 	private draining = false;
@@ -147,6 +151,26 @@ export class GameWorld<M extends readonly AnyModule[]> implements World<M> {
 		if ((word & entry.bit.bit) === 0)
 			throw new Error(`no ${component} on ${id}`);
 		return entry.columns[field]?.[slot] ?? 0;
+	}
+
+	entities(
+		floor: number,
+		visit: (id: EntityId, species: S, x: number, y: number) => void,
+	): void {
+		this.checkHealthy();
+		const { storage, grid, speciesIndex, speciesNames } = this.#engine;
+		const { masks, maskWords, ids } = storage;
+		const from = this.checkFloor(floor) * CAP;
+		const end = from + (storage.highWater[floor] ?? 0);
+		for (let s = from; s < end; s++) {
+			if (((masks[s * maskWords] ?? 0) & ALIVE) === 0) continue;
+			const id = (ids[s] ?? 0) as EntityId;
+			const species = speciesNames[(speciesIndex[s] ?? 0) - 1];
+			if (species === undefined)
+				throw new Error(`entity ${id} has no species name`);
+			// The names are the keys of the species table typed S.
+			visit(id, species as S, grid.x[s] ?? 0, grid.y[s] ?? 0);
+		}
 	}
 
 	hash(): string {

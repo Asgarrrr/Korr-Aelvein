@@ -1,4 +1,4 @@
-import { defineModule, FAIL, NO_CELL, NONE } from "../../core/api";
+import { defineModule, FAIL, NO_CELL, NONE } from "../../core/module/api";
 import { hungerConfig } from "./config";
 import { schema } from "./schema";
 

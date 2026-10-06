@@ -1,5 +1,5 @@
 import type { CellContracts } from "../../contracts";
-import type { Schema } from "../../core/api";
+import type { Schema } from "../../core/module/api";
 
 export const schema = {
 	// Turns its cell burns once this fuel ignites.

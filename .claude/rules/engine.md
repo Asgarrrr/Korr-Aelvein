@@ -54,7 +54,7 @@ slot across all columns. An `EntityId` names an entity for life.
   played as idle. `runRounds` throws once a player is due.
 - A throw while a round or a player turn runs poisons the `World`: every
   later call throws. `input` for a player that is not due throws without
-  poisoning (`core/game-world.ts`).
+  poisoning (`core/world/game-world.ts`).
 - Travel: `core.travel` posts the row to the destination inbox at
   `time + STAIR_TIME`. Position, schedule and intent are not carried. The
   mask and every other saved column are (`Engine.carried`, copied by
@@ -69,17 +69,18 @@ slot across all columns. An `EntityId` names an entity for life.
 
 | Path | Holds |
 |---|---|
-| `api.ts` | The only engine surface a module sees. Frozen. |
-| `world.ts`, `game-world.ts` | `World` API (exported for the game only: `createGame`, `loadGame` in `src/game.ts`); call guards. |
+| `module/api.ts` | The only engine surface a module sees. Frozen. |
+| `world/world.ts`, `world/game-world.ts` | `World` API (exported for the game only: `createGame`, `loadGame` in `src/game.ts`); call guards. |
 | `engine.ts` | All engine state; `coreColumns`; registers `core/step`, `core/idle`, `core/travel`. |
 | `setup/registration.ts` | Ownership checks, `ModuleBuilder`, fingerprint, carried columns (from `coreColumns`). |
 | `turns/turn.ts` | Tick phase, actor loop, `decide`, `execute` (`requires`, alternates), `step` body. |
 | `turns/round.ts` | `advance`, LOD periods, player turns. |
 | `turns/target.ts` | `validTarget`: one rule for proposals, alternates, inputs and loads. |
-| `turns/arbitration.ts` | Candidate buffer: score checks, inertia, tie-break. |
-| `turns/context.ts` | The ctx object; phase guards (`instead`, writes in propose). |
+| `decision/arbitration.ts` | Candidate buffer: score checks, inertia, tie-break. |
+| `decision/perception.ts` | Perception fill order. |
+| `module/context.ts` | The ctx object; phase guards (`instead`, writes in propose). |
 | `travel/` | `core.travel` body, departure, arrival on a free cell; `Inbox` owns the entry layout. |
-| `space/` | Grid lists, perception fill order, `approach`, cell readers and writers. |
+| `space/` | Grid lists, `approach`, cell readers and writers. |
 | `events/` | Per-floor event ring and its cap. |
 | `random/` | Keyed `draw` and bounded ints (D6). |
 | `health/` | `coreSchema` (vitality, link) and the harm drain. |
@@ -122,9 +123,9 @@ engine keeps no `values` object. Stairs: `"stairs"` with `values.link`.
 
 ### Change the frozen core API
 
-Only on purpose, in one commit that says why. Edit `core/api.ts`. Then
-update the pins: `test/core/api-surface.types.ts` and the export list in
-`test/core/api.test.ts`. A new `ReadCtx`/`WriteCtx` member also goes into
+Only on purpose, in one commit that says why. Edit `core/module/api.ts`. Then
+update the pins: `test/core/module/api-surface.types.ts` and the export list in
+`test/core/module/api.test.ts`. A new `ReadCtx`/`WriteCtx` member also goes into
 `forwardCtx()` in `test/fixtures.ts`, a new `Builder` member into
 `forwardBuilder()`. Every test and bench wrapper spreads one of them. The
 typecheck lists any you miss.

@@ -1,10 +1,10 @@
 import { species } from "../src/content/species";
 import { cheese } from "../src/content/species/cheese";
 import { rat } from "../src/content/species/rat";
-import type { AnyModule } from "../src/core/api";
 import type { EntityId } from "../src/core/ecs/ids";
+import type { AnyModule } from "../src/core/module/api";
 import { bounded, draw, PHASE, SUBJECT } from "../src/core/random/rng";
-import { createWorld } from "../src/core/world";
+import { createWorld } from "../src/core/world/world";
 import { modules } from "../src/registry";
 
 export const SEED = 1;

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { defineModule } from "../../../src/core/api";
 import { CAP } from "../../../src/core/config";
-import { createWorld } from "../../../src/core/world";
+import { defineModule } from "../../../src/core/module/api";
+import { createWorld } from "../../../src/core/world/world";
 
 const TURN = 100;
 

@@ -1,13 +1,7 @@
-import type {
-	ActionFn,
-	ActionRef,
-	EventRef,
-	ProposeFn,
-	TargetKind,
-	TickFn,
-} from "./api";
 import type { Audit } from "./audit/audit";
 import { CAP, TICKS_PER_TURN } from "./config";
+import { CandidateBuffer } from "./decision/arbitration";
+import { PerceptionBuffer } from "./decision/perception";
 import type { EntityId } from "./ecs/ids";
 import { MaskBits } from "./ecs/mask";
 import type { Column } from "./ecs/schema";
@@ -17,16 +11,22 @@ import { Harms } from "./health/harm";
 import { coreSchema } from "./health/vitality";
 import { DeferredKills, DeferredSpawns } from "./lifecycle/deferred";
 import type { CompiledSpecies } from "./lifecycle/species";
+import type {
+	ActionFn,
+	ActionRef,
+	EventRef,
+	ProposeFn,
+	TargetKind,
+	TickFn,
+} from "./module/api";
+import { Context } from "./module/context";
 import { Checksum } from "./persistence/checksum";
 import type { WorldFields } from "./persistence/hash";
 import { type Section, SUM } from "./persistence/image";
 import { hashName, PHASE } from "./random/rng";
 import { Grid } from "./space/grid";
-import { PerceptionBuffer } from "./space/perception";
 import type { Inbox } from "./travel/inbox";
 import { travel } from "./travel/travel";
-import { CandidateBuffer } from "./turns/arbitration";
-import { Context } from "./turns/context";
 import { advance } from "./turns/round";
 import { Scheduler } from "./turns/scheduler";
 import { KIND_CODE } from "./turns/target";
@@ -96,6 +96,7 @@ export interface EngineOptions {
 	readonly componentCount: number;
 	readonly popCap: number;
 	readonly events: boolean;
+	readonly speciesNames: readonly string[];
 }
 
 export const CORE = "core";
@@ -112,6 +113,7 @@ export class Engine {
 	readonly now: Int32Array;
 	readonly intentKey: Int32Array;
 	readonly intentTarget: Int32Array;
+	readonly speciesIndex: Uint8Array;
 	readonly coreColumns: readonly CoreColumn[];
 	readonly popCap: number;
 	readonly events: EventLog;
@@ -152,6 +154,7 @@ export class Engine {
 	readonly eventNames = new Map<number, string>();
 	readonly species: CompiledSpecies[] = [];
 	readonly speciesByName = new Map<string, CompiledSpecies>();
+	readonly speciesNames: readonly string[];
 	// One spawn's values, read once: the checks and the writes see the same numbers.
 	readonly spawnColumns: Column[] = [];
 	readonly spawnValues: number[] = [];
@@ -182,11 +185,13 @@ export class Engine {
 
 	constructor(options: EngineOptions) {
 		this.seed = options.seed;
+		this.speciesNames = options.speciesNames;
 		this.storage = new Storage(options.floors, options.componentCount);
 		this.grid = new Grid(this.storage, options.width, options.height);
 		this.scheduler = new Scheduler(this.storage);
 		this.intentKey = this.storage.column("i32") as Int32Array;
 		this.intentTarget = this.storage.column("i32") as Int32Array;
+		this.speciesIndex = this.storage.column("u8") as Uint8Array;
 		const { storage, grid, scheduler } = this;
 		const own = (column: Column, label: string, travels: boolean) => ({
 			column,
@@ -206,6 +211,7 @@ export class Engine {
 			own(scheduler.nextAt, "nextAt", false),
 			own(this.intentKey, "intent.key", false),
 			own(this.intentTarget, "intent.target", false),
+			own(this.speciesIndex, "species", true),
 		];
 		for (const [name, fields] of Object.entries(coreSchema)) {
 			const columns: Record<string, Column> = {};

@@ -4,7 +4,7 @@ import {
 	NO_CELL,
 	NONE,
 	PERCEPTION_RADIUS,
-} from "../../core/api";
+} from "../../core/module/api";
 import { exploreConfig } from "./config";
 import { cells } from "./schema";
 

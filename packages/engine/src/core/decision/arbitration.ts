@@ -1,7 +1,12 @@
-import type { ActionRef, Candidates, TargetKind, TargetOf } from "../api";
 import { INERTIA, MAX_CANDIDATES, SCORE_MAX } from "../config";
 import type { ActionEntry } from "../engine";
-import { validTarget } from "./target";
+import type {
+	ActionRef,
+	Candidates,
+	TargetKind,
+	TargetOf,
+} from "../module/api";
+import { validTarget } from "../turns/target";
 
 const SCORE_BITS = 15;
 if (SCORE_MAX + INERTIA >= 1 << SCORE_BITS)

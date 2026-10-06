@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { defineModule } from "../../../src/core/api";
-import { createWorld } from "../../../src/core/world";
+import { defineModule } from "../../../src/core/module/api";
+import { createWorld } from "../../../src/core/world/world";
 
 const world = () =>
 	createWorld({ seed: 1, floors: 1, width: 4, height: 4, modules: [] });

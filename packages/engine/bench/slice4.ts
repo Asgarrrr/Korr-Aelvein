@@ -1,7 +1,12 @@
 import { ember } from "../src/content/species/ember";
 import { moss } from "../src/content/species/moss";
 import { rat } from "../src/content/species/rat";
-import type { AnyModule, Builder, ModuleDef, Schema } from "../src/core/api";
+import type {
+	AnyModule,
+	Builder,
+	ModuleDef,
+	Schema,
+} from "../src/core/module/api";
 import { fear } from "../src/modules/fear";
 import { fire } from "../src/modules/fire";
 import { modules } from "../src/registry";

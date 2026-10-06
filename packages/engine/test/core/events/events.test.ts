@@ -2,14 +2,18 @@ import { expect, test } from "bun:test";
 import { cheese } from "../../../src/content/species/cheese";
 import { moss } from "../../../src/content/species/moss";
 import { rat } from "../../../src/content/species/rat";
+import { EVENT_CAP_PER_TURN } from "../../../src/core/config";
 import {
 	type AnyModule,
 	defineModule,
 	type EntityId,
-} from "../../../src/core/api";
-import { EVENT_CAP_PER_TURN } from "../../../src/core/config";
+} from "../../../src/core/module/api";
 import { hashName } from "../../../src/core/random/rng";
-import { createWorld, loadWorld, type World } from "../../../src/core/world";
+import {
+	createWorld,
+	loadWorld,
+	type World,
+} from "../../../src/core/world/world";
 import { flora } from "../../../src/modules/flora";
 import { hunger } from "../../../src/modules/hunger";
 import { hungerConfig } from "../../../src/modules/hunger/config";

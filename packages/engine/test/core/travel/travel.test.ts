@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
-import { defineModule, type EntityId } from "../../../src/core/api";
 import { STAIR_TIME } from "../../../src/core/config";
 import { FLOOR_STAGE } from "../../../src/core/engine";
 import { spawn } from "../../../src/core/lifecycle/lifecycle";
+import { defineModule, type EntityId } from "../../../src/core/module/api";
 import { createEngine } from "../../../src/core/setup/registration";
 import { depart } from "../../../src/core/travel/travel";
-import { createWorld, loadWorld } from "../../../src/core/world";
+import { createWorld, loadWorld } from "../../../src/core/world/world";
 import { probe } from "../../fixtures";
 import {
 	aimAt,

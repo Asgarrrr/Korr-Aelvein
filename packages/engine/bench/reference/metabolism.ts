@@ -1,4 +1,4 @@
-import { defineModule } from "../../src/core/api";
+import { defineModule } from "../../src/core/module/api";
 
 const metabolismConfig = {
 	wellFedAbove: 500,

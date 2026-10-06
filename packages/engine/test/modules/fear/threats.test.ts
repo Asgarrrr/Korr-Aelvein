@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 import { rat } from "../../../src/content/species/rat";
 import { stoat } from "../../../src/content/species/stoat";
-import type { EntityId } from "../../../src/core/api";
 import { PERCEPTION_RADIUS } from "../../../src/core/config";
+import type { EntityId } from "../../../src/core/module/api";
 import { bounded, draw, PHASE, SUBJECT } from "../../../src/core/random/rng";
-import { createWorld } from "../../../src/core/world";
+import { createWorld } from "../../../src/core/world/world";
 import { fear } from "../../../src/modules/fear";
 import { hunger } from "../../../src/modules/hunger";
 import { probe } from "../../fixtures";

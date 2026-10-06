@@ -1,4 +1,4 @@
-import { defineModule } from "../../../src/core/api";
+import { defineModule } from "../../../src/core/module/api";
 
 export const watch = defineModule({
 	name: "watch",

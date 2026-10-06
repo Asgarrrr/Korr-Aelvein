@@ -24,7 +24,7 @@ import {
 	tailMask,
 	WORD,
 } from "./image";
-import { inboxProblem } from "./inbox";
+import { inboxProblem } from "./inbox-check";
 import {
 	checkAbsent,
 	checkDead,
@@ -167,6 +167,8 @@ export function checkFloor(
 		prev: int32(grid.prev),
 		intentKey: int32(engine.intentKey),
 		intentTarget: int32(engine.intentTarget),
+		species: uint8(engine.speciesIndex),
+		speciesCount: engine.speciesNames.length,
 		known: knownBits(storage.maskWords, engine.components.size),
 	};
 	if (check === "fast")
@@ -268,7 +270,8 @@ export function checkFloor(
 // The id index readFloor adopts, and the player count; a repeated id would leave a row no id reaches.
 // Beyond unique ids, the fast check guarantees only that every slot and cell the engine will
 // index is on this floor (free list, cell heads, grid links, cells), that live actors are due in
-// [now, MAX_TICK], and that stairs lead to another floor's cell. Other row values go unchecked.
+// [now, MAX_TICK], that stairs lead to another floor's cell, and that species indices are in the
+// table. Other row values go unchecked.
 function indexRows(
 	rows: Rows,
 	index: Int32Array,
@@ -311,6 +314,8 @@ function indexRows(
 		const id = ids[row] ?? 0;
 		if (!indexInsert(index, 0, ids, base, id, base + row))
 			fail(`id ${id} is held by two slots`);
+		if ((rows.species[row] ?? 0) > rows.speciesCount)
+			fail(`slot ${base + row} has species index ${rows.species[row]}`);
 		const cell = cellOf[row] ?? 0;
 		if (!(cell >>> 0 < cells))
 			fail(`slot ${base + row} sits in cell ${cell}, off the floor`);

@@ -1,17 +1,17 @@
 import { expect, test } from "bun:test";
+import { LOD_PERIODS } from "../../../src/core/config";
+import type { Engine } from "../../../src/core/engine";
+import { spawn } from "../../../src/core/lifecycle/lifecycle";
 import {
 	type AnyModule,
 	defineModule,
 	type EntityId,
 	FAIL,
-} from "../../../src/core/api";
-import { LOD_PERIODS } from "../../../src/core/config";
-import type { Engine } from "../../../src/core/engine";
-import { spawn } from "../../../src/core/lifecycle/lifecycle";
+} from "../../../src/core/module/api";
 import { hashName } from "../../../src/core/random/rng";
 import { createEngine } from "../../../src/core/setup/registration";
 import { advance, playerTurn } from "../../../src/core/turns/round";
-import { createWorld, loadWorld } from "../../../src/core/world";
+import { createWorld, loadWorld } from "../../../src/core/world/world";
 
 const TURN = 100;
 const ROUNDS = 64;

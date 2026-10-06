@@ -302,7 +302,7 @@ export const hunger = defineModule({
   `stairTime >= TICKS_PER_TURN` already allow it.
 - The multiplayer turn model (simultaneous turns, timers, who waits for
   whom) is a game design decision for `apps/server`, recorded in
-  `docs/idees.md` until scoped.
+  `docs/ideas.md` until scoped.
 
 ## 3. Not built (YAGNI)
 

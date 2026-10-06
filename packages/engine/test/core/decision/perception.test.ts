@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
+import { MAX_PERCEIVED } from "../../../src/core/config";
 import {
 	defineModule,
 	type EntityId,
 	type Perception,
-} from "../../../src/core/api";
-import { MAX_PERCEIVED } from "../../../src/core/config";
-import { createWorld } from "../../../src/core/world";
+} from "../../../src/core/module/api";
+import { createWorld } from "../../../src/core/world/world";
 
 test("perception lists rings outward, rows top to bottom, newest first in a cell", () => {
 	const seen: number[][] = [];

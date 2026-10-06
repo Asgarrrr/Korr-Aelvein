@@ -1,15 +1,15 @@
 import { expect, test } from "bun:test";
+import { spawn } from "../../../src/core/lifecycle/lifecycle";
 import {
 	type ActionRef,
 	type Cell,
 	defineModule,
 	NO_CELL,
 	type Slot,
-} from "../../../src/core/api";
-import { spawn } from "../../../src/core/lifecycle/lifecycle";
+} from "../../../src/core/module/api";
 import { createEngine } from "../../../src/core/setup/registration";
 import { execute } from "../../../src/core/turns/turn";
-import { createWorld } from "../../../src/core/world";
+import { createWorld } from "../../../src/core/world/world";
 
 const shape = (floors: number) => ({
 	seed: 1,

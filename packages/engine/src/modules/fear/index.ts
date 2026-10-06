@@ -10,7 +10,7 @@ import {
 	type Perception,
 	type ReadCtx,
 	type Slot,
-} from "../../core/api";
+} from "../../core/module/api";
 import { fearConfig } from "./config";
 import { cells, schema } from "./schema";
 

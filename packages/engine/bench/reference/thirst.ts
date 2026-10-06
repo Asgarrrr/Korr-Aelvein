@@ -1,4 +1,4 @@
-import { defineModule, FAIL, NO_CELL, NONE } from "../../src/core/api";
+import { defineModule, FAIL, NO_CELL, NONE } from "../../src/core/module/api";
 
 const thirstConfig = {
 	decayPerTurn: 2,

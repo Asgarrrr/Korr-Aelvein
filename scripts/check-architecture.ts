@@ -19,7 +19,7 @@ const REGISTRY = join(ENGINE, "registry.ts");
 const ECS = join(ENGINE, "core/ecs") + sep;
 const CORE_CONFIG = join(ENGINE, "core/config.ts");
 // A module's whole view of the engine: the core API, shared contract types and its own folder.
-const API = join(ENGINE, "core/api.ts");
+const API = join(ENGINE, "core/module/api.ts");
 const CONTRACTS = join(ENGINE, "contracts") + sep;
 const MODULES = join(ENGINE, "modules") + sep;
 
@@ -94,7 +94,7 @@ const checkEngineImport = (file: string, target: string) => {
 	)
 		report(
 			file,
-			`module ${from.module} imports ${relative(ENGINE, target)}; a module may import only core/api.ts, contracts/ and its own folder`,
+			`module ${from.module} imports ${relative(ENGINE, target)}; a module may import only core/module/api.ts, contracts/ and its own folder`,
 		);
 	if (from.area === "contracts" && to.area !== "contracts")
 		report(file, "contracts/ may only import contracts/");
@@ -139,7 +139,7 @@ for (const spec of [
 	"../../registry",
 	"../../core/engine",
 	"../hunger/schema",
-	"../../core/api",
+	"../../core/module/api",
 	"../../contracts",
 	"./schema",
 ])

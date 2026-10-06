@@ -1,5 +1,5 @@
-import type { TargetKind } from "../api";
 import { ID_FLOOR_STRIDE } from "../config";
+import type { TargetKind } from "../module/api";
 
 export const KIND_CODE: Readonly<Record<TargetKind, number>> = {
 	none: 0,

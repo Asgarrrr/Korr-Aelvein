@@ -1,5 +1,4 @@
-import { cheese } from "../src/content/species/cheese";
-import { rat } from "../src/content/species/rat";
+import { UNNAMED } from "../src/core/lifecycle/species";
 import {
 	type AnyModule,
 	type Builder,
@@ -11,13 +10,21 @@ import {
 	type Slot,
 	type SpeciesShape,
 	type WriteCtx,
-} from "../src/core/api";
-import { createWorld } from "../src/core/world";
+} from "../src/core/module/api";
+import { saveWorld } from "../src/core/persistence/save";
+import { createWorld, loadEngine } from "../src/core/world/world";
 import { game } from "../src/game";
 
 export const SIZE = 32;
 
 export { game };
+
+// A game save with every species index cleared: what the same spawns by shape would save.
+export function unnamed(bytes: Uint8Array): Uint8Array {
+	const engine = loadEngine(bytes, game);
+	engine.speciesIndex.fill(UNNAMED);
+	return saveWorld(engine);
+}
 
 export function populatedWorld(
 	seed: number,
@@ -41,8 +48,8 @@ export function populatedWorld(
 	});
 	const rats = [];
 	for (let i = 0; i < count; i++) {
-		rats.push(world.spawn(0, rat, (i % 10) * 3, Math.floor(i / 10) * 6));
-		world.spawn(0, cheese, (i * 5 + 3) % SIZE, (i * 3 + 1) % SIZE);
+		rats.push(world.spawn(0, "rat", (i % 10) * 3, Math.floor(i / 10) * 6));
+		world.spawn(0, "cheese", (i * 5 + 3) % SIZE, (i * 3 + 1) % SIZE);
 	}
 	return { world, rats };
 }

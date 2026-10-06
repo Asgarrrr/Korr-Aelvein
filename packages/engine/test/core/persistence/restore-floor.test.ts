@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { cheese } from "../../../src/content/species/cheese";
 import { moss } from "../../../src/content/species/moss";
 import { rat } from "../../../src/content/species/rat";
-import { createWorld } from "../../../src/core/world";
+import { createWorld } from "../../../src/core/world/world";
 import { exploreConfig } from "../../../src/modules/explore/config";
 import { game } from "../../fixtures";
 

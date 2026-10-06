@@ -5,7 +5,7 @@ import {
 	NO_CELL,
 	type ReadCtx,
 	type Slot,
-} from "../../src/core/api";
+} from "../../src/core/module/api";
 
 const scentConfig = {
 	// Satiety under which a tracker follows a trail.

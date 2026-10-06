@@ -1,4 +1,4 @@
-import { defineModule } from "../../core/api";
+import { defineModule } from "../../core/module/api";
 import { floraConfig } from "./config";
 import { schema } from "./schema";
 

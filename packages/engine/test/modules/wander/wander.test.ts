@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { LOD_PERIODS } from "../../../src/core/config";
-import { createWorld } from "../../../src/core/world";
+import { createWorld } from "../../../src/core/world/world";
 import { wander } from "../../../src/modules/wander";
 import { modules } from "../../../src/registry";
 import { decider, decisions, idleRounds, populatedWorld } from "../../fixtures";

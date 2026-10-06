@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { cheese } from "../../../src/content/species/cheese";
-import { createWorld } from "../../../src/core/world";
+import { createWorld } from "../../../src/core/world/world";
 import { modules } from "../../../src/registry";
 import { game, populatedWorld } from "../../fixtures";
 
@@ -21,7 +21,7 @@ test("a different seed gives a different hash", () => {
 
 test("the seed 1 world hash is pinned", () => {
 	// Regression lock: any change to simulation order, RNG or storage layout shows up here.
-	expect(seed1).toBe("37494bbb01d7bdaf");
+	expect(seed1).toBe("194a08d45c8c9728");
 });
 
 const twoFloors = (seed: number, popCap?: number) =>

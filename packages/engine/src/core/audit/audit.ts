@@ -1,9 +1,9 @@
-import type { AnyModule } from "../api";
 import { CAP } from "../config";
 import type { Column } from "../ecs/schema";
 import { ALIVE } from "../ecs/storage";
 import { CORE, CORE_KEY, type Engine } from "../engine";
 import { coreSchema } from "../health/vitality";
+import type { AnyModule } from "../module/api";
 import {
 	CELLS,
 	FREE,

@@ -1,6 +1,11 @@
-import type { AnyModule, Builder, ModuleDef, Schema } from "../../src/core/api";
 import { NONE } from "../../src/core/ecs/ids";
 import { type Engine, FLOOR_STAGE } from "../../src/core/engine";
+import type {
+	AnyModule,
+	Builder,
+	ModuleDef,
+	Schema,
+} from "../../src/core/module/api";
 import { advance, playerTurn, startRound } from "../../src/core/turns/round";
 import { beginFloor, runActors } from "../../src/core/turns/turn";
 import { forwardBuilder } from "../../test/fixtures";

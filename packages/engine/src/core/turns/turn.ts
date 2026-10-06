@@ -1,10 +1,3 @@
-import {
-	ALTERNATE,
-	FAIL,
-	type ProposeFn,
-	type TargetKind,
-	type TargetOf,
-} from "../api";
 import { MAX_ALTERNATES, MAX_TICK, TICKS_PER_TURN } from "../config";
 import { type Cell, type EntityId, NO_CELL, NONE, type Slot } from "../ecs/ids";
 import { PLAYER } from "../ecs/storage";
@@ -21,6 +14,13 @@ import {
 } from "../engine";
 import { applyHarm } from "../health/harm";
 import { applyDeferred } from "../lifecycle/lifecycle";
+import {
+	ALTERNATE,
+	FAIL,
+	type ProposeFn,
+	type TargetKind,
+	type TargetOf,
+} from "../module/api";
 import { depart, ingest } from "../travel/travel";
 import { validTarget } from "./target";
 

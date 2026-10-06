@@ -22,7 +22,7 @@ import { loadFloor } from "../../../src/core/persistence/validate";
 import { hashName } from "../../../src/core/random/rng";
 import { createEngine } from "../../../src/core/setup/registration";
 import { END } from "../../../src/core/space/grid";
-import { createWorld } from "../../../src/core/world";
+import { createWorld } from "../../../src/core/world/world";
 import { modules } from "../../../src/registry";
 import { populatedWorld } from "../../fixtures";
 

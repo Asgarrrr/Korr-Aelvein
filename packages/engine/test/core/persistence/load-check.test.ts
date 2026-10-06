@@ -3,7 +3,7 @@ import { species } from "../../../src/content/species";
 import { cheese } from "../../../src/content/species/cheese";
 import { moss } from "../../../src/content/species/moss";
 import { rat } from "../../../src/content/species/rat";
-import type { EntityId } from "../../../src/core/api";
+import type { EntityId } from "../../../src/core/module/api";
 import { Checksum } from "../../../src/core/persistence/checksum";
 import { worldDigest } from "../../../src/core/persistence/hash";
 import {
@@ -21,7 +21,7 @@ import {
 	createWorld,
 	type LoadCheck,
 	loadWorld,
-} from "../../../src/core/world";
+} from "../../../src/core/world/world";
 import { exploreConfig } from "../../../src/modules/explore/config";
 import { modules } from "../../../src/registry";
 import { idleRounds } from "../../fixtures";

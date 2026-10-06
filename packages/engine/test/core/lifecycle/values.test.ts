@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { species } from "../../../src/content/species";
-import { createWorld, loadWorld } from "../../../src/core/world";
+import { createWorld, loadWorld } from "../../../src/core/world/world";
 import { modules } from "../../../src/registry";
+import { unnamed } from "../../fixtures";
 
 const world = () =>
 	createWorld({ seed: 1, floors: 1, width: 4, height: 4, modules, species });
@@ -9,7 +10,7 @@ const world = () =>
 const twoFloors = () =>
 	createWorld({ seed: 1, floors: 2, width: 4, height: 4, modules, species });
 
-test("a spawn by name with values builds the same world as a shape holding those values", () => {
+test("a spawn by name with values builds the same world as a shape holding those values, but for its species index", () => {
 	const { rat, stairs } = species;
 	const byName = twoFloors();
 	byName.spawnPlayer(0, "rat", 0, 0, {
@@ -37,7 +38,7 @@ test("a spawn by name with values builds the same world as a shape holding those
 		1,
 		0,
 	);
-	expect(byName.save()).toEqual(byShape.save());
+	expect(unnamed(byName.save())).toEqual(byShape.save());
 });
 
 test("values hold for their spawn only", () => {

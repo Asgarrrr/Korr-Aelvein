@@ -2,17 +2,17 @@ import { expect, test } from "bun:test";
 import { species } from "../../../src/content/species";
 import { cheese } from "../../../src/content/species/cheese";
 import { rat } from "../../../src/content/species/rat";
+import { SCORE_MAX } from "../../../src/core/config";
+import { spawn } from "../../../src/core/lifecycle/lifecycle";
 import {
 	type ActionRef,
 	defineModule,
 	type EntityId,
 	FAIL,
-} from "../../../src/core/api";
-import { SCORE_MAX } from "../../../src/core/config";
-import { spawn } from "../../../src/core/lifecycle/lifecycle";
+} from "../../../src/core/module/api";
 import { hashName } from "../../../src/core/random/rng";
 import { createEngine } from "../../../src/core/setup/registration";
-import { createWorld, loadWorld } from "../../../src/core/world";
+import { createWorld, loadWorld } from "../../../src/core/world/world";
 import { hungerConfig } from "../../../src/modules/hunger/config";
 import { modules } from "../../../src/registry";
 

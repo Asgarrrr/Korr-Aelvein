@@ -65,6 +65,9 @@ export function inboxProblem(
 		const hp = entries[body + (slotOf.get(vitality.hp) ?? 0)] ?? 0;
 		const max = entries[body + (slotOf.get(vitality.max) ?? 0)] ?? 0;
 		if (lives && !healthy(hp, max)) return `${where} has hp ${hp} of ${max}`;
+		const named = entries[body + (slotOf.get(engine.speciesIndex) ?? 0)] ?? 0;
+		if (!(named >= 0 && named <= engine.speciesNames.length))
+			return `${where} has species index ${named}, outside the species table`;
 	}
 	return undefined;
 }

@@ -7,7 +7,7 @@ import {
 	type LoadOptions,
 	loadWorld,
 	type WorldOptions,
-} from "./core/world";
+} from "./core/world/world";
 import { modules } from "./registry";
 
 export const game = { modules, species } as const;
@@ -15,7 +15,7 @@ export const game = { modules, species } as const;
 export type SpeciesName = keyof typeof species;
 
 export interface World
-	extends Omit<AnyWorld<typeof modules>, "spawn" | "spawnPlayer"> {
+	extends Omit<AnyWorld<typeof modules, SpeciesName>, "spawn" | "spawnPlayer"> {
 	spawn(
 		floor: number,
 		species: SpeciesName,

@@ -1,4 +1,3 @@
-import type { AnyModule } from "../api";
 import {
 	type Column,
 	type FieldKind,
@@ -9,6 +8,7 @@ import {
 import { ACTOR } from "../ecs/storage";
 import type { Component } from "../engine";
 import { type CoreSchema, healthy, I16_MAX } from "../health/vitality";
+import type { AnyModule } from "../module/api";
 
 export interface SpeciesShape {
 	readonly actor: boolean;
@@ -19,8 +19,13 @@ export interface SpeciesShape {
 	};
 }
 
+// The species index of a shape spawned outside the world's species table.
+export const UNNAMED = 0;
+
 export interface CompiledSpecies {
 	readonly actor: boolean;
+	// 1 + the position of its name among the world's sorted species names, or UNNAMED.
+	readonly index: number;
 	readonly link: Int32Array | undefined;
 	readonly mask: Int32Array;
 	readonly columns: readonly Column[];
@@ -76,6 +81,7 @@ export function compileSpecies(
 	components: ReadonlyMap<string, Component>,
 	maskWords: number,
 	label = "species",
+	index = UNNAMED,
 ): CompiledSpecies {
 	const vitality = species.components.vitality;
 	if (vitality !== undefined)
@@ -107,6 +113,7 @@ export function compileSpecies(
 	}
 	return {
 		actor: species.actor,
+		index,
 		link:
 			link === undefined
 				? undefined

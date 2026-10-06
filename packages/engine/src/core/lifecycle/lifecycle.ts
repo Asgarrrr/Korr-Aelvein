@@ -172,6 +172,7 @@ export function place(
 	for (let w = 0; w < maskWords; w++)
 		masks[base + w] = (masks[base + w] ?? 0) | (mask[w] ?? 0);
 	if (player) masks[base] = (masks[base] ?? 0) | PLAYER;
+	e.speciesIndex[slot] = species.index;
 	for (let i = 0; i < columns.length; i++)
 		(columns[i] as Column)[slot] = values[i] ?? 0;
 	const { spawnColumns, spawnValues } = e;

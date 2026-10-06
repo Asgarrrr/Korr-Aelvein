@@ -4,7 +4,7 @@ Turn-based tactical roguelike in the browser, with an authoritative server.
 The dungeon lives without the player: on every floor, creatures eat, hunt,
 flee and migrate whether the player is there or not.
 
-Anything outside the current scope goes to `docs/idees.md`, never into code.
+Anything outside the current scope goes to `docs/ideas.md`, never into code.
 This file holds rules, not progress: progress lives in git and in the plan.
 
 ## How we build
@@ -35,6 +35,8 @@ row fits, that is a design question: propose a new row before coding.
 | Entity storage: ids, columns, queries (imports nothing else from core) | `packages/engine/src/core/ecs/` |
 | Foundation rule: grid, turns, actions, arbitration, health, death, events, RNG | `packages/engine/src/core/<domain>/` |
 | Tuning values of the core: score scale, ticks per turn, capacities | `packages/engine/src/core/config.ts` |
+| The engine surface a module sees: `api.ts`, the only core file a module may import, and the ctx | `packages/engine/src/core/module/` |
+| The `World` API the game wraps | `packages/engine/src/core/world/` |
 | One mechanic: its needs, components, systems | `packages/engine/src/modules/<mechanic>/` |
 | Tuning values of a mechanic: rates, thresholds | `packages/engine/src/modules/<mechanic>/config.ts` |
 | Species: which components, with which values | `packages/engine/src/content/species/` |
@@ -47,7 +49,7 @@ row fits, that is a design question: propose a new row before coding.
 | Connections, sessions, persistence, hosting the engine | `apps/server/src/` |
 | 3D rendering | `apps/web/src/render/` |
 | ASCII debug view | `apps/web/src/debug/` |
-| Keys and clicks → player intents | `apps/web/src/input/` |
+| Keys and clicks → player commands | `apps/web/src/input/` |
 | Rendering settings: sizes, durations, palette | `apps/web/src/theme.ts` |
 | Tests | `<package>/test/`, mirroring `src/` |
 | Engine benchmarks (`bun run bench`, not part of `verify`) | `packages/engine/bench/` |
@@ -85,7 +87,7 @@ the code around it: every needless comment breeds more.
   "as requested". A comment must read correctly to someone who never saw
   the diff. Change context goes in the commit message.
 - Never write plans or justifications: no "for later", "in case we need",
-  "TODO". Ideas go to `docs/idees.md`.
+  "TODO". Ideas go to `docs/ideas.md`.
 - One or two short lines. No comment blocks, no docstrings that repeat the
   signature.
 - Before committing a multi-file change, run the `comment-cleanup` skill on
@@ -107,10 +109,11 @@ the code around it: every needless comment breeds more.
 
 - `packages/engine` — the simulation. Pure TypeScript: no DOM, no Three.js,
   no network, no `Math.random`, no wall clock.
-- `packages/protocol` — message types between web and server. Types only.
+- `packages/protocol` — message schemas between web and server and the
+  types derived from them. No logic.
 - `apps/server` — Elysia. Hosts the engine and owns all game state. The only
   place where game outcomes are computed.
-- `apps/web` — Vite + Three.js. Sends player intents, renders server
+- `apps/web` — Vite + Three.js. Sends player commands, renders server
   snapshots. Never computes an outcome.
 - Dependency direction: `web → protocol`; `server → engine, protocol`.
   `engine` imports no workspace package.

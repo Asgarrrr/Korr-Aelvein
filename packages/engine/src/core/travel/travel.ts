@@ -1,8 +1,8 @@
-import { FAIL } from "../api";
 import { MAX_TICK, STAIR_TIME, TICKS_PER_TURN } from "../config";
 import { type Cell, type EntityId, NO_CELL, NONE, type Slot } from "../ecs/ids";
 import { type Engine, FLOOR_STAGE, NO_FLOOR } from "../engine";
 import { attach, detach } from "../lifecycle/membership";
+import { FAIL } from "../module/api";
 import { mix } from "../random/rng";
 
 if (STAIR_TIME < TICKS_PER_TURN)

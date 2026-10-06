@@ -2,8 +2,8 @@ import {
 	type AnyModule,
 	defineModule,
 	type EntityId,
-} from "../../../src/core/api";
-import { createWorld, type World } from "../../../src/core/world";
+} from "../../../src/core/module/api";
+import { createWorld, type World } from "../../../src/core/world/world";
 import { probe } from "../../fixtures";
 
 export const SIDE = 8;

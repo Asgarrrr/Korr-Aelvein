@@ -1,7 +1,7 @@
-import type { Perception } from "../api";
 import { MAX_PERCEIVED, PERCEPTION_RADIUS } from "../config";
 import type { EntityId, Slot } from "../ecs/ids";
-import { END, type Grid } from "./grid";
+import type { Perception } from "../module/api";
+import { END, type Grid } from "../space/grid";
 
 // Filled on first read: propose cannot move anything, so a lazy fill sees the same state.
 export class PerceptionBuffer implements Perception {

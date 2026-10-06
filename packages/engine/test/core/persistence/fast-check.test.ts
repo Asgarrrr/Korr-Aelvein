@@ -3,9 +3,9 @@ import { species } from "../../../src/content/species";
 import { cheese } from "../../../src/content/species/cheese";
 import { moss } from "../../../src/content/species/moss";
 import { rat } from "../../../src/content/species/rat";
-import type { EntityId } from "../../../src/core/api";
 import { CAP, ID_FLOOR_STRIDE } from "../../../src/core/config";
 import { ACTOR, ALIVE } from "../../../src/core/ecs/storage";
+import type { EntityId } from "../../../src/core/module/api";
 import { Checksum } from "../../../src/core/persistence/checksum";
 import {
 	FLOOR_HEADER,
@@ -19,7 +19,7 @@ import {
 } from "../../../src/core/persistence/image";
 import { createEngine } from "../../../src/core/setup/registration";
 import { END } from "../../../src/core/space/grid";
-import { createWorld, type LoadCheck } from "../../../src/core/world";
+import { createWorld, type LoadCheck } from "../../../src/core/world/world";
 import { modules } from "../../../src/registry";
 
 const SIDE = 32;
@@ -186,6 +186,11 @@ const faults: [string, Uint8Array, RegExp][] = [
 		"stairs to their own floor",
 		resealed(engine.link.floor, stairsRow, FLOOR, 1),
 		/link/,
+	],
+	[
+		"a species index past the species table",
+		resealed(engine.speciesIndex, itemRow, engine.speciesNames.length + 1, 1),
+		/species index/,
 	],
 ];
 

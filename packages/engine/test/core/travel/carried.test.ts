@@ -1,13 +1,13 @@
 import { expect, test } from "bun:test";
+import { STAIR_TIME } from "../../../src/core/config";
+import type { Engine } from "../../../src/core/engine";
+import { spawn } from "../../../src/core/lifecycle/lifecycle";
 import {
 	defineModule,
 	type EntityId,
 	type Schema,
 	type Slot,
-} from "../../../src/core/api";
-import { STAIR_TIME } from "../../../src/core/config";
-import type { Engine } from "../../../src/core/engine";
-import { spawn } from "../../../src/core/lifecycle/lifecycle";
+} from "../../../src/core/module/api";
 import { createEngine } from "../../../src/core/setup/registration";
 import { depart, ingest } from "../../../src/core/travel/travel";
 import { game } from "../../fixtures";
@@ -42,7 +42,9 @@ function traveller(e: Engine): Slot {
 	}
 	components.vitality = { hp: 1, max: 2 };
 	const id = spawn(e, 0, { actor: true, components }, 1, 1);
-	return e.storage.slotOf(0, id);
+	const slot = e.storage.slotOf(0, id);
+	e.speciesIndex[slot] = e.speciesNames.length;
+	return slot;
 }
 
 function travel(e: Engine, slot: Slot): Slot {
@@ -55,11 +57,12 @@ function travel(e: Engine, slot: Slot): Slot {
 	return e.storage.slotOf(1, id);
 }
 
-test("the carried columns are exactly the component columns", () => {
+test("the carried columns are exactly the component columns and the species index", () => {
 	const e = build();
-	const components = [...e.components.values()].flatMap((c) =>
-		Object.values(c.columns),
-	);
+	const components = [
+		e.speciesIndex,
+		...[...e.components.values()].flatMap((c) => Object.values(c.columns)),
+	];
 	expect(e.carried.length).toBe(components.length);
 	expect(components.every((c) => e.carried.includes(c))).toBe(true);
 });

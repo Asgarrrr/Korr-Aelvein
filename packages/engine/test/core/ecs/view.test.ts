@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import { cheese } from "../../../src/content/species/cheese";
 import { rat } from "../../../src/content/species/rat";
-import { defineModule, type Slot } from "../../../src/core/api";
-import { createWorld } from "../../../src/core/world";
+import { defineModule, type Slot } from "../../../src/core/module/api";
+import { createWorld } from "../../../src/core/world/world";
 import { hunger } from "../../../src/modules/hunger";
 
 type DietView = ReturnType<typeof readDiet>;

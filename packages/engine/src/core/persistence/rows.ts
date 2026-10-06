@@ -36,6 +36,7 @@ const ABSENT_VALUE = 24;
 const VITALITY = 27;
 const IDLE_PLAYER = 28;
 const LINK = 29;
+const SPECIES = 30;
 
 // The slot and values a failed check reports: plain numbers, so the hot loops close over nothing.
 const PROBLEM_FIELDS = 3;
@@ -109,6 +110,8 @@ export function describe(code: number): string {
 			return `slot ${slot} is a player but does not act`;
 		case LINK:
 			return `slot ${slot} has a link to floor ${value} that leads nowhere`;
+		case SPECIES:
+			return `slot ${slot} has species index ${value}, past the species table`;
 		case TWO_ACTORS:
 			return `cell ${value} holds two actors, the second in slot ${slot}`;
 		default:
@@ -129,6 +132,8 @@ export interface Rows {
 	readonly known: Int32Array;
 	readonly intentKey: Int32Array;
 	readonly intentTarget: Int32Array;
+	readonly species: Uint8Array;
+	readonly speciesCount: number;
 }
 
 export function checkFree(
@@ -182,6 +187,8 @@ export function checkLive(
 			continue;
 		}
 		live++;
+		if ((rows.species[row] ?? 0) > rows.speciesCount)
+			return report(SPECIES, slot, rows.species[row] ?? 0);
 		if ((mask & PLAYER) !== 0) {
 			if ((mask & ACTOR) === 0) return report(IDLE_PLAYER, slot, 0);
 			players++;

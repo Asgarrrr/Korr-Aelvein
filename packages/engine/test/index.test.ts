@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Engine } from "../src/core/engine";
-import { createWorld, loadWorld } from "../src/core/world";
+import { createWorld, loadWorld } from "../src/core/world/world";
 import { game } from "../src/game";
 import { createGame, type EntityId, loadGame, type World } from "../src/index";
 

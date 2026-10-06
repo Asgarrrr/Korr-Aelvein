@@ -1,8 +1,12 @@
 // Checked by `tsc` only: each @ts-expect-error fails the typecheck if its line compiles.
-import { defineModule, type EntityId, type Slot } from "../../src/core/api";
-import type { Species } from "../../src/core/lifecycle/species";
-import { createWorld } from "../../src/core/world";
-import { modules } from "../../src/registry";
+import type { Species } from "../../../src/core/lifecycle/species";
+import {
+	defineModule,
+	type EntityId,
+	type Slot,
+} from "../../../src/core/module/api";
+import { createWorld } from "../../../src/core/world/world";
+import { modules } from "../../../src/registry";
 
 defineModule({
 	name: "typed",

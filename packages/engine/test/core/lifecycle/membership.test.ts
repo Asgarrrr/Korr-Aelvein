@@ -1,16 +1,16 @@
 import { expect, test } from "bun:test";
-import { type Cell, type EntityId, NONE } from "../../../src/core/api";
 import { CAP } from "../../../src/core/config";
 import { ALIVE, PLAYER } from "../../../src/core/ecs/storage";
 import type { Engine } from "../../../src/core/engine";
 import { kill, spawn } from "../../../src/core/lifecycle/lifecycle";
+import { type Cell, type EntityId, NONE } from "../../../src/core/module/api";
 import { saveFloor } from "../../../src/core/persistence/image";
 import { saveWorld } from "../../../src/core/persistence/save";
 import { loadFloor } from "../../../src/core/persistence/validate";
 import { createEngine } from "../../../src/core/setup/registration";
 import { ENTRY_HEAD } from "../../../src/core/travel/inbox";
 import { advance, playerTurn } from "../../../src/core/turns/round";
-import { loadEngine } from "../../../src/core/world";
+import { loadEngine } from "../../../src/core/world/world";
 import { game } from "../../fixtures";
 
 const FLOORS = 3;

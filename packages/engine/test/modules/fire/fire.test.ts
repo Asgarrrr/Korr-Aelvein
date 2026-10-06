@@ -4,9 +4,13 @@ import { ember } from "../../../src/content/species/ember";
 import { moss } from "../../../src/content/species/moss";
 import { mushroom } from "../../../src/content/species/mushroom";
 import { rat } from "../../../src/content/species/rat";
-import type { AnyModule, EntityId } from "../../../src/core/api";
+import type { AnyModule, EntityId } from "../../../src/core/module/api";
 import { bounded, draw, PHASE, SUBJECT } from "../../../src/core/random/rng";
-import { createWorld, loadWorld, type World } from "../../../src/core/world";
+import {
+	createWorld,
+	loadWorld,
+	type World,
+} from "../../../src/core/world/world";
 import { fire } from "../../../src/modules/fire";
 import { fireConfig } from "../../../src/modules/fire/config";
 import { hunger } from "../../../src/modules/hunger";

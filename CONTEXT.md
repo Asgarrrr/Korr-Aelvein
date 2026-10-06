@@ -7,7 +7,7 @@ a second name anywhere.
 ## World and time
 
 - **World**: every floor of one game, its seed and its round counter.
-  Code: `World` (`packages/engine/src/core/world.ts`).
+  Code: `World` (`packages/engine/src/core/world/world.ts`).
 - **Floor**: one dungeon level. It owns its slots, ids, grid, scheduler,
   events, inbox and its slice of every cell column.
 - **Round**: one lockstep turn of every floor, `TICKS_PER_TURN` ticks long.
@@ -31,7 +31,9 @@ a second name anywhere.
 - **Cell column**: one typed array holding one field for every cell of
   every floor.
 - **Species**: which components an entity starts with, and their values.
-  Content data, compiled once per world.
+  Content data, compiled once per world. Each entity saves its species as
+  an index into the world's sorted species names; 0 means unnamed (spawned
+  from a shape, tests only), and `entities` refuses unnamed entities.
 - **Actor**: an entity the scheduler runs. A **player** is an actor whose
   decision comes from a recorded input.
 
@@ -79,3 +81,12 @@ a second name anywhere.
 - **Game**: the registry plus the species table: what the server runs.
   Code: `game` (`packages/engine/src/game.ts`). `createGame` / `loadGame`
   build a World running the Game.
+
+## Server and client
+
+- **Command**: what a client sends for its player's turn (`move`, `wait`, `eat`).
+  The server maps it to an engine action. Not an Intent.
+- **Session**: One connection owns one Session. A Session holds one World
+  and one player, in memory. Code: `Session` (`apps/server/src/session.ts`).
+- **Snapshot**: the server's message to the client after each of its
+  player's turns. Not an Image, which is saved floor bytes.

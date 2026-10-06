@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { ID_FLOOR_STRIDE, MAX_ALTERNATES } from "../../../src/core/config";
 import {
 	type ActionRef,
 	ALTERNATE,
@@ -6,9 +7,8 @@ import {
 	defineModule,
 	FAIL,
 	NO_CELL,
-} from "../../../src/core/api";
-import { ID_FLOOR_STRIDE, MAX_ALTERNATES } from "../../../src/core/config";
-import { createWorld } from "../../../src/core/world";
+} from "../../../src/core/module/api";
+import { createWorld } from "../../../src/core/world/world";
 import { probe } from "../../fixtures";
 
 const TURN = 100;

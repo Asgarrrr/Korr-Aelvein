@@ -1,9 +1,10 @@
 import { expect, spyOn, test } from "bun:test";
 import { species } from "../../../src/content/species";
-import { defineModule } from "../../../src/core/api";
 import * as compiler from "../../../src/core/lifecycle/species";
-import { createWorld, loadWorld } from "../../../src/core/world";
+import { defineModule } from "../../../src/core/module/api";
+import { createWorld, loadWorld } from "../../../src/core/world/world";
 import { modules } from "../../../src/registry";
+import { unnamed } from "../../fixtures";
 
 const world = (table: Readonly<Record<string, unknown>>) =>
 	createWorld({
@@ -56,7 +57,7 @@ test("a directly spawned species is read fresh on every spawn", () => {
 	expect(w.peek("edible", "nutrition", second)).toBe(77);
 });
 
-test("a spawn by name builds the same world as a spawn by shape", () => {
+test("a spawn by name builds the same world as a spawn by shape, but for its species index", () => {
 	type Name = keyof typeof species;
 	const built = (by: (name: Name) => Name | (typeof species)[Name]) => {
 		const w = world(species);
@@ -66,7 +67,9 @@ test("a spawn by name builds the same world as a spawn by shape", () => {
 		w.spawn(0, by("mushroom"), 2, 0);
 		return w.save();
 	};
-	expect(built((name) => name)).toEqual(built((name) => species[name]));
+	const byName = built((name) => name);
+	expect(unnamed(byName)).not.toEqual(byName);
+	expect(unnamed(byName)).toEqual(built((name) => species[name]));
 });
 
 test("a name outside the world's species table throws, inherited keys included", () => {
@@ -106,10 +109,16 @@ test("a name spawn compiles nothing, values included; a shape spawn compiles on 
 	}
 });
 
-test("creation compiles each distinct table shape once", () => {
+test("two species names for one shape object throw at creation, naming both", () => {
+	expect(() => world({ ...species, alias: species.cheese })).toThrow(
+		"species alias and cheese are the same object",
+	);
+});
+
+test("creation compiles each table shape once, also when a module resolves it", () => {
 	const compile = spyOn(compiler, "compileSpecies");
 	try {
-		world({ ...species, alias: species.cheese });
+		world(species);
 		expect(compile).toHaveBeenCalledTimes(Object.keys(species).length);
 	} finally {
 		compile.mockRestore();

@@ -4,6 +4,7 @@ import { cheese } from "../../../src/content/species/cheese";
 import { ember } from "../../../src/content/species/ember";
 import { rat } from "../../../src/content/species/rat";
 import { stoat } from "../../../src/content/species/stoat";
+import { spawn } from "../../../src/core/lifecycle/lifecycle";
 import {
 	type ActionCtx,
 	type ActionFn,
@@ -14,8 +15,7 @@ import {
 	FAIL,
 	type Perception,
 	type Slot,
-} from "../../../src/core/api";
-import { spawn } from "../../../src/core/lifecycle/lifecycle";
+} from "../../../src/core/module/api";
 import {
 	bounded,
 	draw,
@@ -24,7 +24,7 @@ import {
 	SUBJECT,
 } from "../../../src/core/random/rng";
 import { createEngine } from "../../../src/core/setup/registration";
-import { createWorld } from "../../../src/core/world";
+import { createWorld } from "../../../src/core/world/world";
 import { fear } from "../../../src/modules/fear";
 import { fearConfig } from "../../../src/modules/fear/config";
 import { fire } from "../../../src/modules/fire";

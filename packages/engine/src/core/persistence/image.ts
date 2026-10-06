@@ -3,7 +3,7 @@ import type { Column } from "../ecs/schema";
 import { type Engine, FLOOR_STAGE } from "../engine";
 import type { Checksum } from "./checksum";
 
-export const FORMAT_VERSION = 6;
+export const FORMAT_VERSION = 7;
 export const WORD = 4;
 export const VERSION = 0;
 export const FINGERPRINT = 1;

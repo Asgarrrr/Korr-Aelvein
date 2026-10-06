@@ -3,7 +3,7 @@ import { moss } from "../../../src/content/species/moss";
 import { rat } from "../../../src/content/species/rat";
 import { HIGH_WATER, INBOX, WORD } from "../../../src/core/persistence/image";
 import { readWorld } from "../../../src/core/persistence/save";
-import { createWorld, loadWorld } from "../../../src/core/world";
+import { createWorld, loadWorld } from "../../../src/core/world/world";
 import { exploreConfig } from "../../../src/modules/explore/config";
 import { modules } from "../../../src/registry";
 import { game, populatedWorld } from "../../fixtures";

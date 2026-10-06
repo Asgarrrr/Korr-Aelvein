@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import { cheese } from "../../../src/content/species/cheese";
 import { rat } from "../../../src/content/species/rat";
-import { defineModule, type EntityId } from "../../../src/core/api";
-import { createWorld, loadWorld } from "../../../src/core/world";
+import { defineModule, type EntityId } from "../../../src/core/module/api";
+import { createWorld, loadWorld } from "../../../src/core/world/world";
 import { foodClass } from "../../../src/modules/hunger/config";
 import { game, idleRounds } from "../../fixtures";
 import { climber, drain } from "../travel/climber";

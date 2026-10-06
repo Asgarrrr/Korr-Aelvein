@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { defineModule, type EntityId } from "../../../src/core/api";
 import { CAP, STAIR_TIME } from "../../../src/core/config";
-import { createWorld, loadWorld } from "../../../src/core/world";
+import { defineModule, type EntityId } from "../../../src/core/module/api";
+import { createWorld, loadWorld } from "../../../src/core/world/world";
 import { probe } from "../../fixtures";
 import {
 	aimAt,

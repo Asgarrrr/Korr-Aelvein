@@ -58,7 +58,7 @@ export const warmthConfig = {
 	cost: 100,
 } as const;
 // index.ts
-import { defineModule, FAIL, NO_CELL, NONE } from "../../core/api";
+import { defineModule, FAIL, NO_CELL, NONE } from "../../core/module/api";
 import { warmthConfig } from "./config";
 import { schema } from "./schema";
 

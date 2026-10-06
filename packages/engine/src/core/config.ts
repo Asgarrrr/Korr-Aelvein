@@ -1,4 +1,6 @@
 export const CAP = 1 << 14;
+// A species index is a byte, and 0 means a species spawned from a shape.
+export const MAX_SPECIES = 255;
 export const MAX_FLOORS = 64;
 export const ID_FLOOR_STRIDE = 1 << 25;
 export const TICKS_PER_TURN = 100;

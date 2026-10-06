@@ -1,22 +1,22 @@
-import type { CellContracts, Contracts } from "../contracts";
-import type { Cell, EntityId, Slot } from "./ecs/ids";
-import type { SlotList } from "./ecs/query";
+import type { CellContracts, Contracts } from "../../contracts";
+import type { Cell, EntityId, Slot } from "../ecs/ids";
+import type { SlotList } from "../ecs/query";
 import type {
 	Columns,
 	FieldKind,
 	Fields,
 	FieldValue,
 	Schema,
-} from "./ecs/schema";
-import type { CoreSchema } from "./health/vitality";
-import type { SpeciesShape } from "./lifecycle/species";
+} from "../ecs/schema";
+import type { CoreSchema } from "../health/vitality";
+import type { SpeciesShape } from "../lifecycle/species";
 
-export { PERCEPTION_RADIUS } from "./config";
-export type { Cell, EntityId, Slot } from "./ecs/ids";
-export { NO_CELL, NO_ENTITY, NONE } from "./ecs/ids";
-export type { SlotList } from "./ecs/query";
-export type { Schema } from "./ecs/schema";
-export type { SpeciesShape } from "./lifecycle/species";
+export { PERCEPTION_RADIUS } from "../config";
+export type { Cell, EntityId, Slot } from "../ecs/ids";
+export { NO_CELL, NO_ENTITY, NONE } from "../ecs/ids";
+export type { SlotList } from "../ecs/query";
+export type { Schema } from "../ecs/schema";
+export type { SpeciesShape } from "../lifecycle/species";
 
 export interface TargetOf {
 	entity: EntityId;

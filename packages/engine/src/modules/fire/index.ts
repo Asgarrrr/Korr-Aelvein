@@ -4,7 +4,7 @@ import {
 	NO_CELL,
 	NO_ENTITY,
 	NONE,
-} from "../../core/api";
+} from "../../core/module/api";
 import { fireConfig } from "./config";
 import { cells, schema } from "./schema";
 

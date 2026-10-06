@@ -1,4 +1,4 @@
-import { defineModule, NO_CELL } from "../../core/api";
+import { defineModule, NO_CELL } from "../../core/module/api";
 import { wanderConfig } from "./config";
 
 const DX = [-1, 0, 1, -1, 1, -1, 0, 1];

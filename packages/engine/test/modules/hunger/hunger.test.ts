@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { species } from "../../../src/content/species";
 import { cheese } from "../../../src/content/species/cheese";
 import { rat } from "../../../src/content/species/rat";
+import { LOD_PERIODS, PERCEPTION_RADIUS } from "../../../src/core/config";
 import {
 	type ActionCtx,
 	type ActionFn,
@@ -12,9 +13,8 @@ import {
 	NONE,
 	type Perception,
 	type Slot,
-} from "../../../src/core/api";
-import { LOD_PERIODS, PERCEPTION_RADIUS } from "../../../src/core/config";
-import { createWorld } from "../../../src/core/world";
+} from "../../../src/core/module/api";
+import { createWorld } from "../../../src/core/world/world";
 import { fear } from "../../../src/modules/fear";
 import { flora } from "../../../src/modules/flora";
 import { hunger } from "../../../src/modules/hunger";

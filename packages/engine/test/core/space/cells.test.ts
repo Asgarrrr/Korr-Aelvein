@@ -7,8 +7,8 @@ import {
 	type EntityId,
 	NO_CELL,
 	type WriteCtx,
-} from "../../../src/core/api";
-import { createWorld, loadWorld } from "../../../src/core/world";
+} from "../../../src/core/module/api";
+import { createWorld, loadWorld } from "../../../src/core/world/world";
 
 // Each round, every entity heats its own cell by its `heat.add`; `seen.level` records the
 // heat under each actor when it proposes.
