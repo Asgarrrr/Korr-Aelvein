@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import {
 	type Builder,
-	type CellField,
 	defineModule,
 	type Schema,
 } from "../../../src/core/module/api";
@@ -120,15 +119,12 @@ test("cell columns take no mask bit", () => {
 });
 
 test("an alarm takes only a u8 cell field of its own module", () => {
-	const lent: CellField<"u8">[] = [];
 	const lender = defineModule({
 		name: "lender",
 		schema: { tag: {} },
 		cells: { glow: { v: "u8" } },
 		config: {},
-		setup(b) {
-			lent.push(b.cells("glow").v);
-		},
+		setup() {},
 	});
 	const own = { own: { v: "u8", w: "i16" } } as const;
 	const borrower = (setup: (b: Builder<Schema, typeof own>) => void) =>
@@ -148,19 +144,15 @@ test("an alarm takes only a u8 cell field of its own module", () => {
 				}),
 			],
 		});
-	expect(() =>
-		borrower((b) => b.alarm(b.cells("own").v, ["tag"])),
-	).not.toThrow();
-	const notOwned = /borrower alarm: not an owned u8 cell/;
-	expect(() =>
-		borrower((b) => b.alarm(lent[0] as CellField<"u8">, [])),
-	).toThrow(notOwned);
-	expect(() =>
-		borrower((b) =>
-			b.alarm(b.cells("own").w as unknown as CellField<"u8">, []),
-		),
-	).toThrow(notOwned);
-	expect(() => borrower((b) => b.alarm(b.cells("own").v, ["wings"]))).toThrow(
+	expect(() => borrower((b) => b.alarm("own", "v", ["tag"]))).not.toThrow();
+	expect(() => borrower((b) => b.alarm("glow" as never, "v", []))).toThrow(
+		/borrower does not own cells glow/,
+	);
+	for (const field of ["w", "missing", "toString"])
+		expect(() => borrower((b) => b.alarm("own", field as never, []))).toThrow(
+			`borrower alarm: own.${field} is not a u8 cell field`,
+		);
+	expect(() => borrower((b) => b.alarm("own", "v", ["wings"]))).toThrow(
 		/borrower requires wings, which no module owns/,
 	);
 });

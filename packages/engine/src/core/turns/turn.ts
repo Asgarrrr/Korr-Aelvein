@@ -107,17 +107,13 @@ export function finishTurn(
 function decide(e: Engine, floor: number, slot: Slot, id: EntityId): number {
 	const period = e.period[floor] ?? 0;
 	const key = e.intentKey[slot] ?? 0;
-	if (
-		period > 1 &&
-		key !== 0 &&
-		(e.round + id) % period !== 0 &&
-		!alarmed(e, floor, slot)
-	) {
+	if (period > 1 && key !== 0 && (e.round + id) % period !== 0) {
 		const action = e.actionByKey.get(key);
 		if (action !== undefined) {
+			const entry = e.actions[action] as ActionEntry;
+			if (alarmed(e, floor, slot, entry.moduleKey)) return act(e, floor, slot);
 			const target = e.intentTarget[slot] ?? 0;
-			const { kind } = e.actions[action] as ActionEntry;
-			if (validTarget(kind, target, e.grid.cells, e.storage.floors)) {
+			if (validTarget(entry.kind, target, e.grid.cells, e.storage.floors)) {
 				const cost = execute(e, floor, slot, action, target);
 				if (!e.failed) return cost;
 			}
@@ -128,7 +124,13 @@ function decide(e: Engine, floor: number, slot: Slot, id: EntityId): number {
 	return act(e, floor, slot);
 }
 
-function alarmed(e: Engine, floor: number, slot: Slot): boolean {
+// An alarm is silent for an intent of its own module: that action revalidates itself on replay.
+function alarmed(
+	e: Engine,
+	floor: number,
+	slot: Slot,
+	intentModule: number,
+): boolean {
 	const alarms = e.alarms;
 	if (alarms.length === 0) return false;
 	const { masks, maskWords } = e.storage;
@@ -136,6 +138,7 @@ function alarmed(e: Engine, floor: number, slot: Slot): boolean {
 	const at = floor * e.grid.stride + (e.grid.cellOf[slot] ?? 0);
 	for (let i = 0; i < alarms.length; i++) {
 		const alarm = alarms[i] as Alarm;
+		if (alarm.moduleKey === intentModule) continue;
 		const word = alarm.requiresWord;
 		const bits = alarm.requiresBits;
 		if (

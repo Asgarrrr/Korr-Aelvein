@@ -27,7 +27,7 @@ const siren = defineModule({
 	config: {},
 	setup(b) {
 		const { on } = b.cells("siren");
-		b.alarm(on, ["tag0", "tag28"]);
+		b.alarm("siren", "on", ["tag0", "tag28"]);
 		b.tick((ctx) => {
 			const cells = on.write(ctx);
 			cells.clear();

@@ -163,8 +163,12 @@ interface BuilderPin<S extends Schema, K extends Schema> {
 		run: ActionFn<A>,
 	): ActionRef<A>;
 	propose(run: ProposeFn): void;
-	alarm(
-		field: CellField<"u8">,
+	alarm<N extends keyof K & string>(
+		table: N,
+		field: {
+			[F in keyof K[N]]: K[N][F] extends "u8" ? F : never;
+		}[keyof K[N]] &
+			string,
 		requires: readonly (
 			| (keyof S & string)
 			| keyof Contracts

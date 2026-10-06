@@ -65,9 +65,11 @@ a second name anywhere.
   A matching candidate gets inertia; a FAIL clears it.
 - **Period (P)**: how often an actor re-decides. Set per floor by distance
   to the nearest player; between decisions the actor repeats its intent.
-- **Alarm**: a u8 cell field a module sets only on the turn danger first
-  reaches a cell. An actor there with the alarm's required components
-  decides in full instead of replaying its Intent.
+- **Alarm**: a u8 cell field a module sets only on the turn an eater first
+  comes within the module's alarm radius of a cell. An actor there with the
+  alarm's required components decides in full instead of replaying its
+  Intent, unless that Intent is an action of the same module. Every action
+  of the declaring module revalidates the alarm's condition when it replays.
 - **Requires**: the components an action needs on its actor. Without them
   the action is a FAIL.
 - **Harm**: buffered health loss, applied by the core after each callback.

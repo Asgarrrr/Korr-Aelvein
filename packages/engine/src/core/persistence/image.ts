@@ -330,6 +330,8 @@ export function readFloor(
 			: now,
 	);
 	engine.players[floor] = players;
+	// The grid lists were rewritten in place: a kept perception must not survive them.
+	engine.grid.version++;
 }
 
 // The section copy rewrites every row below the incoming high water; rows above it must go.

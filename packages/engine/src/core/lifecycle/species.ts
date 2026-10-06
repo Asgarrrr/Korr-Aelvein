@@ -22,14 +22,19 @@ export interface FieldRange {
 	readonly max: number;
 }
 
+// `Range` is never for spawn values: only a species draws from a range.
+type ShapeComponents<Range> = {
+	readonly [component: string]:
+		| { readonly [field: string]: number | Range | undefined }
+		| undefined;
+};
+
 export interface SpeciesShape {
 	readonly actor: boolean;
-	readonly components: {
-		readonly [component: string]:
-			| { readonly [field: string]: number | FieldRange | undefined }
-			| undefined;
-	};
+	readonly components: ShapeComponents<FieldRange>;
 }
+
+export type SpawnValues = ShapeComponents<never>;
 
 export interface RangeDraw {
 	readonly column: Column;

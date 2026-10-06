@@ -18,6 +18,8 @@ Context, terms and recipes: `engine.md`. Example: `bench/reference/thirst.ts`.
 4. Propose goal actions whose target persists (an `EntityId`). Reach
    `ctx.step` / `ctx.idle` / `ctx.travel` only through `instead`. The
    action re-validates its target on every run: it may run cached.
+4a. A module that declares an alarm: every action of that module
+   revalidates the alarm's condition when it replays.
 5. `requires` lists every component the action writes or needs on the
    actor. Names come from the own schema, `contracts/` or the core.
 6. A second module reads your component: add it to `Contracts`, and the

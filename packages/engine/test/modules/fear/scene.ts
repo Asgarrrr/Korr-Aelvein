@@ -2,7 +2,13 @@ import { species } from "../../../src/content/species";
 import { rat } from "../../../src/content/species/rat";
 import { stoat } from "../../../src/content/species/stoat";
 import { spawn } from "../../../src/core/lifecycle/lifecycle";
-import type { AnyModule, EntityId } from "../../../src/core/module/api";
+import {
+	type ActionCtx,
+	ALTERNATE,
+	type AnyModule,
+	type EntityId,
+	NONE,
+} from "../../../src/core/module/api";
 import { createEngine } from "../../../src/core/setup/registration";
 import { explore } from "../../../src/modules/explore";
 import { wander } from "../../../src/modules/wander";
@@ -40,4 +46,36 @@ export const scene = (side: number, list: readonly AnyModule[] = still) => {
 		});
 	const stoatAt = (x: number, y: number) => spawn(engine, 0, stoat, x, y);
 	return { engine, intent, target, xOf, ratAt, stoatAt };
+};
+
+// An action ctx over a few bodies on a side x side floor, as [slot, id, x, y]; fear reads sight
+// from the grid lists. `crowded`: every cell holds an actor.
+export const gridCtx = (
+	bodies: readonly [number, EntityId, number, number][],
+	side: number,
+	crowded = false,
+) => {
+	const at = (slot: number) => bodies.find(([s]) => s === slot);
+	const cellOf = (slot: number) => {
+		const body = at(slot);
+		return body ? body[3] * side + body[2] : NONE;
+	};
+	const inCell = (cell: number) =>
+		bodies.filter(([s]) => cellOf(s) === cell).map(([s]) => s);
+	return {
+		width: side,
+		height: side,
+		x: (slot: number) => at(slot)?.[2] ?? 0,
+		y: (slot: number) => at(slot)?.[3] ?? 0,
+		cellAt: (x: number, y: number) => y * side + x,
+		cellOf,
+		slotOf: (id: EntityId) => bodies.find(([, i]) => i === id)?.[0] ?? NONE,
+		firstAt: (cell: number) => inCell(cell)[0] ?? NONE,
+		nextAt: (slot: number) => {
+			const list = inCell(cellOf(slot));
+			return list[list.indexOf(slot) + 1] ?? NONE;
+		},
+		holdsActor: () => crowded,
+		instead: () => ALTERNATE,
+	} as unknown as ActionCtx;
 };

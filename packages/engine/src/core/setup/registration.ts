@@ -215,7 +215,6 @@ class ModuleBuilder implements Builder<Schema, Schema> {
 	readonly #resolve: (wanted: string | SpeciesShape) => SpeciesRef;
 	readonly #audit: boolean;
 	readonly #buffers: Buffer[] = [];
-	readonly #cellFields = new Map<CellField<FieldKind>, Column>();
 	#sealed = false;
 
 	constructor(
@@ -251,9 +250,7 @@ class ModuleBuilder implements Builder<Schema, Schema> {
 		const fields: Record<string, CellField<FieldKind>> = {};
 		for (const [field, column] of Object.entries(columns)) {
 			const audit = this.#audit ? `${name}.${field}` : undefined;
-			const view = cellField(column, grid.stride, grid.cells, audit);
-			this.#cellFields.set(view, column);
-			fields[field] = view;
+			fields[field] = cellField(column, grid.stride, grid.cells, audit);
 		}
 		return Object.freeze(fields) as CellColumns<Schema[N]>;
 	}
@@ -334,11 +331,15 @@ class ModuleBuilder implements Builder<Schema, Schema> {
 		this.#engine.proposers.push({ moduleKey: this.#moduleKey, run });
 	}
 
-	alarm(field: CellField<"u8">, requires: readonly string[]): void {
-		const column = this.#cellFields.get(field);
+	alarm(table: string, field: string, requires: readonly string[]): void {
+		const columns = this.#ownedCells(table);
+		const column = Object.hasOwn(columns, field) ? columns[field] : undefined;
 		if (!(column instanceof Uint8Array))
-			throw new Error(`${this.#open().name} alarm: not an owned u8 cell`);
-		this.#engine.addAlarm(column, this.#bits(requires, "requires"));
+			throw new Error(
+				`${this.#module.name} alarm: ${table}.${field} is not a u8 cell field`,
+			);
+		const bits = this.#bits(requires, "requires");
+		this.#engine.addAlarm(this.#moduleKey, column, bits);
 	}
 
 	event(name: string): EventRef {

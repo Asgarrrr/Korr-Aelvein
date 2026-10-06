@@ -142,7 +142,9 @@ test("flight never drops below flightMin: a starving bold rat flees at 1, and fl
 	engine.runRound();
 	expect([intent(id), xOf(id)]).toEqual(["fear/flee", 6]);
 	engine.runRound();
-	expect([intent(id), xOf(id)]).toEqual(["fear/watch", 6]);
+	// Starving, it does not watch either: at two cells it stays put.
+	expect(intent(id)).not.toMatch(/^fear\//);
+	expect(xOf(id)).toBe(6);
 });
 
 test("without temperament, a rat flees a stoat as soon as it sees it", () => {

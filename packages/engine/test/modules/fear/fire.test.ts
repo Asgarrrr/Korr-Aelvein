@@ -32,6 +32,7 @@ import { foodClass, hungerConfig } from "../../../src/modules/hunger/config";
 import { wander } from "../../../src/modules/wander";
 import { modules } from "../../../src/registry";
 import { probe } from "../../fixtures";
+import { gridCtx } from "./scene";
 
 const tracked = { ...rat, components: { ...rat.components, where: {} } };
 
@@ -242,22 +243,14 @@ test("avoid fails once no cell near burns, even with an eater in sight", () => {
 		},
 	} as unknown as Builder<typeof fear.schema>;
 	fear.setup(builder, fearConfig);
-	const ctx = {
-		x: () => 5,
-		y: () => 5,
-		cellAt: (x: number, y: number) => y * side + x,
-		cellOf: () => 5 * side + 5,
-		holdsActor: () => false,
-		instead: () => ALTERNATE,
-	} as unknown as ActionCtx;
-	const eater = {
-		count: 1,
-		slot: () => 1,
-		id: () => 9,
-		dx: () => -1,
-		dy: () => 0,
-		dist: () => 1,
-	} as unknown as Perception;
+	const ctx = gridCtx(
+		[
+			[0, 1 as EntityId, 5, 5],
+			[1, 9 as EntityId, 4, 5],
+		],
+		side,
+	);
+	const eater = {} as Perception;
 	const run = avoid as ActionFn<"none">;
 	expect(run(ctx, 0 as Slot, null, eater)).toBe(ALTERNATE);
 	lit = false;

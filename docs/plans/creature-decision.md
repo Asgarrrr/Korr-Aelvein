@@ -36,7 +36,7 @@ per budget; FAIL rows do not change the exit code, so read them):
   alarm reaches its cell; a stoat never re-decides because of it.
 - Bench, paired: each perf-sensitive slice is benched right after its
   base, under the same machine load. Cached actor turn at P=64 and world
-  round within +5% of the base (slice 2 accepts +12%, see D6); player floor within +10%; RSS <= 160 MB.
+  round within +5% of the base (slices 2 and 6: see D6); player floor within +10%; RSS <= 160 MB.
   Absolute budgets are re-checked on an idle machine: on 2026-10-06 a
   loaded machine (load average ~3.8) measured 96-100 ms rounds and
   180-186 ns cached turns on both `c0a8774` and `e50a6d8`.
@@ -74,7 +74,9 @@ The score order is a convention in comments today. It becomes core data in
 candidate. A seeded-world test fails if a game module pushes a score
 outside every band. Core tests that push synthetic scores are not
 concerned. `INERTIA` stays flat; per-band inertia is added only if the
-oscillation guard fails. Bands are rescaled only when a measurement shows
+oscillation guard fails. `band()` maps a weight into `[min, max -
+INERTIA]` for every band but the top, so inertia never lifts a cached
+candidate into the next band. Bands are rescaled only when a measurement shows
 a band lacks resolution.
 
 ### D3. Curves
@@ -126,8 +128,9 @@ flight = clamp(flight, cfg.flightMin, PERCEPTION_RADIUS)
 - `d <= flight`: `flee` in the reflex band, as today.
 - `flight < d <= PERCEPTION_RADIUS`: new `watch` in the vigilance band. It
   idles with the threat as target. It fails when the threat leaves
-  perception, or when any perceived eater of its class comes within the
-  flight distance, so the actor decides again. A sated rat watches; a hungry one keeps eating.
+  perception, when any perceived eater of its class comes within the
+  flight distance, or when the actor is starving (below `riskBelow`); a
+  starving creature never proposes it. The actor then decides again. A sated rat watches; a hungry one keeps eating.
 - Hysteresis: fear owns `fleeing: u8` on `wary`. The flee action sets it;
   fear's tick clears it on rows whose cell carried no danger of the row's
   class last round. The clear shares the prey loop that runs before this
@@ -144,17 +147,41 @@ cached intent, `decide()` (`core/turns/turn.ts`) checks the actor's
 component mask, then reads the field at its cell; nonzero skips the replay
 and runs a full decision. Zero alarms cost nothing measurable.
 
-The alarm is edge-triggered. Fear stamps `alarm.eats = danger.eats &
-~previous danger.eats`: a cell alarms only on the turn danger first
-reaches it. A level-triggered alarm (any danger) made most rats on the
-reference world decide every turn: world round +190%. Fear's cells are
-split into `danger {eats}`, `burns {near}` and `alarm {eats}`, so the
-previous-turn copy holds one field. Stoats lack `wary` and never pay.
+The alarm is edge-triggered over a radius. Fear stamps `spotted.eats` on
+cells within `alarmRadius` of an eater (fear config, default
+`PERCEPTION_RADIUS + MARGIN` = 4) and sets `alarm.eats = spotted.eats &
+~previous spotted.eats`: a cell alarms only on the turn an eater first
+comes that close. An alarm stays silent for an actor whose cached intent
+is an action of the alarm's own module: those actions revalidate the
+alarm's condition on every replay (`.claude/rules/engine-modules.md`).
+`b.alarm(table, field, requires)` names an own u8 cell field. Stoats lack
+`wary` and never pay.
 
-Measured, paired on a loaded machine: world round and the P=64 actor turn
-+12%, player floor unchanged. The user accepted this cost as the price of
-reflexes on far floors. Known limit: an actor that walks into standing
-danger keeps its cache until its next scheduled decision.
+History of the decision, all measured paired on a loaded machine:
+- Level-triggered over reach 4: world round +190%.
+- Edge over reach 4 (slice 2): +12%, accepted. A final review found the
+  wake fires beyond sight and sees nothing, so a far rat replaying `eat`
+  could be eaten without reacting.
+- Level over sight with own-module silence: correct reflexes, +103%;
+  with perf B and C1, +48%; edge over sight with B and C1: +28%. The cost
+  is far-floor rats actually reacting (several times more flee and watch
+  replays), not the alarm itself.
+- The user chose cheap far floors: edge over radius 4 with B and C1,
+  world round +0.4% versus slice 5, player floor -10%. `alarmRadius` 3
+  makes far floors reactive (about +28%): a config change, no code.
+
+Accepted limits on far floors: an actor that keeps eating as an eater
+closes in, or walks into standing danger, keeps its cache until its next
+scheduled decision; a wake at radius 4 usually sees no eater yet.
+
+Perf B and C1, behaviour-neutral (50 columns hashed every round for 40
+reference rounds, identical): fear finds eaters through its own `reach`
+stamp (eaters within `MARGIN` at the tick) in `sight.ts`, and flee
+geometry lives in `escape.ts`, so flee and watch revalidate without a
+perception fill. Perception keeps its last fill while floor, actor and
+`Grid.version` are unchanged. B assumes every action costs one turn; a
+test pins it. An eater spawned mid-round outside every stamp stays unseen
+until the next tick; no current module spawns one.
 
 ### D7. Tree
 
@@ -162,6 +189,7 @@ danger keeps its cache until its next scheduled decision.
 core/decision/{arbitration,perception,bands,curve}.ts
 core/module/api.ts              exports band, curve, b.alarm
 modules/temperament/{index,schema}.ts
+modules/fear/{index,schema,config,sight,escape}.ts
 modules/fear/behaviours/watch.ts
 contracts/index.ts               + temperament (slice 5)
 content/species/{rat,stoat}.ts   + boldness ranges
@@ -198,7 +226,7 @@ content in English. Target ~150 lines of diff per slice.
    Helper: intent switches per entity, first decision excluded
    (`test/fixtures.ts`); baselines pinned as upper bounds on two seeds.
 2. **Alarms.** `b.alarm(field, requires)`, the check in `decide()`, fear's
-   edge stamp `alarm.eats` and its cell table split.
+   edge stamp `alarm.eats` and its cell table split (revised in slice 6).
    Tests: a wary rat caching `eat` on a P=64 floor re-decides the turn an
    alarm reaches its cell, and not before; a stoat on an alarmed cell
    keeps replaying; hash identical across floor-order permutations.
@@ -228,4 +256,34 @@ content in English. Target ~150 lines of diff per slice.
    pinned counts; without temperament, today's fear tests pass unchanged.
    Bench rows recorded.
 
-Then `/code-review` on the whole branch and a closing section here.
+6. **Final review fixes.** Edge alarm over `alarmRadius`; own-module
+   alarm silence; `b.alarm` by names; perf B and C1; bands capped at
+   `max - INERTIA` below the top; `watch` fails and is not proposed when
+   starving; flight readers chosen once at setup; one `SpawnValues` type.
+   Tests: each fix has a seeded test; the accepted limits are pinned by
+   tests; the one-turn action cost is pinned.
+
+## 5. Closing
+
+Milestone 1 holds: shy, average and bold rats react differently to the
+same stoat (flee at 3, watch then flee at 2, flee at 1), hunger shifts
+the risk, and reversals stay within two of the count without traits.
+
+The structure for more behaviours is in place: priority bands as core
+data, curves compiled from data, one file per new behaviour, traits drawn
+per individual from species ranges, and module alarms.
+
+Measured on a loaded machine (load average 3-8), paired with the previous
+slice: world round +0.4%, player floor -10%, P=64 actor turn unchanged,
+RSS unchanged within noise. Absolute budgets still need an idle machine:
+both the base and this branch read about 111 ms rounds and 210 ns cached
+turns under load.
+
+Deviations from v2: bands kept today's scale and arrived without module
+changes; the contract arrived with its first reader; the alarm went
+through four designs (D6); fear gained perf B and C1; the switch guard
+became a reversal guard.
+
+Follow-ups in `docs/ideas.md`: class-aware alarms. Next candidates for
+this structure: sociability (groups), environment use, evolution of traits
+with experience.

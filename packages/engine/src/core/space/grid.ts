@@ -14,6 +14,8 @@ export class Grid {
 	readonly cellOf: Int32Array;
 	readonly next: Int32Array;
 	readonly prev: Int32Array;
+	// Bumped on every list change, so a perception can tell it is still current.
+	version = 0;
 
 	constructor(
 		private readonly storage: Storage,
@@ -41,6 +43,7 @@ export class Grid {
 		const cell = y * this.width + x;
 		const at = floor * this.cells + cell;
 		const head = this.heads[at] ?? END;
+		this.version++;
 		this.next[slot] = head;
 		this.prev[slot] = END;
 		if (head !== END) this.prev[head] = slot;
@@ -53,6 +56,7 @@ export class Grid {
 	remove(floor: number, slot: Slot): void {
 		const prev = this.prev[slot] ?? END;
 		const next = this.next[slot] ?? END;
+		this.version++;
 		if (prev !== END) this.next[prev] = next;
 		else this.heads[floor * this.cells + (this.cellOf[slot] ?? 0)] = next;
 		if (next !== END) this.prev[next] = prev;

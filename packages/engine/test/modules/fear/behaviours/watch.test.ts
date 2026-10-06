@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { species } from "../../../../src/content/species";
+import { cheese } from "../../../../src/content/species/cheese";
 import { rat } from "../../../../src/content/species/rat";
 import { stoat } from "../../../../src/content/species/stoat";
 import { LOD_PERIODS } from "../../../../src/core/config";
@@ -19,8 +20,9 @@ import {
 import { createWorld } from "../../../../src/core/world/world";
 import type { fear } from "../../../../src/modules/fear";
 import { watchAction } from "../../../../src/modules/fear/behaviours/watch";
+import { fearConfig } from "../../../../src/modules/fear/config";
 import { foodClass } from "../../../../src/modules/hunger/config";
-import { idleRounds } from "../../../fixtures";
+import { decider, decisions, idleRounds } from "../../../fixtures";
 import { scene, still } from "../scene";
 
 // Steps one cell east every turn, whatever it sees.
@@ -41,6 +43,8 @@ const STALKER = {
 };
 const { min, max } = rat.components.temperament.boldness;
 const AVERAGE = (min + max) / 2;
+// A few turns of hunger's decay above riskBelow.
+const RISK_MARGIN = 10;
 
 test("a sated average rat watches an approaching eater at 3, then flees it at 2", () => {
 	const { engine, intent, xOf, ratAt } = scene(16, [...still, stalker]);
@@ -85,6 +89,10 @@ test("a rat replaying watch on one eater decides again and flees when another co
 const THREAT = 9 as EntityId;
 const OTHER = 10 as EntityId;
 const FLIGHT = 2;
+const SIGHT = 3;
+let hungry = false;
+// What the watcher sees on the next run, as [slot, id, distance].
+let inSight: [number, EntityId, number][] = [];
 const watchWith = (eats: number[]) => {
 	let run: ActionFn<"entity"> | undefined;
 	const builder = {
@@ -104,18 +112,28 @@ const watchWith = (eats: number[]) => {
 	const edible = {
 		class: { get: (s: number) => (s === 0 ? foodClass.meat : 0) },
 	} as unknown as ContractView<"edible">;
-	watchAction(builder, { diet, edible, flightDistance: () => FLIGHT });
+	const eater = (slot: number, prey: number) =>
+		((eats[slot] ?? 0) & prey) !== 0;
+	watchAction(builder, {
+		diet,
+		edible,
+		flightDistance: () => FLIGHT,
+		starving: () => hungry,
+		threatNear: (_ctx, _actor, prey, radius) =>
+			inSight.some(([slot, , d]) => eater(slot, prey) && d <= radius),
+		sees: (_ctx, _actor, threat, prey) =>
+			inSight.some(
+				([slot, id, d]) => id === threat && eater(slot, prey) && d <= SIGHT,
+			),
+	});
 	return run as ActionFn<"entity">;
 };
 const ctx = { idle: {}, instead: () => ALTERNATE } as unknown as ActionCtx;
 // Each seen entity as [slot, id, distance].
-const sight = (...seen: [number, EntityId, number][]) =>
-	({
-		count: seen.length,
-		slot: (i: number) => seen[i]?.[0],
-		id: (i: number) => seen[i]?.[1],
-		dist: (i: number) => seen[i]?.[2],
-	}) as unknown as Perception;
+const sight = (...seen: [number, EntityId, number][]) => {
+	inSight = seen;
+	return {} as Perception;
+};
 
 test("watch idles while its threat is in sight beyond flight distance, and fails otherwise", () => {
 	const run = watchWith([0, foodClass.meat, foodClass.meat, foodClass.forage]);
@@ -132,6 +150,42 @@ test("watch idles while its threat is in sight beyond flight distance, and fails
 	expect(
 		run(ctx, actor, THREAT, sight([3, OTHER, FLIGHT], [1, THREAT, far])),
 	).toBe(ALTERNATE);
+	hungry = true;
+	expect(run(ctx, actor, THREAT, sight([1, THREAT, far]))).toBe(FAIL);
+	hungry = false;
 	const harmless = watchWith([0, foodClass.forage]);
 	expect(harmless(ctx, actor, THREAT, sight([1, THREAT, far]))).toBe(FAIL);
+});
+
+test("a rat watching on a P=64 floor decides again once its satiety drops below riskBelow, and eats", () => {
+	const floors = LOD_PERIODS.length;
+	const far = floors - 1;
+	const period = LOD_PERIODS[far] ?? 0;
+	decisions.clear();
+	const world = createWorld({
+		seed: 1,
+		floors,
+		width: 16,
+		height: 16,
+		modules: [...still, decider],
+		species,
+	});
+	world.spawnPlayer(0, { actor: true, components: {} }, 0, 0);
+	// Hungry but above riskBelow, with no food in sight: it watches the stoat three cells east.
+	const id = world.spawn(far, rat, 8, 8, {
+		temperament: { boldness: AVERAGE },
+		satiety: { value: fearConfig.riskBelow + RISK_MARGIN },
+	});
+	world.spawn(far, stoat, 11, 8);
+	idleRounds(world, 1);
+	// Food in sight now raises no alarm: the cached watch goes on until hunger ends it.
+	const meal = world.spawn(far, cheese, 6, 8);
+	let round = 1;
+	for (; decisions.get(id) === 1 && round < period; round++)
+		idleRounds(world, 1);
+	expect(round).toBeLessThan(period);
+	expect((round - 1 + id) % period).not.toBe(0);
+	expect(round - 1).toBeGreaterThan(1);
+	idleRounds(world, 2);
+	expect(world.locate(meal)).toBe("dead");
 });

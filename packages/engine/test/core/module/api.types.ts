@@ -14,12 +14,15 @@ defineModule({
 	cells: { glow: { on: "u8", heat: "i16" } },
 	config: {},
 	setup(b) {
-		const glow = b.cells("glow");
-		b.alarm(glow.on, ["owned", "satiety", "vitality"]);
+		b.alarm("glow", "on", ["owned", "satiety", "vitality"]);
 		// @ts-expect-error an alarm field is u8
-		b.alarm(glow.heat, []);
+		b.alarm("glow", "heat", []);
+		// @ts-expect-error an alarm field belongs to the named table
+		b.alarm("glow", "missing", []);
+		// @ts-expect-error an alarm table is one of the module's own cells
+		b.alarm("fire", "left", []);
 		// @ts-expect-error wary belongs to fear and is not in contracts/
-		b.alarm(glow.on, ["wary"]);
+		b.alarm("glow", "on", ["wary"]);
 	},
 });
 

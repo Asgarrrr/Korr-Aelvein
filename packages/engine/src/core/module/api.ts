@@ -206,10 +206,14 @@ export interface Builder<S extends Schema, K extends Schema = NoCells> {
 		run: ActionFn<K>,
 	): ActionRef<K>;
 	propose(run: ProposeFn): void;
-	// Replaying actors with every component of `requires` decide in full while `field` is nonzero
-	// at their cell. `field`: an own u8 cell field.
-	alarm(
-		field: CellField<"u8">,
+	// Replaying actors with every component of `requires` decide in full while `table.field`, an
+	// own u8 cell field, is nonzero at their cell, unless their cached action is this module's.
+	alarm<N extends keyof K & string>(
+		table: N,
+		field: {
+			[F in keyof K[N]]: K[N][F] extends "u8" ? F : never;
+		}[keyof K[N]] &
+			string,
 		requires: readonly (
 			| (keyof S & string)
 			| keyof Contracts

@@ -14,17 +14,12 @@ import {
 	checkKey,
 	compileSpecies,
 	type RangeDraw,
+	type SpawnValues,
 	type SpeciesShape,
 	speciesError,
 } from "./species";
 
 const NO_CAUSE = 0 as EntityId;
-
-export interface SpawnValues {
-	readonly [component: string]:
-		| { readonly [field: string]: number | undefined }
-		| undefined;
-}
 
 // A shape compiles on every call, from a frozen copy so its getters run once: a direct spawn is
 // setup work, and a cache would serve an edited object stale. A name is the fast path.

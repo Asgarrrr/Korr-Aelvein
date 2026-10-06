@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
+import { cheese } from "../../../src/content/species/cheese";
 import { rat } from "../../../src/content/species/rat";
 import { stoat } from "../../../src/content/species/stoat";
-import { LOD_PERIODS } from "../../../src/core/config";
+import { LOD_PERIODS, PERCEPTION_RADIUS } from "../../../src/core/config";
 import {
 	type AnyModule,
 	defineModule,
@@ -9,10 +10,12 @@ import {
 } from "../../../src/core/module/api";
 import { createWorld, loadWorld } from "../../../src/core/world/world";
 import { fear } from "../../../src/modules/fear";
+import { fearConfig } from "../../../src/modules/fear/config";
 import { hunger } from "../../../src/modules/hunger";
+import { temperament } from "../../../src/modules/temperament";
 import { wander } from "../../../src/modules/wander";
 import { climber } from "../../core/travel/climber";
-import { idleRounds } from "../../fixtures";
+import { forwardBuilder, idleRounds } from "../../fixtures";
 
 // The player stands on floor 0, so the last floor decides every 64 turns.
 const FLOORS = LOD_PERIODS.length;
@@ -21,6 +24,12 @@ const PERIOD = LOD_PERIODS[FAR] ?? 0;
 const ROUNDS = PERIOD + 8;
 const SIDE = 9;
 const player = { actor: true, components: {} };
+const SHY = 0;
+const BOLD = 255;
+const { min, max } = rat.components.temperament.boldness;
+const AVERAGE = (min + max) / 2;
+// Below hunger's threshold, above fear's riskBelow.
+const HUNGRY = 400;
 
 let round = 0;
 const decided = new Map<EntityId, number[]>();
@@ -45,6 +54,7 @@ const farFloor = (
 ) => {
 	round = 0;
 	decided.clear();
+	ran.clear();
 	const world = createWorld({
 		seed: 1,
 		floors: FLOORS,
@@ -71,18 +81,224 @@ const offSchedule = (id: number) => {
 	return found;
 };
 
-test("a wary rat on a P=64 floor decides in full on the turn danger reaches its cell, then replays", () => {
-	const { world, run } = farFloor(still);
-	const prey = world.spawn(FAR, rat, 1, 1);
-	const arrival = offSchedule(prey);
-	run(arrival);
-	expect(decided.get(prey)).toEqual(scheduled(prey, arrival));
-	// Four cells away: inside fear's stamp (sight plus one cell of margin), out of sight.
-	world.spawn(FAR, stoat, 5, 1);
-	run(ROUNDS - arrival);
-	expect(decided.get(prey)).toEqual(
-		[...scheduled(prey, ROUNDS), arrival].sort((a, b) => a - b),
+const ran = new Map<EntityId, [number, string][]>();
+// Logs every run of the module's actions, cached replays included, by actor and round.
+const logged = (module: AnyModule): AnyModule => ({
+	...module,
+	setup(b, cfg) {
+		module.setup(
+			{
+				...forwardBuilder(b),
+				action: (name, kind, requires, run) =>
+					b.action(name, kind, requires, (ctx, actor, target, perception) => {
+						const id = ctx.idOf(actor);
+						ran.set(id, [
+							...(ran.get(id) ?? []),
+							[round, `${module.name}/${name}`],
+						]);
+						return run(ctx, actor, target, perception);
+					}),
+			},
+			cfg,
+		);
+	},
+});
+const actionsOf = (id: EntityId, at: number) =>
+	(ran.get(id) ?? []).filter(([r]) => r === at).map(([, name]) => name);
+
+// Steps one cell west every turn, above wander's score: a stoat that walks at its prey.
+const STALK_SCORE = 30;
+const stalker = defineModule({
+	name: "stalker",
+	schema: { stalks: {} },
+	config: {},
+	setup(b) {
+		const stalks = b.query(["stalks"]);
+		const creep = b.action("creep", "none", ["stalks"], (ctx, actor) =>
+			ctx.instead(ctx.step, ctx.cellAt(ctx.x(actor) - 1, ctx.y(actor))),
+		);
+		b.propose((_ctx, actor, _perception, out) => {
+			if (stalks.has(actor)) out.push(creep, null, STALK_SCORE);
+		});
+	},
+});
+const walker = (x: number, y: number) => ({
+	x,
+	y,
+	body: { ...stoat, components: { ...stoat.components, stalks: {} } },
+});
+const block = { actor: true, components: {} };
+
+const distance = (
+	world: ReturnType<typeof farFloor>["world"],
+	a: EntityId,
+	b: EntityId,
+) => {
+	const p = world.locate(a);
+	const q = world.locate(b);
+	if (typeof p === "string" || typeof q === "string")
+		throw new Error("not placed");
+	return Math.max(Math.abs(p.x - q.x), Math.abs(p.y - q.y));
+};
+
+// Runs until the stoat stands within `radius` of the rat at a round start, which alarms its cell.
+const untilWithin = (
+	far: ReturnType<typeof farFloor>,
+	prey: EntityId,
+	hunter: EntityId,
+	radius = fearConfig.alarmRadius,
+) => {
+	for (let r = 0; r < PERIOD; r++) {
+		if (distance(far.world, prey, hunter) <= radius) return r;
+		far.run(1);
+	}
+	throw new Error(`the stoat never came within ${radius}`);
+};
+
+// A hungry rat blocked from its cheese replays eat (it idles and keeps the intent) while a
+// stoat walks at it from five cells east.
+const eatScene = (fearModule: AnyModule, boldness: number) => {
+	const far = farFloor([
+		logged(hunger),
+		temperament,
+		logged(fearModule),
+		stalker,
+		logger,
+	]);
+	const { world } = far;
+	world.spawn(FAR, cheese, 0, 4);
+	for (let y = 3; y <= 5; y++) world.spawn(FAR, block, 1, y);
+	const prey = world.spawn(FAR, rat, 2, 4, {
+		temperament: { boldness },
+		satiety: { value: HUNGRY },
+	});
+	const { x, y, body } = walker(7, 4);
+	const hunter = world.spawn(FAR, body, x, y);
+	return { far, world, prey, hunter };
+};
+
+test("a rat replaying eat on a P=64 floor decides in full on the turn a stoat comes within alarmRadius", () => {
+	const { far, prey, hunter } = eatScene(fear, SHY);
+	const woken = untilWithin(far, prey, hunter);
+	expect(woken).toBeGreaterThan(0);
+	expect(scheduled(prey, woken + 1)).toEqual([0]);
+	far.run(1);
+	expect(decided.get(prey)).toEqual([0, woken]);
+	expect(actionsOf(prey, woken - 1)).toEqual(["hunger/eat"]);
+	// One cell beyond sight by default: the wake sees no eater yet.
+	expect(actionsOf(prey, woken)).toEqual(["hunger/eat"]);
+});
+
+test("with alarmRadius at sight, a rat replaying eat wakes as the stoat comes in sight and flees before it is adjacent", () => {
+	const sighted = {
+		...fear,
+		config: { ...fearConfig, alarmRadius: PERCEPTION_RADIUS },
+	};
+	const { far, world, prey, hunter } = eatScene(sighted, SHY);
+	const seen = untilWithin(far, prey, hunter, PERCEPTION_RADIUS);
+	expect(seen).toBeGreaterThan(0);
+	expect(scheduled(prey, seen + 1)).toEqual([0]);
+	far.run(1);
+	expect(decided.get(prey)).toEqual([0, seen]);
+	expect(actionsOf(prey, seen - 1)).toEqual(["hunger/eat"]);
+	expect(actionsOf(prey, seen)).toEqual(["fear/flee"]);
+	expect(distance(world, prey, hunter)).toBeGreaterThan(1);
+});
+
+test("a rat replaying roam on a P=64 floor decides in full on the turn a stoat comes within alarmRadius", () => {
+	const far = farFloor([
+		hunger,
+		temperament,
+		fear,
+		logged(wander),
+		stalker,
+		logger,
+	]);
+	const { world } = far;
+	// Boxed in, so every roam is a blocked step: it idles and keeps the intent. A rat that walks
+	// into cells the stoat's square already covers is not woken (see the accepted limits below).
+	for (const [bx, by] of [
+		[0, 3],
+		[1, 3],
+		[1, 4],
+		[1, 5],
+		[0, 5],
+	] as const)
+		world.spawn(FAR, block, bx, by);
+	const prey = world.spawn(FAR, rat, 0, 4, {
+		temperament: { boldness: AVERAGE },
+	});
+	const { x, y, body } = walker(8, 4);
+	const hunter = world.spawn(FAR, body, x, y);
+	const woken = untilWithin(far, prey, hunter);
+	expect(woken).toBeGreaterThan(0);
+	expect(scheduled(prey, woken + 1)).toEqual([0]);
+	far.run(1);
+	expect(decided.get(prey)).toEqual([0, woken]);
+	expect(actionsOf(prey, woken - 1)).toEqual(["wander/roam"]);
+});
+
+test("a rat replaying watch or flee in sight of a stoat pays no full decision for the alarm", () => {
+	const watching = farFloor([hunger, temperament, fear, logger]);
+	const watcher = watching.world.spawn(FAR, rat, 1, 1, {
+		temperament: { boldness: AVERAGE },
+	});
+	// Three cells away, sated and still: the average rat watches and keeps watching.
+	watching.world.spawn(FAR, stoat, 4, 1);
+	watching.run(ROUNDS);
+	expect(decided.get(watcher)).toEqual(scheduled(watcher, ROUNDS));
+
+	const fleeing = farFloor([
+		hunger,
+		temperament,
+		logged(fear),
+		stalker,
+		logger,
+	]);
+	const runner = fleeing.world.spawn(FAR, rat, 4, 4, {
+		temperament: { boldness: SHY },
+	});
+	// Walks west as fast as the rat flees: the stoat stays in sight and the rat replays flee.
+	const { x, y, body } = walker(6, 4);
+	fleeing.world.spawn(FAR, body, x, y);
+	const rounds = offSchedule(runner);
+	fleeing.run(rounds);
+	expect(decided.get(runner)).toEqual(scheduled(runner, rounds));
+	expect(
+		(ran.get(runner) ?? []).filter(([, name]) => name === "fear/flee"),
+	).toHaveLength(rounds);
+});
+
+// Accepted limit: the alarm fires only on the turn an eater comes within alarmRadius.
+test("a rat that keeps eating when a stoat comes within alarmRadius is not woken again as it closes", () => {
+	// Bold and hungry: in sight, eating outscores watching, and it flees only at one cell.
+	const { far, world, prey, hunter } = eatScene(fear, BOLD);
+	const woken = untilWithin(far, prey, hunter);
+	let adjacent = woken;
+	for (; distance(world, prey, hunter) > 1; adjacent++) far.run(1);
+	far.run(1);
+	expect(scheduled(prey, adjacent + 1)).toEqual([0]);
+	expect(decided.get(prey)).toEqual([0, woken]);
+	expect(actionsOf(prey, woken)).toEqual(["hunger/eat"]);
+	expect(actionsOf(prey, adjacent)).toEqual(["hunger/eat"]);
+});
+
+// Accepted limit: a cell already within alarmRadius of an eater raises no alarm for whoever steps into it.
+test("a rat walking into a standing stoat's sight is not woken", () => {
+	const far = farFloor([hunger, temperament, fear, stalker, logger]);
+	const { world } = far;
+	world.spawn(FAR, stoat, 1, 4);
+	const prey = world.spawn(
+		FAR,
+		{ ...rat, components: { ...rat.components, stalks: {} } },
+		7,
+		4,
 	);
+	const rounds = 5;
+	far.run(rounds);
+	expect(world.locate(prey)).toEqual({ floor: FAR, x: 2, y: 4 });
+	expect(scheduled(prey, rounds)).toEqual([0]);
+	expect(decided.get(prey)).toEqual([0]);
 });
 
 test("a stoat whose cell danger reaches keeps replaying its cached decision", () => {

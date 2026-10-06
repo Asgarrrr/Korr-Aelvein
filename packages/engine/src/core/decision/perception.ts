@@ -11,6 +11,7 @@ export class PerceptionBuffer implements Perception {
 	#self = 0;
 	#ox = 0;
 	#oy = 0;
+	#version = -1;
 	readonly #slots = new Int32Array(MAX_PERCEIVED);
 	readonly #grid: Grid;
 	readonly #entityIds: Int32Array;
@@ -25,7 +26,15 @@ export class PerceptionBuffer implements Perception {
 		return this.#n;
 	}
 
+	// Keeps the last fill while nothing has moved: a failed replay and the decision after it share one.
 	reset(floor: number, self: Slot): void {
+		if (
+			!this.#stale &&
+			this.#floor === floor &&
+			this.#self === self &&
+			this.#version === this.#grid.version
+		)
+			return;
 		this.#floor = floor;
 		this.#self = self;
 		this.#stale = true;
@@ -57,6 +66,7 @@ export class PerceptionBuffer implements Perception {
 	#fill(): void {
 		this.#stale = false;
 		const grid = this.#grid;
+		this.#version = grid.version;
 		const self = this.#self;
 		const slots = this.#slots;
 		const { width, height, heads, next } = grid;

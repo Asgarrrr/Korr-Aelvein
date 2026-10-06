@@ -1,31 +1,26 @@
 import { expect, test } from "bun:test";
 import { species } from "../../../src/content/species";
-import { ember } from "../../../src/content/species/ember";
-import { rat } from "../../../src/content/species/rat";
-import { stairs } from "../../../src/content/species/stairs";
-import { BANDS } from "../../../src/core/config";
+import { BANDS, INERTIA } from "../../../src/core/config";
 import { band } from "../../../src/core/decision/bands";
 import { spawn } from "../../../src/core/lifecycle/lifecycle";
 import type { AnyModule } from "../../../src/core/module/api";
 import { createEngine } from "../../../src/core/setup/registration";
-import { createWorld } from "../../../src/core/world/world";
-import { exploreConfig } from "../../../src/modules/explore/config";
 import { modules } from "../../../src/registry";
 import { starter } from "../../../src/world/starter";
 import {
 	forwardBuilder,
 	intentReversals,
 	intentSwitches,
+	seededWorld,
 } from "../../fixtures";
 
 type BandName = keyof typeof BANDS;
+const TOP: BandName = "reflex";
 
 const bandOf = (score: number) =>
 	(Object.keys(BANDS) as BandName[]).find(
 		(name) => score >= BANDS[name].min && score <= BANDS[name].max,
 	);
-
-const RESTLESS = exploreConfig.restlessBelow - 1;
 
 const EXPECTED: Record<string, BandName> = {
 	"explore/leave": "routine",
@@ -45,15 +40,23 @@ test("bands are ordered from routine up, with no gap and no overlap", () => {
 
 const WEIGHT_MAX = 255;
 
-test("band maps weight 0 to no candidate and 1..255 monotonically onto the whole band", () => {
+test("band maps weight 0 to no candidate and 1..255 monotonically into the band", () => {
 	for (const name of Object.keys(BANDS) as BandName[]) {
 		const { min, max } = BANDS[name];
 		expect(band(name, 0)).toBe(0);
 		expect(band(name, 1)).toBe(min);
-		expect(band(name, WEIGHT_MAX)).toBe(max);
+		expect(band(name, WEIGHT_MAX)).toBe(name === TOP ? max : max - INERTIA);
 		for (let w = 2; w <= WEIGHT_MAX; w++)
 			expect(band(name, w)).toBeGreaterThanOrEqual(band(name, w - 1));
 	}
+});
+
+test("below the top band, inertia never lifts a band's highest score out of it", () => {
+	for (const name of Object.keys(BANDS) as BandName[])
+		if (name !== TOP)
+			expect(band(name, WEIGHT_MAX) + INERTIA).toBeLessThanOrEqual(
+				BANDS[name].max,
+			);
 });
 
 test("band refuses a weight outside 0..255 or not an integer", () => {
@@ -94,52 +97,27 @@ function observed(module: AnyModule, pushes: Pushes): AnyModule {
 	};
 }
 
-// The starter floor plus an ember and a restless rat beside stairs to a second floor, so every
-// game proposer has a reason to push.
-function seededWorld(list: readonly AnyModule[]) {
-	const world = createWorld({
-		seed: 7,
-		floors: 2,
-		width: starter.width,
-		height: starter.height,
-		modules: list,
-		species,
-	});
-	for (const { species: name, x, y } of starter.layout)
-		world.spawn(0, name, x, y);
-	world.spawn(0, ember, 16, 3);
-	world.spawn(
-		0,
-		{ ...stairs, components: { link: { floor: 1, x: 1, y: 1 } } },
-		21,
-		13,
-	);
-	world.spawn(
-		0,
-		{ ...rat, components: { ...rat.components, satiety: { value: RESTLESS } } },
-		20,
-		12,
-	);
-	world.spawn(
-		1,
-		{ ...stairs, components: { link: { floor: 0, x: 20, y: 13 } } },
-		0,
-		0,
-	);
-	return world;
-}
-
 test("on a seeded 300-round world, every game action scores in its own band", () => {
 	const pushes: Pushes = new Map();
 	seededWorld(modules.map((m) => observed(m, pushes))).runRounds(300);
 	expect([...pushes.keys()].sort()).toEqual(Object.keys(EXPECTED).sort());
-	for (const [name, scores] of pushes)
+	for (const [name, scores] of pushes) {
 		for (const score of scores)
 			expect({ name, score, band: bandOf(score) }).toEqual({
 				name,
 				score,
 				band: EXPECTED[name],
 			});
+		// The top band has nothing above it to cross into.
+		const own: BandName = EXPECTED[name] ?? TOP;
+		const lifted = Math.max(...scores) + INERTIA;
+		if (own !== TOP)
+			expect({ name, lifted, within: lifted <= BANDS[own].max }).toEqual({
+				name,
+				lifted,
+				within: true,
+			});
+	}
 });
 
 const measuredOn = (seed: number, measure: typeof intentSwitches) => {

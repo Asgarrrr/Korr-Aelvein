@@ -1,3 +1,7 @@
+import { species } from "../src/content/species";
+import { ember } from "../src/content/species/ember";
+import { rat } from "../src/content/species/rat";
+import { stairs } from "../src/content/species/stairs";
 import { CAP } from "../src/core/config";
 import type { Engine } from "../src/core/engine";
 import { UNNAMED } from "../src/core/lifecycle/species";
@@ -16,6 +20,8 @@ import {
 import { saveWorld } from "../src/core/persistence/save";
 import { createWorld, loadEngine } from "../src/core/world/world";
 import { game } from "../src/game";
+import { exploreConfig } from "../src/modules/explore/config";
+import { starter } from "../src/world/starter";
 
 export const SIZE = 32;
 
@@ -103,7 +109,7 @@ export function forwardBuilder<S extends Schema, K extends Schema>(
 		tick: (run) => b.tick(run),
 		action: (name, kind, requires, run) => b.action(name, kind, requires, run),
 		propose: (run) => b.propose(run),
-		alarm: (field, requires) => b.alarm(field, requires),
+		alarm: (table, field, requires) => b.alarm(table, field, requires),
 		event: (name) => b.event(name),
 		species: (wanted) => b.species(wanted),
 	};
@@ -282,4 +288,41 @@ export function intentReversals(engine: Engine, rounds: number): number {
 		backRound[s] = round;
 	});
 	return reversals;
+}
+
+const RESTLESS = exploreConfig.restlessBelow - 1;
+
+// The starter floor plus an ember and a restless rat beside stairs to a second floor, so every
+// game proposer has a reason to push.
+export function seededWorld(list: readonly AnyModule[]) {
+	const world = createWorld({
+		seed: 7,
+		floors: 2,
+		width: starter.width,
+		height: starter.height,
+		modules: list,
+		species,
+	});
+	for (const { species: name, x, y } of starter.layout)
+		world.spawn(0, name, x, y);
+	world.spawn(0, ember, 16, 3);
+	world.spawn(
+		0,
+		{ ...stairs, components: { link: { floor: 1, x: 1, y: 1 } } },
+		21,
+		13,
+	);
+	world.spawn(
+		0,
+		{ ...rat, components: { ...rat.components, satiety: { value: RESTLESS } } },
+		20,
+		12,
+	);
+	world.spawn(
+		1,
+		{ ...stairs, components: { link: { floor: 0, x: 20, y: 13 } } },
+		0,
+		0,
+	);
+	return world;
 }

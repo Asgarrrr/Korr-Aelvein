@@ -53,6 +53,7 @@ export interface ActionEntry {
 }
 
 export interface Alarm {
+	readonly moduleKey: number;
 	readonly field: Uint8Array;
 	readonly requires: MaskBits;
 	readonly requiresWord: number;
@@ -335,9 +336,13 @@ export class Engine {
 		return Object.freeze({ index }) as ActionRef<K>;
 	}
 
-	addAlarm(field: Uint8Array, required: readonly MaskBit[]): void {
+	addAlarm(
+		moduleKey: number,
+		field: Uint8Array,
+		required: readonly MaskBit[],
+	): void {
 		const requires = new MaskBits(this.storage, required);
-		this.alarms.push({ field, requires, ...inlineMask(requires) });
+		this.alarms.push({ moduleKey, field, requires, ...inlineMask(requires) });
 	}
 
 	// Keyed by name hash, not registry position: adding a module never renumbers other events.

@@ -32,7 +32,6 @@ function alwaysAlert<S extends Schema, C, K extends Schema>(
 	return {
 		...module,
 		setup(b, cfg) {
-			const columnOf = new Map<CellField<"u8">, CellField<"u8">>();
 			const alert: Builder<S, K> = {
 				...forwardBuilder(b),
 				cells(name) {
@@ -41,18 +40,13 @@ function alwaysAlert<S extends Schema, C, K extends Schema>(
 					for (const [field, column] of Object.entries(real) as [
 						string,
 						CellField<"u8">,
-					][]) {
-						const stub: CellField<"u8"> = {
+					][])
+						fields[field] = {
 							read: () => ({ get: () => 0xff, next: () => NO_CELL }),
 							write: (ctx) => column.write(ctx),
 						};
-						columnOf.set(stub, column);
-						fields[field] = stub;
-					}
 					return fields as typeof real;
 				},
-				alarm: (field, requires) =>
-					b.alarm(columnOf.get(field) ?? field, requires),
 			};
 			module.setup(alert, cfg);
 		},
