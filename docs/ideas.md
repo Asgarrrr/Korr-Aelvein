@@ -55,3 +55,4 @@ the spec is updated to include it.
   server supplies the inputs (see `docs/plans/ecs-core.md`, D13).
 - Floors without a player that advance asynchronously, within one round of
   their neighbours.
+- Class-aware alarms: an alarm byte holds eaten-class bits, but `alarmed()` wakes every actor with the required components. With a second prey class, check the bits against the actor's own class.

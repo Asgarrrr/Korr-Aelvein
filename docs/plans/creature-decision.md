@@ -27,8 +27,11 @@ per budget; FAIL rows do not change the exit code, so read them):
 - One seed, 200 rats drawn from species defaults, each alone at distance
   3 from a stoat: the outcomes include both `flee` and `watch`.
 - The flight distance never increases with boldness.
-- Intent switches per 100 turns on a seeded floor do not exceed today's
-  count on the same seed (oscillation guard).
+- Intent reversals (A→B→A within two decisions) on two seeded floors do
+  not exceed their pinned counts (oscillation guard). `watch` adds alert
+  episodes, so the raw switch count was re-baselined (44/48 → 51/59) and
+  is not the oscillation measure: reversals with traits stay within two of
+  the count without traits (13/29 with, 24/27 without).
 - A wary rat caching `eat` on a P=64 floor re-decides on the turn an
   alarm reaches its cell; a stoat never re-decides because of it.
 - Bench, paired: each perf-sensitive slice is benched right after its
@@ -114,7 +117,7 @@ Fear scans for the nearest perceived eater of its class (today it takes
 the first), behind the existing danger pre-check. Its flight distance:
 
 ```
-flight = curve(flightByBoldness)[boldness]   // 3 for shy .. 1 for bold
+flight = curve([[64, 3], [192, 1]])[boldness] // 3 for shy .. 1 for bold
 flight -= satiety < cfg.riskBelow ? 1 : 0   // a hungry animal risks more
 flight += fleeing ? 1 : 0                   // hysteresis
 flight = clamp(flight, cfg.flightMin, PERCEPTION_RADIUS)
@@ -123,10 +126,12 @@ flight = clamp(flight, cfg.flightMin, PERCEPTION_RADIUS)
 - `d <= flight`: `flee` in the reflex band, as today.
 - `flight < d <= PERCEPTION_RADIUS`: new `watch` in the vigilance band. It
   idles with the threat as target. It fails when the threat leaves
-  perception or comes within the flight distance, so the actor decides
-  again. A sated rat watches; a hungry one keeps eating.
+  perception, or when any perceived eater of its class comes within the
+  flight distance, so the actor decides again. A sated rat watches; a hungry one keeps eating.
 - Hysteresis: fear owns `fleeing: u8` on `wary`. The flee action sets it;
-  fear's tick clears it on rows whose cell carries no danger.
+  fear's tick clears it on rows whose cell carried no danger of the row's
+  class last round. The clear shares the prey loop that runs before this
+  round's stamp, so calming lags one round.
 - Without `temperament`, flight is `PERCEPTION_RADIUS`: fear flees on
   sight, as today. Without `hunger`, the satiety term is skipped.
 - `avoid` (fire) keeps its own `danger.fire` gate and is unchanged.
@@ -218,8 +223,9 @@ content in English. Target ~150 lines of diff per slice.
    Tests: forced shy and bold rats flee at 3 and 1; a sated average rat
    watches at 3 then flees at 2; a starving bold rat keeps eating at 2;
    200 rats at distance 3 give both flee and watch; flight distance
-   non-increasing in boldness; intent switches not above the slice-1
-   baseline; without temperament, today's fear tests pass unchanged.
+   non-increasing in boldness; the nearest eater wins; a watch fails when
+   a second eater comes within flight; intent reversals within their
+   pinned counts; without temperament, today's fear tests pass unchanged.
    Bench rows recorded.
 
 Then `/code-review` on the whole branch and a closing section here.
