@@ -38,6 +38,9 @@
     },
     "packages/protocol": {
       "name": "@korr/protocol",
+      "dependencies": {
+        "@sinclair/typebox": "0.34.52",
+      },
     },
   },
   "packages": {

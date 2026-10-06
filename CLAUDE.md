@@ -47,7 +47,7 @@ row fits, that is a design question: propose a new row before coding.
 | Connections, sessions, persistence, hosting the engine | `apps/server/src/` |
 | 3D rendering | `apps/web/src/render/` |
 | ASCII debug view | `apps/web/src/debug/` |
-| Keys and clicks → player intents | `apps/web/src/input/` |
+| Keys and clicks → player commands | `apps/web/src/input/` |
 | Rendering settings: sizes, durations, palette | `apps/web/src/theme.ts` |
 | Tests | `<package>/test/`, mirroring `src/` |
 | Engine benchmarks (`bun run bench`, not part of `verify`) | `packages/engine/bench/` |
@@ -107,10 +107,11 @@ the code around it: every needless comment breeds more.
 
 - `packages/engine` — the simulation. Pure TypeScript: no DOM, no Three.js,
   no network, no `Math.random`, no wall clock.
-- `packages/protocol` — message types between web and server. Types only.
+- `packages/protocol` — message schemas between web and server and the
+  types derived from them. No logic.
 - `apps/server` — Elysia. Hosts the engine and owns all game state. The only
   place where game outcomes are computed.
-- `apps/web` — Vite + Three.js. Sends player intents, renders server
+- `apps/web` — Vite + Three.js. Sends player commands, renders server
   snapshots. Never computes an outcome.
 - Dependency direction: `web → protocol`; `server → engine, protocol`.
   `engine` imports no workspace package.

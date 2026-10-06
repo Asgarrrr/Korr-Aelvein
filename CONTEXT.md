@@ -79,3 +79,12 @@ a second name anywhere.
 - **Game**: the registry plus the species table: what the server runs.
   Code: `game` (`packages/engine/src/game.ts`). `createGame` / `loadGame`
   build a World running the Game.
+
+## Server and client
+
+- **Command**: what a client sends for its player's turn (`move`, `wait`).
+  The server maps it to an engine action. Not an Intent.
+- **Session**: One connection owns one Session. A Session holds one World
+  and one player, in memory. Code: `Session` (`apps/server/src/session.ts`).
+- **Snapshot**: the server's message to the client after each of its
+  player's turns. Not an Image, which is saved floor bytes.

@@ -1,3 +1,60 @@
-export type ClientMessage = { type: "ping" };
+import { type Static, Type } from "@sinclair/typebox";
 
-export type ServerMessage = { type: "pong" };
+const closed = { additionalProperties: false } as const;
+const Delta = Type.Integer({ minimum: -1, maximum: 1 });
+
+export const Ping = Type.Object({ type: Type.Literal("ping") }, closed);
+export type Ping = Static<typeof Ping>;
+
+export const Move = Type.Object(
+	{ type: Type.Literal("move"), dx: Delta, dy: Delta },
+	closed,
+);
+export type Move = Static<typeof Move>;
+
+export const Wait = Type.Object({ type: Type.Literal("wait") }, closed);
+export type Wait = Static<typeof Wait>;
+
+export const Command = Type.Union([Move, Wait]);
+export type Command = Static<typeof Command>;
+
+export const ClientMessage = Type.Union([Ping, Command]);
+export type ClientMessage = Static<typeof ClientMessage>;
+
+export const Pong = Type.Object({ type: Type.Literal("pong") }, closed);
+export type Pong = Static<typeof Pong>;
+
+export const Snapshot = Type.Object(
+	{
+		type: Type.Literal("snapshot"),
+		width: Type.Integer(),
+		height: Type.Integer(),
+		player: Type.Object(
+			{
+				id: Type.Integer(),
+				x: Type.Integer(),
+				y: Type.Integer(),
+				hp: Type.Integer(),
+				satiety: Type.Integer(),
+			},
+			closed,
+		),
+	},
+	closed,
+);
+export type Snapshot = Static<typeof Snapshot>;
+
+export const Over = Type.Object({ type: Type.Literal("over") }, closed);
+export type Over = Static<typeof Over>;
+
+export const Rejected = Type.Object(
+	{
+		type: Type.Literal("rejected"),
+		reason: Type.Union([Type.Literal("invalid"), Type.Literal("over")]),
+	},
+	closed,
+);
+export type Rejected = Static<typeof Rejected>;
+
+export const ServerMessage = Type.Union([Pong, Snapshot, Over, Rejected]);
+export type ServerMessage = Static<typeof ServerMessage>;
