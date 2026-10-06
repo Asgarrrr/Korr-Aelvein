@@ -10,7 +10,7 @@ import { loadFloor } from "../../../src/core/persistence/validate";
 import { createEngine } from "../../../src/core/setup/registration";
 import { ENTRY_HEAD } from "../../../src/core/travel/inbox";
 import { advance, playerTurn } from "../../../src/core/turns/round";
-import { loadWorld } from "../../../src/core/world";
+import { loadEngine } from "../../../src/core/world";
 import { game } from "../../fixtures";
 
 const FLOORS = 3;
@@ -111,8 +111,7 @@ test("each floor's player tallies equal its player rows and the players in its i
 		if (e.inbox.players(0) + e.inbox.players(1) + e.inbox.players(2) > 0) {
 			reloads++;
 			for (const check of ["fast", "full"] as const) {
-				const world = loadWorld(saveWorld(e), { ...game, check });
-				expectTally((world as unknown as { engine: Engine }).engine);
+				expectTally(loadEngine(saveWorld(e), { ...game, check }));
 				for (let f = 0; f < FLOORS; f++)
 					loadFloor(e, saveFloor(e, f), f, check);
 				expectTally(e);

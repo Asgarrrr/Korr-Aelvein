@@ -1,4 +1,3 @@
-import { species } from "../src/content/species";
 import { cheese } from "../src/content/species/cheese";
 import { rat } from "../src/content/species/rat";
 import {
@@ -14,12 +13,11 @@ import {
 	type WriteCtx,
 } from "../src/core/api";
 import { createWorld } from "../src/core/world";
-import { modules } from "../src/registry";
+import { game } from "../src/game";
 
 export const SIZE = 32;
 
-// The game's registry and the species table its modules name.
-export const game = { modules, species } as const;
+export { game };
 
 export function populatedWorld(
 	seed: number,
@@ -38,7 +36,7 @@ export function populatedWorld(
 		width: SIZE,
 		height: SIZE,
 		modules,
-		species,
+		species: game.species,
 		...options,
 	});
 	const rats = [];

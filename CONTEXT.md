@@ -77,3 +77,5 @@ a second name anywhere.
 - **Contract**: a component or cell field read by a second module, typed
   in `contracts/` and read through a getter view.
 - **Game**: the registry plus the species table: what the server runs.
+  Code: `game` (`packages/engine/src/game.ts`). `createGame` / `loadGame`
+  build a World running the Game.

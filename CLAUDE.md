@@ -40,6 +40,8 @@ row fits, that is a design question: propose a new row before coding.
 | Species: which components, with which values | `packages/engine/src/content/species/` |
 | Type read by two or more modules | `packages/engine/src/contracts/` |
 | Which modules run, in which order | `packages/engine/src/registry.ts` |
+| The Game and its factories | `packages/engine/src/game.ts` |
+| The engine's public entry: what the server may import | `packages/engine/src/index.ts` |
 | Floor and world generation | `packages/engine/src/world/` |
 | Message between web and server | `packages/protocol/src/` |
 | Connections, sessions, persistence, hosting the engine | `apps/server/src/` |
