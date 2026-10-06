@@ -34,6 +34,12 @@ a second name anywhere.
   Content data, compiled once per world. Each entity saves its species as
   an index into the world's sorted species names; 0 means unnamed (spawned
   from a shape, tests only), and `entities` refuses unnamed entities.
+  A field may hold a range `{ min, max }`. Each entity draws its own value
+  from the range at birth: triangular and deterministic. A spawn value
+  overrides the draw. Core fields take no range.
+- **Range**: the `{ min, max }` of a species field, the bounds of the value
+  each entity draws at birth. A band bounds candidate scores; a range bounds
+  a field value.
 - **Actor**: an entity the scheduler runs. A **player** is an actor whose
   decision comes from a recorded input.
 

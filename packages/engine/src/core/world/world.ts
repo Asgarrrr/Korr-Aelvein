@@ -3,7 +3,12 @@ import type { EntityId } from "../ecs/ids";
 import { INDEX_SIZE } from "../ecs/storage";
 import { type Engine, FLOOR_STAGE } from "../engine";
 import type { EventVisitor } from "../events/events";
-import type { ComponentName, FieldName, Species } from "../lifecycle/species";
+import type {
+	ComponentName,
+	FieldName,
+	SpawnFields,
+	Species,
+} from "../lifecycle/species";
 import type { AnyModule } from "../module/api";
 import { worldDigest } from "../persistence/hash";
 import { identityProblem } from "../persistence/identity";
@@ -65,14 +70,14 @@ export interface World<
 		species: string | Species<M>,
 		x: number,
 		y: number,
-		values?: Species<M>["components"],
+		values?: SpawnFields<M>,
 	): EntityId;
 	spawnPlayer(
 		floor: number,
 		species: string | Species<M>,
 		x: number,
 		y: number,
-		values?: Species<M>["components"],
+		values?: SpawnFields<M>,
 	): EntityId;
 	// Throws when a player becomes due: a world with players moves through advance and input.
 	runRounds(n: number): void;

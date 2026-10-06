@@ -37,6 +37,7 @@ export { KIND_CODE } from "./turns/target";
 export interface Component {
 	readonly bit: MaskBit;
 	readonly columns: Readonly<Record<string, Column>>;
+	readonly ownerKey: number;
 }
 
 export interface ActionEntry {
@@ -235,6 +236,7 @@ export class Engine {
 			this.components.set(name, {
 				bit: this.storage.componentBit(this.components.size),
 				columns: Object.freeze(columns),
+				ownerKey: CORE_KEY,
 			});
 		}
 		const core = (name: keyof typeof coreSchema) =>

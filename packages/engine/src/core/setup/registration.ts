@@ -37,6 +37,7 @@ import { hashName } from "../random/rng";
 import { cellField, cellView } from "../space/cells";
 import { Inbox } from "../travel/inbox";
 import { canonical, frozenCopy } from "./canonical";
+import { registerComponents } from "./components";
 
 export interface WorldShape {
 	readonly seed: number;
@@ -88,17 +89,7 @@ export function createEngine(
 		componentCount: componentNames.length,
 		speciesNames,
 	});
-	for (const module of modules) {
-		for (const [name, fields] of Object.entries(module.schema)) {
-			const columns: Record<string, Column> = {};
-			for (const [field, kind] of Object.entries(fields))
-				columns[field] = engine.storage.column(kind);
-			engine.components.set(name, {
-				bit: engine.storage.componentBit(engine.components.size),
-				columns: Object.freeze(columns),
-			});
-		}
-	}
+	registerComponents(engine, modules);
 	const { floors } = shape;
 	for (const module of modules) {
 		for (const [name, fields] of Object.entries(module.cells ?? {})) {

@@ -86,14 +86,20 @@ factors in code (`min()`, comparisons); no generic combiner.
 ### D4. Individual traits
 
 - A species field may declare a range `{ min, max }` instead of an
-  integer. Both bounds fit the column and `min <= max`. The compiled
-  species keeps a list of ranges: column, bounds, owner module key, field
-  index. The range enters the fingerprint.
+  integer. Both bounds fit the column, `min <= max`, and the width is
+  below `MAX_BOUND` (65536). A core field (`vitality`, `link`) takes no
+  range: a drawn value would skip the health and link checks. The range
+  enters the fingerprint. Spawn values stay integer-only.
 - `place()` (`core/lifecycle/lifecycle.ts`) draws each range per entity:
-  triangular, the mean of two uniform draws, from `draw(seed, owner
-  module, PHASE.spawn, 0, entity, id, field index)`. A field given in
-  `spawn(..., values)` is not drawn. The no-range path allocates nothing.
-- Load and arrival restore stored columns and never draw again.
+  the sum of two bounded draws, halved; an odd sum rounds on a spare bit
+  of the second draw, so the mean sits at the midpoint. The draws are keyed
+  by seed, owner module name, `PHASE.spawn`, entity id and the field's
+  name hash, never its position; the time argument (0, then 1) tells the
+  two draws apart: adding or reordering schema fields
+  re-rolls nothing. A field given in `spawn(..., values)` is not drawn.
+  The no-range path does no work.
+- Only `spawn` and deferred spawns call `place()`. Load and arrival
+  restore stored columns and never draw again.
 - `modules/temperament/` owns `temperament: { boldness: u8 }`, data only:
   no propose, no action. More axes arrive as fields when a rule reads
   them. Fear reads it through `contracts/`.

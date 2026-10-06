@@ -130,7 +130,12 @@ interface SpeciesShapePin {
 	readonly actor: boolean;
 	readonly components: {
 		readonly [component: string]:
-			| { readonly [field: string]: number | undefined }
+			| {
+					readonly [field: string]:
+						| number
+						| { readonly min: number; readonly max: number }
+						| undefined;
+			  }
 			| undefined;
 	};
 }

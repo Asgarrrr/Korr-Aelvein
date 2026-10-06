@@ -1,6 +1,6 @@
 import { species } from "./content/species";
-import type { GameSpecies } from "./content/species/types";
 import type { EntityId } from "./core/ecs/ids";
+import type { SpawnFields } from "./core/lifecycle/species";
 import {
 	type World as AnyWorld,
 	createWorld,
@@ -21,14 +21,14 @@ export interface World
 		species: SpeciesName,
 		x: number,
 		y: number,
-		values?: GameSpecies["components"],
+		values?: SpawnFields<typeof modules>,
 	): EntityId;
 	spawnPlayer(
 		floor: number,
 		species: SpeciesName,
 		x: number,
 		y: number,
-		values?: GameSpecies["components"],
+		values?: SpawnFields<typeof modules>,
 	): EntityId;
 }
 

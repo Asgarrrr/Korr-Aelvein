@@ -3,7 +3,7 @@ import { rat } from "../../src/content/species/rat";
 import { stoat } from "../../src/content/species/stoat";
 import type { Engine } from "../../src/core/engine";
 import { spawn } from "../../src/core/lifecycle/lifecycle";
-import type { Species } from "../../src/core/lifecycle/species";
+import type { SpawnFields, Species } from "../../src/core/lifecycle/species";
 import type { AnyModule } from "../../src/core/module/api";
 import { bounded, draw, PHASE, SUBJECT } from "../../src/core/random/rng";
 import { createEngine } from "../../src/core/setup/registration";
@@ -183,7 +183,7 @@ export function buildReference(
 			kind: string,
 			x = coord(),
 			y = coord(),
-			values?: Ref["components"],
+			values?: SpawnFields<typeof referenceModules>,
 		) => {
 			spawn(e, f, kind, x, y, false, values);
 			items++;
