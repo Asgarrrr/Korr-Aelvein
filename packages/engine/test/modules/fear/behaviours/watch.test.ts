@@ -106,16 +106,12 @@ const watchWith = (eats: number[]) => {
 			return { index: 0 };
 		},
 	} as unknown as Builder<typeof fear.schema, NonNullable<typeof fear.cells>>;
-	const diet = {
-		eats: { get: (s: number) => eats[s] ?? 0 },
-	} as unknown as ContractView<"diet">;
 	const edible = {
 		class: { get: (s: number) => (s === 0 ? foodClass.meat : 0) },
 	} as unknown as ContractView<"edible">;
 	const eater = (slot: number, prey: number) =>
 		((eats[slot] ?? 0) & prey) !== 0;
 	watchAction(builder, {
-		diet,
 		edible,
 		flightDistance: () => FLIGHT,
 		starving: () => hungry,

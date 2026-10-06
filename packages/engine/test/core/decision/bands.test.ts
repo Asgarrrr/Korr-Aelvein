@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { species } from "../../../src/content/species";
 import { BANDS, INERTIA } from "../../../src/core/config";
-import { band } from "../../../src/core/decision/bands";
+import { band, checkBands } from "../../../src/core/decision/bands";
 import { spawn } from "../../../src/core/lifecycle/lifecycle";
 import type { AnyModule } from "../../../src/core/module/api";
 import { createEngine } from "../../../src/core/setup/registration";
@@ -57,6 +57,19 @@ test("below the top band, inertia never lifts a band's highest score out of it",
 			expect(band(name, WEIGHT_MAX) + INERTIA).toBeLessThanOrEqual(
 				BANDS[name].max,
 			);
+});
+
+test("a band below the top no wider than INERTIA is refused", () => {
+	expect(() => checkBands(BANDS, INERTIA)).not.toThrow();
+	const narrow = {
+		low: { min: 1, max: 1 + INERTIA },
+		top: { min: 10, max: 11 },
+	};
+	expect(() => checkBands(narrow, INERTIA)).toThrow(
+		`band low must be wider than INERTIA (${INERTIA})`,
+	);
+	const top = { low: { min: 1, max: 9 }, top: { min: 10, max: 10 + INERTIA } };
+	expect(() => checkBands(top, INERTIA)).not.toThrow();
 });
 
 test("band refuses a weight outside 0..255 or not an integer", () => {

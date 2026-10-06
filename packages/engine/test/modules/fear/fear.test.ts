@@ -5,7 +5,6 @@ import { ember } from "../../../src/content/species/ember";
 import { rat } from "../../../src/content/species/rat";
 import { stoat } from "../../../src/content/species/stoat";
 import {
-	type ActionCtx,
 	type ActionFn,
 	ALTERNATE,
 	type AnyModule,

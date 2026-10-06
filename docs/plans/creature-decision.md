@@ -147,15 +147,14 @@ cached intent, `decide()` (`core/turns/turn.ts`) checks the actor's
 component mask, then reads the field at its cell; nonzero skips the replay
 and runs a full decision. Zero alarms cost nothing measurable.
 
-The alarm is edge-triggered over a radius. Fear stamps `spotted.eats` on
-cells within `alarmRadius` of an eater (fear config, default
-`PERCEPTION_RADIUS + MARGIN` = 4) and sets `alarm.eats = spotted.eats &
-~previous spotted.eats`: a cell alarms only on the turn an eater first
-comes that close. An alarm stays silent for an actor whose cached intent
-is an action of the alarm's own module: those actions revalidate the
-alarm's condition on every replay (`.claude/rules/engine-modules.md`).
-`b.alarm(table, field, requires)` names an own u8 cell field. Stoats lack
-`wary` and never pay.
+The alarm is edge-triggered on danger. Fear sets `alarm.eats = danger.eats
+& ~previous danger.eats`: a cell alarms only on the turn an eater first
+comes within reach (`PERCEPTION_RADIUS + MARGIN` = 4). An alarm stays
+silent for an actor whose cached intent is an action of the alarm's own
+module: every such action revalidates the alarm's condition on replay
+(rule 4a in `.claude/rules/engine-modules.md`); `avoid` ends once an
+eater is within flight. `b.alarm(table, field, requires)` names an own
+u8 cell field. Stoats lack `wary` and never pay.
 
 History of the decision, all measured paired on a loaded machine:
 - Level-triggered over reach 4: world round +190%.
@@ -166,9 +165,11 @@ History of the decision, all measured paired on a loaded machine:
   with perf B and C1, +48%; edge over sight with B and C1: +28%. The cost
   is far-floor rats actually reacting (several times more flee and watch
   replays), not the alarm itself.
-- The user chose cheap far floors: edge over radius 4 with B and C1,
-  world round +0.4% versus slice 5, player floor -10%. `alarmRadius` 3
-  makes far floors reactive (about +28%): a config change, no code.
+- The user chose cheap far floors: edge over danger (reach 4) with B and
+  C1, world round +0.4% versus slice 5, player floor -10%. A separate
+  `spotted` stamp with a configurable radius was built, then removed: at
+  the chosen radius it duplicated `danger`. Reactive far floors (an alarm
+  over sight, about +28%) are in `docs/ideas.md`.
 
 Accepted limits on far floors: an actor that keeps eating as an eater
 closes in, or walks into standing danger, keeps its cache until its next
@@ -256,12 +257,14 @@ content in English. Target ~150 lines of diff per slice.
    pinned counts; without temperament, today's fear tests pass unchanged.
    Bench rows recorded.
 
-6. **Final review fixes.** Edge alarm over `alarmRadius`; own-module
-   alarm silence; `b.alarm` by names; perf B and C1; bands capped at
-   `max - INERTIA` below the top; `watch` fails and is not proposed when
-   starving; flight readers chosen once at setup; one `SpawnValues` type.
-   Tests: each fix has a seeded test; the accepted limits are pinned by
-   tests; the one-turn action cost is pinned.
+6. **Final review fixes.** Edge alarm derived from danger; own-module
+   alarm silence with revalidation (`avoid` ends once an eater is within
+   flight); `b.alarm` by names; perf B and C1; bands capped at `max -
+   INERTIA` below the top, checked at load; `watch` fails and is not
+   proposed when starving; flight readers chosen once at setup; one
+   `SpawnValues` type; `Grid.invalidate()` for in-place list rewrites.
+   Tests: each fix has a seeded test; the accepted limits, the one-turn
+   action cost and fear's tie order against perception are pinned.
 
 ## 5. Closing
 
@@ -275,7 +278,9 @@ per individual from species ranges, and module alarms.
 
 Measured on a loaded machine (load average 3-8), paired with the previous
 slice: world round +0.4%, player floor -10%, P=64 actor turn unchanged,
-RSS unchanged within noise. Absolute budgets still need an idle machine:
+RSS within noise: three paired fresh-process runs read the branch 1-3 MB
+above the previous slice, inside the base's own 4 MB spread; no
+allocating code path was found. Absolute budgets still need an idle machine:
 both the base and this branch read about 111 ms rounds and 210 ns cached
 turns under load.
 
@@ -284,6 +289,6 @@ changes; the contract arrived with its first reader; the alarm went
 through four designs (D6); fear gained perf B and C1; the switch guard
 became a reversal guard.
 
-Follow-ups in `docs/ideas.md`: class-aware alarms. Next candidates for
+Follow-ups in `docs/ideas.md`: class-aware alarms, reactive far floors. Next candidates for
 this structure: sociability (groups), environment use, evolution of traits
 with experience.

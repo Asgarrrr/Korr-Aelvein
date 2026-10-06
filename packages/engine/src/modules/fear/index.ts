@@ -75,16 +75,13 @@ export const fear = defineModule({
 		const danger = b.cells("danger");
 		const previousDanger = b.previous("danger");
 		const burns = b.cells("burns");
-		const spotted = b.cells("spotted");
-		const previousSpotted = b.previous("spotted");
 		const alarm = b.cells("alarm");
 		const near = b.cells("reach");
-		// Far floors replay for up to 64 turns; this makes a wary creature decide again when an eater
-		// comes within alarmRadius.
+		// Far floors replay for up to 64 turns; this makes a wary creature decide again when danger
+		// first reaches its cell.
 		b.alarm("alarm", "eats", ["wary"]);
 		const eaters = diet ? b.query(["diet"]) : undefined;
 		const reach = PERCEPTION_RADIUS + MARGIN;
-		const span = Math.max(reach, cfg.alarmRadius);
 		// A burning cell next door is always a threat, so no radius lets a creature step into fire.
 		const fireReach = Math.max(cfg.fireRadius, 1);
 		const heat = fireReach + MARGIN;
@@ -114,12 +111,10 @@ export const fear = defineModule({
 		b.tick((ctx) => {
 			const hunted = danger.eats.write(ctx);
 			const heated = burns.near.write(ctx);
-			const seen = spotted.eats.write(ctx);
 			const arrived = alarm.eats.write(ctx);
 			const nearby = near.near.write(ctx);
 			hunted.clear();
 			heated.clear();
-			seen.clear();
 			arrived.clear();
 			nearby.clear();
 			const prey = wary.slots(ctx);
@@ -159,31 +154,24 @@ export const fear = defineModule({
 				if (bits === 0) continue;
 				const x = ctx.x(s);
 				const y = ctx.y(s);
-				for (let dy = -span; dy <= span; dy++) {
-					const ady = Math.abs(dy);
-					for (let dx = -span; dx <= span; dx++) {
+				for (let dy = -reach; dy <= reach; dy++)
+					for (let dx = -reach; dx <= reach; dx++) {
 						const cell = ctx.cellAt(x + dx, y + dy);
-						if (cell === NO_CELL) continue;
-						const d = Math.max(ady, Math.abs(dx));
-						if (d <= reach) hunted.set(cell, hunted.get(cell) | bits);
-						if (d <= cfg.alarmRadius) seen.set(cell, seen.get(cell) | bits);
+						if (cell !== NO_CELL) hunted.set(cell, hunted.get(cell) | bits);
 					}
-				}
 				for (let dy = -MARGIN; dy <= MARGIN; dy++)
 					for (let dx = -MARGIN; dx <= MARGIN; dx++) {
 						const cell = ctx.cellAt(x + dx, y + dy);
 						if (cell !== NO_CELL) nearby.set(cell, nearby.get(cell) | bits);
 					}
 			}
-			// Only where an eater has just come within alarmRadius: a creature already there keeps its
-			// cached reaction.
-			const sawEats = previousSpotted.eats.read(ctx);
-			for (let c = seen.next(NO_CELL); c !== NO_CELL; c = seen.next(c))
-				arrived.set(c, seen.get(c) & ~sawEats.get(c));
+			// Only where danger is new: a creature already in it keeps its cached reaction.
+			for (let c = hunted.next(NO_CELL); c !== NO_CELL; c = hunted.next(c))
+				arrived.set(c, hunted.get(c) & ~previousEats.get(c));
 		});
 
 		// Re-executed later from a cached decision, so the target must still be a perceived threat.
-		// Cornered, it fails rather than idles: the creature then does whatever else it would.
+		// Cornered, it fails rather than idles: on a replay the creature then decides afresh.
 		const flee = b.action("flee", "entity", ["wary"], (ctx, actor, threat) => {
 			if (!diet || !edible) return FAIL;
 			const prey = edible.class.get(actor);
@@ -209,21 +197,22 @@ export const fear = defineModule({
 			return ctx.instead(ctx.step, cell);
 		});
 
+		// Whether an eater of `prey` stands within `radius`: the check that ends watch and avoid.
+		const threatNear = (
+			ctx: ReadCtx,
+			actor: Slot,
+			prey: number,
+			radius: number,
+		): boolean =>
+			diet !== undefined &&
+			nearestEater(ctx, actor, diet.eats, near.near.read(ctx), prey, radius) !==
+				NONE;
+
 		const watch = watchAction(b, {
-			diet,
 			edible,
 			flightDistance,
 			starving,
-			threatNear: (ctx, actor, prey, radius) =>
-				diet !== undefined &&
-				nearestEater(
-					ctx,
-					actor,
-					diet.eats,
-					near.near.read(ctx),
-					prey,
-					radius,
-				) !== NONE,
+			threatNear,
 			sees: (ctx, actor, threat, prey) =>
 				diet !== undefined && sees(ctx, actor, threat, diet.eats, prey),
 		});
@@ -239,6 +228,8 @@ export const fear = defineModule({
 			)
 				return FAIL;
 			const prey = edible ? edible.class.get(actor) : 0;
+			// Replayed past the alarm: an eater within flight fails it, so the creature decides afresh.
+			if (threatNear(ctx, actor, prey, flightDistance(actor))) return FAIL;
 			const cell = fleeCell(
 				ctx,
 				actor,
@@ -287,7 +278,7 @@ export const fear = defineModule({
 			const cell = fleeCell(ctx, actor, eats, nearby, prey, fire, fireReach);
 			if (cell === NO_CELL) return;
 			if (close && cell !== here) out.push(flee, threat, cfg.score);
-			if (heated) out.push(avoid, null, cfg.fireScore);
+			if (heated && !close) out.push(avoid, null, cfg.fireScore);
 		});
 	},
 });

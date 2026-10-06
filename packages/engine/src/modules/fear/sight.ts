@@ -8,7 +8,6 @@ import {
 	type ReadCtx,
 	type Slot,
 } from "../../core/module/api";
-import { MARGIN } from "./config";
 
 // The classes eaten by an eater that stood within MARGIN at fear's tick: only there can one stand now.
 export type Near = CellReader<"u8">;

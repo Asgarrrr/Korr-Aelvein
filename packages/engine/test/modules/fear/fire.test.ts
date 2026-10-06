@@ -6,7 +6,6 @@ import { rat } from "../../../src/content/species/rat";
 import { stoat } from "../../../src/content/species/stoat";
 import { spawn } from "../../../src/core/lifecycle/lifecycle";
 import {
-	type ActionCtx,
 	type ActionFn,
 	ALTERNATE,
 	type AnyModule,
@@ -204,27 +203,35 @@ test("wary rats never step into fire, with or without hunger or stoats; without 
 	expect(burned).toBeGreaterThan(0);
 });
 
+const BOLD = 255;
 // Danger set on every cell, as fear's tick would stamp it around the scene the test builds.
 const ALERT = { read: () => ({ get: () => 0xff }) };
 
-test("avoid fails once no cell near burns, even with an eater in sight", () => {
+test("avoid fails once no cell near burns, even with an eater in sight, or once an eater comes within flight", () => {
 	let avoid: ActionFn<"none"> | undefined;
 	let lit = true;
 	const side = 32;
-	// The actor stands at (5, 5), fire at (6, 5), an eater of its class at (4, 5).
+	// The actor, bold (flight 1), stands at (5, 5), fire at (6, 5), an eater of its class at (3, 5).
 	const builder = {
 		read: (name: string) =>
-			name === "fire"
-				? {
-						left: {
-							read: () => ({
-								get: (cell: number) => (lit && cell === 5 * side + 6 ? 1 : 0),
-							}),
-						},
-					}
-				: name === "diet"
-					? { eats: { get: (s: number) => (s === 1 ? foodClass.meat : 0) } }
-					: { class: { get: (s: number) => (s === 0 ? foodClass.meat : 0) } },
+			name === "satiety"
+				? undefined
+				: name === "temperament"
+					? { boldness: { get: () => BOLD } }
+					: name === "fire"
+						? {
+								left: {
+									read: () => ({
+										get: (cell: number) =>
+											lit && cell === 5 * side + 6 ? 1 : 0,
+									}),
+								},
+							}
+						: name === "diet"
+							? { eats: { get: (s: number) => (s === 1 ? foodClass.meat : 0) } }
+							: {
+									class: { get: (s: number) => (s === 0 ? foodClass.meat : 0) },
+								},
 		query: () => ({ has: () => true }),
 		write: () => ({ fleeing: new Uint8Array(2) }),
 		cells: () => ({ eats: ALERT, near: ALERT }),
@@ -243,18 +250,20 @@ test("avoid fails once no cell near burns, even with an eater in sight", () => {
 		},
 	} as unknown as Builder<typeof fear.schema>;
 	fear.setup(builder, fearConfig);
-	const ctx = gridCtx(
-		[
-			[0, 1 as EntityId, 5, 5],
-			[1, 9 as EntityId, 4, 5],
-		],
-		side,
-	);
+	const at = (x: number) =>
+		gridCtx(
+			[
+				[0, 1 as EntityId, 5, 5],
+				[1, 9 as EntityId, x, 5],
+			],
+			side,
+		);
 	const eater = {} as Perception;
 	const run = avoid as ActionFn<"none">;
-	expect(run(ctx, 0 as Slot, null, eater)).toBe(ALTERNATE);
+	expect(run(at(3), 0 as Slot, null, eater)).toBe(ALTERNATE);
+	expect(run(at(4), 0 as Slot, null, eater)).toBe(FAIL);
 	lit = false;
-	expect(run(ctx, 0 as Slot, null, eater)).toBe(FAIL);
+	expect(run(at(3), 0 as Slot, null, eater)).toBe(FAIL);
 });
 
 test("with fireRadius 0, a burning cell next door is still a threat: rats never step into fire", () => {

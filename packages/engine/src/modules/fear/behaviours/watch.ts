@@ -10,7 +10,6 @@ import {
 import type { cells, schema } from "../schema";
 
 interface WatchDeps {
-	readonly diet: ContractView<"diet"> | undefined;
 	readonly edible: ContractView<"edible"> | undefined;
 	readonly flightDistance: (actor: Slot) => number;
 	readonly starving: (actor: Slot) => boolean;
@@ -32,10 +31,10 @@ interface WatchDeps {
 // actor's class is within flight distance, or the actor is starving, so it decides again.
 export function watchAction(
 	b: Builder<typeof schema, typeof cells>,
-	{ diet, edible, flightDistance, starving, threatNear, sees }: WatchDeps,
+	{ edible, flightDistance, starving, threatNear, sees }: WatchDeps,
 ): ActionRef<"entity"> {
 	return b.action("watch", "entity", ["wary"], (ctx, actor, threat) => {
-		if (!diet || !edible || starving(actor)) return FAIL;
+		if (!edible || starving(actor)) return FAIL;
 		const prey = edible.class.get(actor);
 		if (threatNear(ctx, actor, prey, flightDistance(actor))) return FAIL;
 		if (!sees(ctx, actor, threat, prey)) return FAIL;

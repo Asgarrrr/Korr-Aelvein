@@ -62,6 +62,11 @@ export class Grid {
 		if (next !== END) this.prev[next] = prev;
 	}
 
+	// Call after rewriting the lists in place: a kept perception must not outlive the rewrite.
+	invalidate(): void {
+		this.version++;
+	}
+
 	move(floor: number, slot: Slot, cell: Cell): void {
 		this.remove(floor, slot);
 		this.insert(floor, slot, cell % this.width, (cell / this.width) | 0);
