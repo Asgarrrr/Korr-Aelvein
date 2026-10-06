@@ -7,7 +7,7 @@ a second name anywhere.
 ## World and time
 
 - **World**: every floor of one game, its seed and its round counter.
-  Code: `World` (`packages/engine/src/core/world.ts`).
+  Code: `World` (`packages/engine/src/core/world/world.ts`).
 - **Floor**: one dungeon level. It owns its slots, ids, grid, scheduler,
   events, inbox and its slice of every cell column.
 - **Round**: one lockstep turn of every floor, `TICKS_PER_TURN` ticks long.

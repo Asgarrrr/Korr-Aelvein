@@ -1,8 +1,12 @@
 import { expect, test } from "bun:test";
-import type { AnyModule, EntityId } from "../../src/core/api";
-import { createWorld, loadWorld, type World } from "../../src/core/world";
-import { createGame } from "../../src/index";
-import { game, idleRounds, populatedWorld, SIZE } from "../fixtures";
+import type { AnyModule, EntityId } from "../../../src/core/module/api";
+import {
+	createWorld,
+	loadWorld,
+	type World,
+} from "../../../src/core/world/world";
+import { createGame } from "../../../src/index";
+import { game, idleRounds, populatedWorld, SIZE } from "../../fixtures";
 
 const ROUNDS = 100;
 const MOSSES = 4;

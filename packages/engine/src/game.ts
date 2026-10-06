@@ -7,7 +7,7 @@ import {
 	type LoadOptions,
 	loadWorld,
 	type WorldOptions,
-} from "./core/world";
+} from "./core/world/world";
 import { modules } from "./registry";
 
 export const game = { modules, species } as const;

@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { type Cell, defineModule, type EntityId } from "../../../src/core/api";
+import {
+	type Cell,
+	defineModule,
+	type EntityId,
+} from "../../../src/core/module/api";
 import {
 	bounded,
 	draw,
@@ -7,7 +11,7 @@ import {
 	PHASE,
 	SUBJECT,
 } from "../../../src/core/random/rng";
-import { createWorld } from "../../../src/core/world";
+import { createWorld } from "../../../src/core/world/world";
 
 const E = SUBJECT.entity;
 const C = SUBJECT.cell;

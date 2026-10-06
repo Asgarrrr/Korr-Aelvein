@@ -1,6 +1,13 @@
 // Checked by `tsc` only. The core API is frozen: every interface below must stay identical,
 // signatures included, so any change to it is a deliberate edit of this file.
-import type { CellContracts, Contracts } from "../../src/contracts";
+import type { CellContracts, Contracts } from "../../../src/contracts";
+import type {
+	Columns,
+	FieldKind,
+	Fields,
+	FieldValue,
+} from "../../../src/core/ecs/schema";
+import type { CoreSchema } from "../../../src/core/health/vitality";
 import {
 	type ActionCtx,
 	type ActionFn,
@@ -35,14 +42,7 @@ import {
 	type TargetOf,
 	type TickFn,
 	type WriteCtx,
-} from "../../src/core/api";
-import type {
-	Columns,
-	FieldKind,
-	Fields,
-	FieldValue,
-} from "../../src/core/ecs/schema";
-import type { CoreSchema } from "../../src/core/health/vitality";
+} from "../../../src/core/module/api";
 
 type Equal<A, B> =
 	(<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2

@@ -1,11 +1,15 @@
 import { expect, test } from "bun:test";
 import { moss } from "../../../src/content/species/moss";
 import { stoat } from "../../../src/content/species/stoat";
-import { type AnyModule, defineModule, type Slot } from "../../../src/core/api";
 import { CAP } from "../../../src/core/config";
 import { spawn } from "../../../src/core/lifecycle/lifecycle";
+import {
+	type AnyModule,
+	defineModule,
+	type Slot,
+} from "../../../src/core/module/api";
 import { createEngine } from "../../../src/core/setup/registration";
-import { createWorld } from "../../../src/core/world";
+import { createWorld } from "../../../src/core/world/world";
 import { modules } from "../../../src/registry";
 import { populatedWorld } from "../../fixtures";
 

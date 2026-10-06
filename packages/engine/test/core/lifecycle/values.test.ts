@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { species } from "../../../src/content/species";
-import { createWorld, loadWorld } from "../../../src/core/world";
+import { createWorld, loadWorld } from "../../../src/core/world/world";
 import { modules } from "../../../src/registry";
 import { unnamed } from "../../fixtures";
 

@@ -1,17 +1,17 @@
-import type { AnyModule } from "./api";
-import { CAP, MAX_COORD, MAX_FLOORS, MAX_SEED } from "./config";
-import type { EntityId } from "./ecs/ids";
-import { INDEX_SIZE } from "./ecs/storage";
-import { type Engine, FLOOR_STAGE } from "./engine";
-import type { EventVisitor } from "./events/events";
+import { CAP, MAX_COORD, MAX_FLOORS, MAX_SEED } from "../config";
+import type { EntityId } from "../ecs/ids";
+import { INDEX_SIZE } from "../ecs/storage";
+import { type Engine, FLOOR_STAGE } from "../engine";
+import type { EventVisitor } from "../events/events";
+import type { ComponentName, FieldName, Species } from "../lifecycle/species";
+import type { AnyModule } from "../module/api";
+import { worldDigest } from "../persistence/hash";
+import { identityProblem } from "../persistence/identity";
+import { FLOOR_HEADER, readFloor, STAGE, SUM } from "../persistence/image";
+import { readWorld } from "../persistence/save";
+import { checkFloor, type LoadCheck } from "../persistence/validate";
+import { createEngine } from "../setup/registration";
 import { GameWorld } from "./game-world";
-import type { ComponentName, FieldName, Species } from "./lifecycle/species";
-import { worldDigest } from "./persistence/hash";
-import { identityProblem } from "./persistence/identity";
-import { FLOOR_HEADER, readFloor, STAGE, SUM } from "./persistence/image";
-import { readWorld } from "./persistence/save";
-import { checkFloor, type LoadCheck } from "./persistence/validate";
-import { createEngine } from "./setup/registration";
 
 export interface WorldOptions<
 	M extends readonly AnyModule[],
@@ -45,7 +45,7 @@ export interface InputRecord {
 	readonly target: number | null;
 }
 
-export type { LoadCheck } from "./persistence/validate";
+export type { LoadCheck } from "../persistence/validate";
 
 // "fast" only for images this server wrote and kept since; "full" for anything else, after a
 // crash, and in tests. Both refuse a bad checksum; behind a good one, "fast" still refuses slots

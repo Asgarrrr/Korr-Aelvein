@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { defineModule, type Slot } from "../../../src/core/api";
 import type { Engine } from "../../../src/core/engine";
 import { spawn } from "../../../src/core/lifecycle/lifecycle";
+import { defineModule, type Slot } from "../../../src/core/module/api";
 import { createEngine } from "../../../src/core/setup/registration";
 
 type Write = (slot: Slot) => void;

@@ -1,18 +1,18 @@
-import type { AnyModule } from "./api";
-import { CAP } from "./config";
-import { type EntityId, NONE } from "./ecs/ids";
-import { ALIVE } from "./ecs/storage";
-import { type ActionEntry, type Engine, KIND_CODE } from "./engine";
-import type { EventVisitor } from "./events/events";
-import { spawn } from "./lifecycle/lifecycle";
-import type { ComponentName, FieldName, Species } from "./lifecycle/species";
-import { engineDigest, hashHex } from "./persistence/hash";
-import { saveFloor, WORD } from "./persistence/image";
-import { saveWorld } from "./persistence/save";
-import { loadFloor } from "./persistence/validate";
-import { hashName } from "./random/rng";
-import { advance, dueOn, playerTurn } from "./turns/round";
-import { validTarget } from "./turns/target";
+import { CAP } from "../config";
+import { type EntityId, NONE } from "../ecs/ids";
+import { ALIVE } from "../ecs/storage";
+import { type ActionEntry, type Engine, KIND_CODE } from "../engine";
+import type { EventVisitor } from "../events/events";
+import { spawn } from "../lifecycle/lifecycle";
+import type { ComponentName, FieldName, Species } from "../lifecycle/species";
+import type { AnyModule } from "../module/api";
+import { engineDigest, hashHex } from "../persistence/hash";
+import { saveFloor, WORD } from "../persistence/image";
+import { saveWorld } from "../persistence/save";
+import { loadFloor } from "../persistence/validate";
+import { hashName } from "../random/rng";
+import { advance, dueOn, playerTurn } from "../turns/round";
+import { validTarget } from "../turns/target";
 import type { InputRecord, LoadOptions, Location, World } from "./world";
 
 // The World interface over one engine: the guards every call goes through.

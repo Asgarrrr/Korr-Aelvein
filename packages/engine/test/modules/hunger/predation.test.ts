@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import { cheese } from "../../../src/content/species/cheese";
 import { rat } from "../../../src/content/species/rat";
 import { stoat } from "../../../src/content/species/stoat";
-import type { EntityId } from "../../../src/core/api";
-import { createWorld } from "../../../src/core/world";
+import type { EntityId } from "../../../src/core/module/api";
+import { createWorld } from "../../../src/core/world/world";
 import { hungerConfig } from "../../../src/modules/hunger/config";
 import { game } from "../../fixtures";
 

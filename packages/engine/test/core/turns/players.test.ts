@@ -1,8 +1,12 @@
 import { expect, test } from "bun:test";
 import { cheese } from "../../../src/content/species/cheese";
 import { rat } from "../../../src/content/species/rat";
-import type { EntityId } from "../../../src/core/api";
-import { createWorld, loadWorld, type World } from "../../../src/core/world";
+import type { EntityId } from "../../../src/core/module/api";
+import {
+	createWorld,
+	loadWorld,
+	type World,
+} from "../../../src/core/world/world";
 import { game } from "../../fixtures";
 
 const FLOORS = 3;

@@ -14,9 +14,9 @@ import {
 	FAIL,
 	type Perception,
 	type Slot,
-} from "../../../src/core/api";
+} from "../../../src/core/module/api";
 import { bounded, draw, PHASE, SUBJECT } from "../../../src/core/random/rng";
-import { createWorld } from "../../../src/core/world";
+import { createWorld } from "../../../src/core/world/world";
 import { fear } from "../../../src/modules/fear";
 import { fearConfig } from "../../../src/modules/fear/config";
 import { foodClass, hungerConfig } from "../../../src/modules/hunger/config";

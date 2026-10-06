@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import type { EntityId, Slot } from "../../../src/core/api";
 import { CAP } from "../../../src/core/config";
 import { NONE } from "../../../src/core/ecs/ids";
 import { INDEX_SIZE, Storage } from "../../../src/core/ecs/storage";
+import type { EntityId, Slot } from "../../../src/core/module/api";
 
 // Randomized churn, checked against a Map: every id ever issued, alive or dead, on both floors.
 test("the id index agrees with a Map through heavy churn", () => {

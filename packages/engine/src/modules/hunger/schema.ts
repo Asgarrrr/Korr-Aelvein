@@ -1,5 +1,5 @@
 import type { Contracts } from "../../contracts";
-import type { Schema } from "../../core/api";
+import type { Schema } from "../../core/module/api";
 
 export const schema = {
 	satiety: { value: "i32" },

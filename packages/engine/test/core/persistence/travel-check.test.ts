@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
-import { defineModule, type EntityId } from "../../../src/core/api";
 import { CAP, EVENT_CAP_PER_TURN } from "../../../src/core/config";
 import { ACTOR, PLAYER } from "../../../src/core/ecs/storage";
 import { FLOOR_STAGE } from "../../../src/core/engine";
 import { I16_MAX } from "../../../src/core/health/vitality";
 import { spawn } from "../../../src/core/lifecycle/lifecycle";
+import { defineModule, type EntityId } from "../../../src/core/module/api";
 import { Checksum } from "../../../src/core/persistence/checksum";
 import {
 	engineDigest,
@@ -32,7 +32,7 @@ import { readWorld, saveWorld } from "../../../src/core/persistence/save";
 import { loadFloor } from "../../../src/core/persistence/validate";
 import { createEngine } from "../../../src/core/setup/registration";
 import { ENTRY_HEAD, ID, TIME, X } from "../../../src/core/travel/inbox";
-import { createWorld, loadWorld } from "../../../src/core/world";
+import { createWorld, loadWorld } from "../../../src/core/world/world";
 
 const SIDE = 8;
 const TRAVELLERS = 3;

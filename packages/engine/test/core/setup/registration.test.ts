@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { defineModule } from "../../../src/core/api";
+import { defineModule } from "../../../src/core/module/api";
 import { createEngine } from "../../../src/core/setup/registration";
-import { createWorld } from "../../../src/core/world";
+import { createWorld } from "../../../src/core/world/world";
 
 test("a module's config is read once, so the fingerprint and the module see one value", () => {
 	let reads = 0;

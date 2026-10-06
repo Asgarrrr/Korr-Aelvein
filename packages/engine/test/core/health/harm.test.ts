@@ -5,10 +5,10 @@ import {
 	type SpeciesRef,
 	type SpeciesShape,
 	type WriteCtx,
-} from "../../../src/core/api";
+} from "../../../src/core/module/api";
 import { saveFloor } from "../../../src/core/persistence/image";
 import { createEngine } from "../../../src/core/setup/registration";
-import { createWorld } from "../../../src/core/world";
+import { createWorld } from "../../../src/core/world/world";
 
 const TURN = 100;
 const BODY = { actor: false, components: { vitality: { hp: 10, max: 10 } } };

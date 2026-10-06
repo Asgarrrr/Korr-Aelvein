@@ -1,3 +1,4 @@
+import { UNNAMED } from "../src/core/lifecycle/species";
 import {
 	type AnyModule,
 	type Builder,
@@ -9,10 +10,9 @@ import {
 	type Slot,
 	type SpeciesShape,
 	type WriteCtx,
-} from "../src/core/api";
-import { UNNAMED } from "../src/core/lifecycle/species";
+} from "../src/core/module/api";
 import { saveWorld } from "../src/core/persistence/save";
-import { createWorld, loadEngine } from "../src/core/world";
+import { createWorld, loadEngine } from "../src/core/world/world";
 import { game } from "../src/game";
 
 export const SIZE = 32;

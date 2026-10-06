@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
-import type { EntityId } from "../../../src/core/api";
 import { ID_FLOOR_STRIDE } from "../../../src/core/config";
 import { spawn } from "../../../src/core/lifecycle/lifecycle";
+import type { EntityId } from "../../../src/core/module/api";
 import { saveWorld } from "../../../src/core/persistence/save";
 import { createEngine } from "../../../src/core/setup/registration";
-import { loadWorld } from "../../../src/core/world";
+import { loadWorld } from "../../../src/core/world/world";
 
 // Saves built from a forged engine: every checksum is valid, only the ids are wrong.
 const forge = (edit: (e: ReturnType<typeof createEngine>) => void) => {

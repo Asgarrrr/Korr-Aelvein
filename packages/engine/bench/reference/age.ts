@@ -1,4 +1,4 @@
-import { defineModule } from "../../src/core/api";
+import { defineModule } from "../../src/core/module/api";
 
 const STAGE = { young: 0, adult: 1, elder: 2 } as const;
 

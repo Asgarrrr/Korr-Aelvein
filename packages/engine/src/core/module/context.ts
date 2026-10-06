@@ -1,12 +1,4 @@
-import {
-	type ActionCtx,
-	type ActionRef,
-	ALTERNATE,
-	type EventRef,
-	type SpeciesRef,
-	type TargetKind,
-	type TargetOf,
-} from "../api";
+import { targetValue } from "../decision/arbitration";
 import { type Cell, type EntityId, NO_CELL, NONE, type Slot } from "../ecs/ids";
 import type { ActionEntry, Engine } from "../engine";
 import { checkSpawn } from "../lifecycle/lifecycle";
@@ -20,8 +12,16 @@ import {
 	type SubjectKind,
 } from "../random/rng";
 import { approach as approachCell } from "../space/approach";
-import { targetValue } from "./arbitration";
-import { validTarget } from "./target";
+import { validTarget } from "../turns/target";
+import {
+	type ActionCtx,
+	type ActionRef,
+	ALTERNATE,
+	type EventRef,
+	type SpeciesRef,
+	type TargetKind,
+	type TargetOf,
+} from "./api";
 
 const PHASE_NAME: Readonly<Record<Phase, string>> = {
 	[PHASE.propose]: "propose",

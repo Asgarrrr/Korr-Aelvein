@@ -1,13 +1,13 @@
 import { expect, test } from "bun:test";
+import { STAIR_TIME } from "../../../src/core/config";
+import type { Engine } from "../../../src/core/engine";
+import { spawn } from "../../../src/core/lifecycle/lifecycle";
 import {
 	defineModule,
 	type EntityId,
 	type Schema,
 	type Slot,
-} from "../../../src/core/api";
-import { STAIR_TIME } from "../../../src/core/config";
-import type { Engine } from "../../../src/core/engine";
-import { spawn } from "../../../src/core/lifecycle/lifecycle";
+} from "../../../src/core/module/api";
 import { createEngine } from "../../../src/core/setup/registration";
 import { depart, ingest } from "../../../src/core/travel/travel";
 import { game } from "../../fixtures";

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import type { EntityId } from "../../../src/core/api";
 import { EventLog } from "../../../src/core/events/events";
+import type { EntityId } from "../../../src/core/module/api";
 
 const NO_CAUSE = 0 as EntityId;
 const BURST = 5000;

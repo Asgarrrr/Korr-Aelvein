@@ -24,7 +24,7 @@ import {
 	tailMask,
 	WORD,
 } from "./image";
-import { inboxProblem } from "./inbox";
+import { inboxProblem } from "./inbox-check";
 import {
 	checkAbsent,
 	checkDead,

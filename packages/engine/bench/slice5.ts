@@ -1,11 +1,11 @@
 import { species } from "../src/content/species";
 import { cheese } from "../src/content/species/cheese";
 import { rat } from "../src/content/species/rat";
-import { defineModule } from "../src/core/api";
 import { CAP, LOD_PERIODS, TICKS_PER_TURN } from "../src/core/config";
 import { NONE } from "../src/core/ecs/ids";
 import { type Engine, FLOOR_STAGE } from "../src/core/engine";
 import { spawn } from "../src/core/lifecycle/lifecycle";
+import { defineModule } from "../src/core/module/api";
 import { bounded, draw, PHASE, SUBJECT } from "../src/core/random/rng";
 import { createEngine } from "../src/core/setup/registration";
 import { advance, playerTurn, startRound } from "../src/core/turns/round";

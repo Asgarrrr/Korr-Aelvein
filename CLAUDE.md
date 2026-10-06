@@ -35,6 +35,8 @@ row fits, that is a design question: propose a new row before coding.
 | Entity storage: ids, columns, queries (imports nothing else from core) | `packages/engine/src/core/ecs/` |
 | Foundation rule: grid, turns, actions, arbitration, health, death, events, RNG | `packages/engine/src/core/<domain>/` |
 | Tuning values of the core: score scale, ticks per turn, capacities | `packages/engine/src/core/config.ts` |
+| The engine surface a module sees: `api.ts`, the only core file a module may import, and the ctx | `packages/engine/src/core/module/` |
+| The `World` API the game wraps | `packages/engine/src/core/world/` |
 | One mechanic: its needs, components, systems | `packages/engine/src/modules/<mechanic>/` |
 | Tuning values of a mechanic: rates, thresholds | `packages/engine/src/modules/<mechanic>/config.ts` |
 | Species: which components, with which values | `packages/engine/src/content/species/` |

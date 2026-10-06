@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { cheese } from "../../../src/content/species/cheese";
 import { rat } from "../../../src/content/species/rat";
+import { LOD_PERIODS, STAIR_TIME } from "../../../src/core/config";
 import {
 	type AnyModule,
 	type Builder,
@@ -9,9 +10,8 @@ import {
 	type ModuleDef,
 	NO_CELL,
 	type Schema,
-} from "../../../src/core/api";
-import { LOD_PERIODS, STAIR_TIME } from "../../../src/core/config";
-import { createWorld, type World } from "../../../src/core/world";
+} from "../../../src/core/module/api";
+import { createWorld, type World } from "../../../src/core/world/world";
 import { explore } from "../../../src/modules/explore";
 import { exploreConfig } from "../../../src/modules/explore/config";
 import { hunger } from "../../../src/modules/hunger";

@@ -1,16 +1,16 @@
 import { expect, test } from "bun:test";
 import { rat } from "../../src/content/species/rat";
+import { Storage } from "../../src/core/ecs/storage";
+import { Engine } from "../../src/core/engine";
 import {
 	type ActionCtx,
 	type Builder,
 	defineModule,
 	type Schema,
 	type Slot,
-} from "../../src/core/api";
-import { Storage } from "../../src/core/ecs/storage";
-import { Engine } from "../../src/core/engine";
+} from "../../src/core/module/api";
 import { Grid } from "../../src/core/space/grid";
-import { createWorld } from "../../src/core/world";
+import { createWorld } from "../../src/core/world/world";
 import { hunger } from "../../src/modules/hunger";
 
 const TURN = 100;

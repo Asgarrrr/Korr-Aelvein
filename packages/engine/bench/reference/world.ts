@@ -1,10 +1,10 @@
 import { species as gameSpecies } from "../../src/content/species";
 import { rat } from "../../src/content/species/rat";
 import { stoat } from "../../src/content/species/stoat";
-import type { AnyModule } from "../../src/core/api";
 import type { Engine } from "../../src/core/engine";
 import { spawn } from "../../src/core/lifecycle/lifecycle";
 import type { Species } from "../../src/core/lifecycle/species";
+import type { AnyModule } from "../../src/core/module/api";
 import { bounded, draw, PHASE, SUBJECT } from "../../src/core/random/rng";
 import { createEngine } from "../../src/core/setup/registration";
 import { modules as gameModules } from "../../src/registry";

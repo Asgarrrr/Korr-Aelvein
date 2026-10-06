@@ -5,6 +5,8 @@ import { ember } from "../../../src/content/species/ember";
 import { moss } from "../../../src/content/species/moss";
 import { rat } from "../../../src/content/species/rat";
 import { stoat } from "../../../src/content/species/stoat";
+import { PERCEPTION_RADIUS } from "../../../src/core/config";
+import { kill, spawn } from "../../../src/core/lifecycle/lifecycle";
 import {
 	type AnyModule,
 	type Builder,
@@ -14,12 +16,10 @@ import {
 	type ModuleDef,
 	NO_CELL,
 	type Schema,
-} from "../../../src/core/api";
-import { PERCEPTION_RADIUS } from "../../../src/core/config";
-import { kill, spawn } from "../../../src/core/lifecycle/lifecycle";
+} from "../../../src/core/module/api";
 import { bounded, draw, PHASE, SUBJECT } from "../../../src/core/random/rng";
 import { createEngine } from "../../../src/core/setup/registration";
-import { createWorld } from "../../../src/core/world";
+import { createWorld } from "../../../src/core/world/world";
 import { fear } from "../../../src/modules/fear";
 import { foodClass, hungerConfig } from "../../../src/modules/hunger/config";
 import { modules } from "../../../src/registry";

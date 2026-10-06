@@ -1,13 +1,13 @@
 import { expect, test } from "bun:test";
+import type { FieldKind } from "../../../src/core/ecs/schema";
 import {
 	type Cell,
 	type CellReader,
 	defineModule,
 	NO_CELL,
-} from "../../../src/core/api";
-import type { FieldKind } from "../../../src/core/ecs/schema";
+} from "../../../src/core/module/api";
 import { bounded, draw, PHASE, SUBJECT } from "../../../src/core/random/rng";
-import { createWorld } from "../../../src/core/world";
+import { createWorld } from "../../../src/core/world/world";
 
 const KINDS = {
 	a: "u8",

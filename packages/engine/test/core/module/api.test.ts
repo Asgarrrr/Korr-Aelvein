@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import * as api from "../../src/core/api";
+import * as api from "../../../src/core/module/api";
 
 const DECLARATION =
 	/^export\s+(?:declare\s+)?(?:interface|type|const|function|class)\s+(\w+)/gm;
@@ -29,7 +29,7 @@ const scan = (source: string) => {
 };
 
 const source = readFileSync(
-	new URL("../../src/core/api.ts", import.meta.url),
+	new URL("../../../src/core/module/api.ts", import.meta.url),
 	"utf8",
 );
 

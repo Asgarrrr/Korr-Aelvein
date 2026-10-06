@@ -1,21 +1,4 @@
 import type { CellContracts, Contracts } from "../../contracts";
-import type {
-	ActionFn,
-	ActionRef,
-	AnyModule,
-	Builder,
-	CellColumns,
-	CellField,
-	CellReadView,
-	CellView,
-	ContractView,
-	EventRef,
-	ProposeFn,
-	Query,
-	SpeciesRef,
-	TargetKind,
-	TickFn,
-} from "../api";
 import { Audit } from "../audit/audit";
 import { checked } from "../audit/checked";
 import { MAX_SPECIES } from "../config";
@@ -32,6 +15,23 @@ import {
 	compileSpecies,
 	type SpeciesShape,
 } from "../lifecycle/species";
+import type {
+	ActionFn,
+	ActionRef,
+	AnyModule,
+	Builder,
+	CellColumns,
+	CellField,
+	CellReadView,
+	CellView,
+	ContractView,
+	EventRef,
+	ProposeFn,
+	Query,
+	SpeciesRef,
+	TargetKind,
+	TickFn,
+} from "../module/api";
 import { sectionsOf } from "../persistence/image";
 import { hashName } from "../random/rng";
 import { cellField, cellView } from "../space/cells";

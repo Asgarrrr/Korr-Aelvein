@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { EVENT_CAP_PER_TURN } from "../../../src/core/config";
+import { DeferredKills } from "../../../src/core/lifecycle/deferred";
 import {
 	defineModule,
 	type EntityId,
@@ -6,10 +8,8 @@ import {
 	type SpeciesRef,
 	type SpeciesShape,
 	type WriteCtx,
-} from "../../../src/core/api";
-import { EVENT_CAP_PER_TURN } from "../../../src/core/config";
-import { DeferredKills } from "../../../src/core/lifecycle/deferred";
-import { createWorld } from "../../../src/core/world";
+} from "../../../src/core/module/api";
+import { createWorld } from "../../../src/core/world/world";
 
 const seed = { actor: false, components: { patch: { kind: 1 } } };
 

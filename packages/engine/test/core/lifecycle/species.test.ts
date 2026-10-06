@@ -1,8 +1,8 @@
 import { expect, spyOn, test } from "bun:test";
 import { species } from "../../../src/content/species";
-import { defineModule } from "../../../src/core/api";
 import * as compiler from "../../../src/core/lifecycle/species";
-import { createWorld, loadWorld } from "../../../src/core/world";
+import { defineModule } from "../../../src/core/module/api";
+import { createWorld, loadWorld } from "../../../src/core/world/world";
 import { modules } from "../../../src/registry";
 import { unnamed } from "../../fixtures";
 

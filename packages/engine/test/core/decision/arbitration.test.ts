@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import { type AnyModule, defineModule } from "../../../src/core/api";
 import { SCORE_MAX } from "../../../src/core/config";
+import { type AnyModule, defineModule } from "../../../src/core/module/api";
 import { hashName } from "../../../src/core/random/rng";
-import { createWorld } from "../../../src/core/world";
+import { createWorld } from "../../../src/core/world/world";
 import { probe } from "../../fixtures";
 
 const SCORE = 50;

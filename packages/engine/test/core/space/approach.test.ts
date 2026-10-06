@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { type Cell, defineModule, NO_CELL } from "../../../src/core/api";
-import { createWorld } from "../../../src/core/world";
+import { type Cell, defineModule, NO_CELL } from "../../../src/core/module/api";
+import { createWorld } from "../../../src/core/world/world";
 
 const SIDE = 8;
 const at = (x: number, y: number) => (y * SIDE + x) as Cell;

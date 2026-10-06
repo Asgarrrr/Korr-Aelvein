@@ -5,7 +5,7 @@ export type {
 	LoadCheck,
 	LoadOptions,
 	Location,
-} from "./core/world";
+} from "./core/world/world";
 export {
 	createGame,
 	loadGame,

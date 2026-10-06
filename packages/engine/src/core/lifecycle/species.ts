@@ -1,4 +1,3 @@
-import type { AnyModule } from "../api";
 import {
 	type Column,
 	type FieldKind,
@@ -9,6 +8,7 @@ import {
 import { ACTOR } from "../ecs/storage";
 import type { Component } from "../engine";
 import { type CoreSchema, healthy, I16_MAX } from "../health/vitality";
+import type { AnyModule } from "../module/api";
 
 export interface SpeciesShape {
 	readonly actor: boolean;
