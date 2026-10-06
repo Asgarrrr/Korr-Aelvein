@@ -39,7 +39,7 @@ a second name anywhere.
   overrides the draw. Core fields take no range.
 - **Range**: the `{ min, max }` of a species field, the bounds of the value
   each entity draws at birth. A band bounds candidate scores; a range bounds
-  a field value.
+  a field value. A Trait is a field with a Range.
 - **Actor**: an entity the scheduler runs. A **player** is an actor whose
   decision comes from a recorded input.
 
@@ -90,6 +90,10 @@ a second name anywhere.
   components and systems. Removing it leaves a running game.
 - **Contract**: a component or cell field read by a second module, typed
   in `contracts/` and read through a getter view.
+- **Trait**: one independent personality axis of an individual, such as
+  boldness. Each entity draws its value from its species Range at birth.
+- **Temperament**: the module and component that hold an individual's
+  Traits. It stores values only: it proposes no action and runs no tick.
 - **Game**: the registry plus the species table: what the server runs.
   Code: `game` (`packages/engine/src/game.ts`). `createGame` / `loadGame`
   build a World running the Game.

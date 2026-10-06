@@ -101,8 +101,9 @@ factors in code (`min()`, comparisons); no generic combiner.
 - Only `spawn` and deferred spawns call `place()`. Load and arrival
   restore stored columns and never draw again.
 - `modules/temperament/` owns `temperament: { boldness: u8 }`, data only:
-  no propose, no action. More axes arrive as fields when a rule reads
-  them. Fear reads it through `contracts/`.
+  no propose, no action, no tick, no `config.ts`. More axes arrive as
+  fields when a rule reads them. The `temperament` contract arrives in
+  slice 5 with fear, its first reader, as every existing contract did.
 - Rat boldness 20-140, stoat 120-240 (`content/species/`).
 - Evolution with experience is out of scope. It will be temperament's own
   tick reading contracts, never events.
@@ -155,9 +156,9 @@ danger keeps its cache until its next scheduled decision.
 ```
 core/decision/{arbitration,perception,bands,curve}.ts
 core/module/api.ts              exports band, curve, b.alarm
-modules/temperament/{index,schema,config}.ts
+modules/temperament/{index,schema}.ts
 modules/fear/behaviours/watch.ts
-contracts/index.ts               + temperament
+contracts/index.ts               + temperament (slice 5)
 content/species/{rat,stoat}.ts   + boldness ranges
 ```
 
@@ -205,12 +206,13 @@ content in English. Target ~150 lines of diff per slice.
    registered module shifts no value; an explicit spawn value wins and
    shifts no other draw; save/load and travel keep values (reuse the
    persistence and travel test patterns).
-4. **Temperament.** `modules/temperament/`, the contract, rat and stoat
-   ranges, registry entry.
+4. **Temperament.** `modules/temperament/` (index, schema), rat and stoat
+   ranges, registry entry. No contract yet (slice 5).
    Tests: boldness differs between rats of one seed; the game runs
    without temperament.
-5. **Fear reads traits.** `core/decision/{bands,curve}.ts` with `band()`
-   and `curve()` exported, the flight
+5. **Fear reads traits.** The `temperament` contract;
+   `core/decision/{bands,curve}.ts` with `band()` and `curve()` exported;
+   the flight
    curve, nearest-threat scan, satiety shift, `fleeing` hysteresis,
    `fear/behaviours/watch.ts`.
    Tests: forced shy and bold rats flee at 3 and 1; a sated average rat
