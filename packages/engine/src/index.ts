@@ -12,3 +12,4 @@ export {
 	type SpeciesName,
 	type World,
 } from "./game";
+export { createStarterGame, starter } from "./world/starter";

@@ -138,11 +138,14 @@ names the engine's getter views; "Image" names saved floor bytes. A
 ### D7. Starter floor
 
 `packages/engine/src/world/` (the "Floor and world generation" row) gets
-`starter.ts`: `populateStarter(world)` places a fixed layout of food and
-creatures on floor 0, from a const array in the same file. The layout is
-content replaced by a generator later, not a tuning value, so it does not
-go to a `config.ts`. No randomness: the seed still drives every creature's
-behaviour. `index.ts` exports `populateStarter`.
+`starter.ts`. It exports `starter`, a frozen `{ width, height, start,
+layout }` (`layout` is a list of `{ species, x, y }`), and
+`createStarterGame(seed)`, which builds a one-floor game of that size and
+spawns the layout. Building the world inside rules out a size mismatch.
+The layout is content replaced by a generator later, not a tuning value,
+so it does not go to a `config.ts`. No randomness: the seed still drives
+every creature's behaviour. The server reads the size and start cell from
+`starter`.
 
 ## 3. Not built
 
@@ -188,11 +191,14 @@ red-team and a blue-team review of the diff before the next slice. Target
    with a mechanic removed (cheese and mushroom without fire); the
    player's species is reported; a loaded image with an out-of-range
    species index is refused.
-4. **A starter floor.** `packages/engine/src/world/starter.ts`
-   (`populateStarter`), `src/index.ts`, test: the layout is placed, and a
-   seeded run of N rounds has creatures eating (population of food drops).
+4. **A starter floor.** `packages/engine/src/world/starter.ts`,
+   `src/index.ts`. Tests: the listed entities equal `starter.layout`; the
+   layout fits the floor with the start cell free; `starter` cannot be
+   mutated; a seeded run of 200 rounds leaves fewer cheese (cheese never
+   regrows, so the count is the eating observable) and rats alive.
 5. **The client sees the floor and can eat.** `entities` in the snapshot,
-   `populateStarter` in the session, `eat` command.
+   `createStarterGame` in the session, `eat` command. `FLOOR` and `START`
+   leave `session.ts`; it reads `starter`.
    Tests: the first snapshot lists the starter layout; a hungry player
    spawned next to cheese eats it (the cheese leaves the snapshot, satiety
    rises); an `eat` on food 3 cells away moves the player one step closer;
