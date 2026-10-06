@@ -45,10 +45,13 @@ socket.onmessage = (event) => {
 		notice = setTimeout(() => show(state), rejectedNoticeMs);
 	}
 };
-socket.onerror = () => settle("serveur injoignable");
-socket.onclose = () => {
+socket.onerror = () => {
 	ended = true;
-	if (!over) settle("connexion perdue");
+	settle("serveur injoignable");
+};
+socket.onclose = () => {
+	if (!over && !ended) settle("connexion perdue");
+	ended = true;
 };
 
 document.addEventListener("keydown", (event) => {
