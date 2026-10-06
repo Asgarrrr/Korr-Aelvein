@@ -18,6 +18,7 @@ import type {
 } from "../api";
 import { Audit } from "../audit/audit";
 import { checked } from "../audit/checked";
+import { MAX_SPECIES } from "../config";
 import { MaskBits } from "../ecs/mask";
 import { MaskQuery } from "../ecs/query";
 import type { Column, Columns, FieldKind, Schema } from "../ecs/schema";
@@ -79,9 +80,13 @@ export function createEngine(
 		componentNames.push(...Object.keys(module.schema));
 	}
 
+	const speciesNames = Object.keys(species).sort();
+	if (speciesNames.length > MAX_SPECIES)
+		throw new Error(`more than ${MAX_SPECIES} species`);
 	const engine = new Engine({
 		...shape,
 		componentCount: componentNames.length,
+		speciesNames,
 	});
 	for (const module of modules) {
 		for (const [name, fields] of Object.entries(module.schema)) {
@@ -115,7 +120,7 @@ export function createEngine(
 		return copy;
 	};
 	const compiled = new Map<SpeciesShape, CompiledSpecies>();
-	const compiledOf = (shape: SpeciesShape, label: string) => {
+	const compiledOf = (shape: SpeciesShape, label: string, index?: number) => {
 		let entry = compiled.get(shape);
 		if (!entry) {
 			const { components, storage } = engine;
@@ -124,15 +129,23 @@ export function createEngine(
 				components,
 				storage.maskWords,
 				label,
+				index,
 			);
 			compiled.set(shape, entry);
 		}
 		return entry;
 	};
 	const table = new Map<string, string>();
-	for (const [name, shape] of Object.entries(species)) {
+	// One compiled entry per shape object: a second name for it would list as the first.
+	const nameOf = new Map<SpeciesShape, string>();
+	for (const [i, name] of speciesNames.entries()) {
+		const shape = species[name] as SpeciesShape;
+		const twin = nameOf.get(shape);
+		if (twin !== undefined)
+			throw new Error(`species ${twin} and ${name} are the same object`);
+		nameOf.set(shape, name);
 		table.set(name, speciesData(copyOf(shape), `species ${name}`));
-		engine.speciesByName.set(name, compiledOf(shape, `species ${name}`));
+		engine.speciesByName.set(name, compiledOf(shape, `species ${name}`, i + 1));
 	}
 	const refs = new Map<SpeciesShape, SpeciesRef>();
 	const resolved: string[] = [];

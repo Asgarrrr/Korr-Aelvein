@@ -187,6 +187,11 @@ const faults: [string, Uint8Array, RegExp][] = [
 		resealed(engine.link.floor, stairsRow, FLOOR, 1),
 		/link/,
 	],
+	[
+		"a species index past the species table",
+		resealed(engine.speciesIndex, itemRow, engine.speciesNames.length + 1, 1),
+		/species index/,
+	],
 ];
 
 for (const [name, bad, error] of faults)

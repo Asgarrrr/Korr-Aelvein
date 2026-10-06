@@ -13,7 +13,10 @@ import { readWorld } from "./persistence/save";
 import { checkFloor, type LoadCheck } from "./persistence/validate";
 import { createEngine } from "./setup/registration";
 
-export interface WorldOptions<M extends readonly AnyModule[]> {
+export interface WorldOptions<
+	M extends readonly AnyModule[],
+	S extends string = string,
+> {
 	readonly seed: number;
 	readonly floors: number;
 	readonly width: number;
@@ -22,7 +25,7 @@ export interface WorldOptions<M extends readonly AnyModule[]> {
 	readonly events?: boolean;
 	readonly audit?: boolean;
 	readonly modules: M;
-	readonly species?: Readonly<Record<string, Species<M>>>;
+	readonly species?: Readonly<Record<S, Species<M>>>;
 	// A permutation of the floors, the order they run in within a round. Tests only: no
 	// order may change the result.
 	readonly floorOrder?: readonly number[];
@@ -51,7 +54,10 @@ export interface LoadOptions {
 	readonly check?: LoadCheck;
 }
 
-export interface World<M extends readonly AnyModule[]> {
+export interface World<
+	M extends readonly AnyModule[],
+	S extends string = string,
+> {
 	// `values` override the species' own for this entity. A registered component the species
 	// lacks throws; one no module registers is skipped, as in a shape.
 	spawn(
@@ -85,6 +91,11 @@ export interface World<M extends readonly AnyModule[]> {
 		field: FieldName<M, N>,
 		id: EntityId,
 	): number;
+	// Every entity on the floor, with its species name and cell. Draws nothing and writes nothing.
+	entities(
+		floor: number,
+		visit: (id: EntityId, species: S, x: number, y: number) => void,
+	): void;
 	hash(): string;
 	// Writes into `into` when it is word-aligned and large enough: the result aliases it, so the
 	// next save into it overwrites this image. Otherwise a fresh array: compare result.buffer.
@@ -136,22 +147,23 @@ function build(options: WorldOptions<readonly AnyModule[]>): Engine {
 	return engine;
 }
 
-export function createWorld<const M extends readonly AnyModule[]>(
-	options: WorldOptions<M>,
-): World<M> {
-	return new GameWorld<M>(build(options));
+export function createWorld<
+	const M extends readonly AnyModule[],
+	S extends string = string,
+>(options: WorldOptions<M, S>): World<M, S> {
+	return new GameWorld<M, S>(build(options));
 }
 
-type LoadTable<M extends readonly AnyModule[]> = {
+type LoadTable<M extends readonly AnyModule[], S extends string = string> = {
 	readonly modules: M;
-	readonly species?: Readonly<Record<string, Species<M>>>;
+	readonly species?: Readonly<Record<S, Species<M>>>;
 } & LoadOptions;
 
-export function loadWorld<const M extends readonly AnyModule[]>(
-	bytes: Uint8Array,
-	options: LoadTable<M>,
-): World<M> {
-	return new GameWorld<M>(loadEngine(bytes, options));
+export function loadWorld<
+	const M extends readonly AnyModule[],
+	S extends string = string,
+>(bytes: Uint8Array, options: LoadTable<M, S>): World<M, S> {
+	return new GameWorld<M, S>(loadEngine(bytes, options));
 }
 
 // The World keeps its engine private: tests that inspect a loaded engine start here.

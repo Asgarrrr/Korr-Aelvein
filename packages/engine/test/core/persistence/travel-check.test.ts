@@ -231,6 +231,15 @@ const cases: [string, Edit, RegExp][] = [
 		/keeps a value in vitality/,
 	],
 	[
+		"an entry whose species index is past the species table",
+		(w) => {
+			const index = target.carried.indexOf(target.speciesIndex);
+			w[entry(1, ENTRY_HEAD + target.storage.maskWords + index)] =
+				target.speciesNames.length + 1;
+		},
+		/species index/,
+	],
+	[
 		"a negative event count",
 		(w) => {
 			w[EMITTED] = -1;

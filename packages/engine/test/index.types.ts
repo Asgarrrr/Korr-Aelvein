@@ -30,3 +30,5 @@ world.spawnPlayer(0, "dragon", 1, 1);
 createGame({ ...side, floorOrder: [0] });
 // @ts-expect-error audit mode is a test knob of createWorld
 createGame({ ...side, audit: true });
+// The game lists its own species names, not any string.
+world.entities(0, (_id, species: entry.SpeciesName) => species);

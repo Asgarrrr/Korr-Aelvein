@@ -31,7 +31,9 @@ a second name anywhere.
 - **Cell column**: one typed array holding one field for every cell of
   every floor.
 - **Species**: which components an entity starts with, and their values.
-  Content data, compiled once per world.
+  Content data, compiled once per world. Each entity saves its species as
+  an index into the world's sorted species names; 0 means unnamed (spawned
+  from a shape, tests only), and `entities` refuses unnamed entities.
 - **Actor**: an entity the scheduler runs. A **player** is an actor whose
   decision comes from a recorded input.
 
