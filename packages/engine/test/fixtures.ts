@@ -205,15 +205,24 @@ export function idleRounds(
 			for (const p of due) world.input(p, "core/idle", null);
 }
 
-// Oscillation measure: an entity's first decision is not a switch, only later changes are.
-export function intentSwitches(engine: Engine, rounds: number): number {
+// Calls `change` for every intent change of an entity after its first decision.
+function intentChanges(
+	engine: Engine,
+	rounds: number,
+	change: (
+		slot: number,
+		id: number,
+		from: readonly [number, number],
+		to: readonly [number, number],
+		round: number,
+	) => void,
+): void {
 	const { ids, highWater, floors } = engine.storage;
 	const { intentKey, intentTarget } = engine;
 	const lastId = new Int32Array(ids.length);
 	const lastKey = new Int32Array(ids.length);
 	const lastTarget = new Int32Array(ids.length);
 	const decided = new Uint8Array(ids.length);
-	let switches = 0;
 	for (let r = 0; r <= rounds; r++) {
 		if (r > 0) engine.runRound();
 		for (let f = 0; f < floors; f++)
@@ -226,12 +235,51 @@ export function intentSwitches(engine: Engine, rounds: number): number {
 					decided[s] === 1 &&
 					(key !== lastKey[s] || target !== lastTarget[s])
 				)
-					switches++;
+					change(
+						s,
+						id,
+						[lastKey[s] ?? 0, lastTarget[s] ?? 0],
+						[key, target],
+						r,
+					);
 				if (key !== 0) decided[s] = 1;
 				lastId[s] = id;
 				lastKey[s] = key;
 				lastTarget[s] = target;
 			}
 	}
+}
+
+// Oscillation measure: an entity's first decision is not a switch, only later changes are.
+export function intentSwitches(engine: Engine, rounds: number): number {
+	let switches = 0;
+	intentChanges(engine, rounds, () => switches++);
 	return switches;
+}
+
+const REVERSAL_ROUNDS = 2;
+
+// Jitter measure: a switch back to the intent held before the previous switch (A to B to A),
+// at most REVERSAL_ROUNDS rounds after it.
+export function intentReversals(engine: Engine, rounds: number): number {
+	const size = engine.storage.ids.length;
+	const backId = new Int32Array(size);
+	const backKey = new Int32Array(size);
+	const backTarget = new Int32Array(size);
+	const backRound = new Int32Array(size);
+	let reversals = 0;
+	intentChanges(engine, rounds, (s, id, from, to, round) => {
+		if (
+			backId[s] === id &&
+			round - (backRound[s] ?? 0) <= REVERSAL_ROUNDS &&
+			backKey[s] === to[0] &&
+			backTarget[s] === to[1]
+		)
+			reversals++;
+		backId[s] = id;
+		backKey[s] = from[0];
+		backTarget[s] = from[1];
+		backRound[s] = round;
+	});
+	return reversals;
 }

@@ -12,6 +12,8 @@ import type { CoreSchema } from "../health/vitality";
 import type { SpeciesShape } from "../lifecycle/species";
 
 export { PERCEPTION_RADIUS } from "../config";
+export { band } from "../decision/bands";
+export { curve } from "../decision/curve";
 export type { Cell, EntityId, Slot } from "../ecs/ids";
 export { NO_CELL, NO_ENTITY, NONE } from "../ecs/ids";
 export type { SlotList } from "../ecs/query";

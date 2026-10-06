@@ -76,6 +76,8 @@ test("the core API exports exactly the frozen names, all in forms the scan reads
 		"TargetOf",
 		"TickFn",
 		"WriteCtx",
+		"band",
+		"curve",
 		"defineModule",
 	]);
 });

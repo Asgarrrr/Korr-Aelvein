@@ -21,7 +21,7 @@ test("a different seed gives a different hash", () => {
 
 test("the seed 1 world hash is pinned", () => {
 	// Regression lock: any change to simulation order, RNG or storage layout shows up here.
-	expect(seed1).toBe("75c825b19160a395");
+	expect(seed1).toBe("362b6c31bac55e7d");
 });
 
 const twoFloors = (seed: number, popCap?: number) =>

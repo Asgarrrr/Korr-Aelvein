@@ -52,6 +52,13 @@ a second name anywhere.
 - **Band**: a fixed range of candidate scores (`BANDS` in `core/config.ts`).
   A candidate in a higher band beats any candidate in a lower band. From
   high to low: reflex, urgent, vigilance, routine.
+- **Curve**: a list of `[input, output]` points, both 0..255, linear
+  between points and flat beyond the ends. `curve` compiles it once per
+  World into a 256-entry integer table a Mechanic indexes by a Trait.
+- **Flight distance**: the Chebyshev distance within which a wary creature
+  flees a perceived eater. Farther away, still in sight, it watches.
+  Boldness sets the distance through a Curve. Starving takes one cell off.
+  Fleeing adds one cell.
 - **Goal action**: an action whose target persists across turns (eat this
   food, flee this threat). It reaches `core.step` through `instead`.
 - **Intent**: the cached (action key, target) of an actor's last decision.

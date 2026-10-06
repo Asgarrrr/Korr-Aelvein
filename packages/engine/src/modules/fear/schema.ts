@@ -1,5 +1,6 @@
 export const schema = {
-	wary: {},
+	// fleeing: nonzero from a flee until danger leaves the creature's cell.
+	wary: { fleeing: "u8" },
 } as const;
 
 export const cells = {

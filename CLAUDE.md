@@ -39,6 +39,7 @@ row fits, that is a design question: propose a new row before coding.
 | The `World` API the game wraps | `packages/engine/src/core/world/` |
 | One mechanic: its needs, components, systems | `packages/engine/src/modules/<mechanic>/` |
 | Tuning values of a mechanic: rates, thresholds | `packages/engine/src/modules/<mechanic>/config.ts` |
+| A behaviour of a mechanic: its action, in its own file | `packages/engine/src/modules/<mechanic>/behaviours/<behaviour>.ts` |
 | Species: which components, with which values | `packages/engine/src/content/species/` |
 | Type read by two or more modules | `packages/engine/src/contracts/` |
 | Which modules run, in which order | `packages/engine/src/registry.ts` |

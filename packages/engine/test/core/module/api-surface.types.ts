@@ -14,6 +14,7 @@ import {
 	type ActionRef,
 	type ALTERNATE,
 	type Builder,
+	type band,
 	type Candidates,
 	type Cell,
 	type CellColumns,
@@ -23,6 +24,7 @@ import {
 	type CellView,
 	type CellWriter,
 	type ContractView,
+	type curve,
 	defineModule,
 	type EntityId,
 	type EventRef,
@@ -310,12 +312,13 @@ export const views: [
 	Equal<ContractView<"diet">, ReadView<Contracts["diet"]>>,
 	Equal<ContractView<"satiety">, ReadView<Contracts["satiety"]>>,
 	Equal<ContractView<"edible">, ReadView<Contracts["edible"]>>,
+	Equal<ContractView<"temperament">, ReadView<Contracts["temperament"]>>,
 	Equal<ContractView<"fire">, CellReadView<CellContracts["fire"]>>,
 	Equal<
 		Schema,
 		{ readonly [name: string]: { readonly [field: string]: FieldKind } }
 	>,
-] = [true, true, true, true, true, true, true, true, true];
+] = [true, true, true, true, true, true, true, true, true, true];
 
 declare const kind: "cell";
 export const refs: [
@@ -335,3 +338,17 @@ export const defaults: [
 	>,
 	Equal<typeof inferred.schema, { readonly a: { readonly v: "u8" } }>,
 ] = [true, true, true, true];
+
+export const scoring: [
+	Equal<
+		typeof band,
+		(
+			name: "reflex" | "urgent" | "vigilance" | "routine",
+			weight: number,
+		) => number
+	>,
+	Equal<
+		typeof curve,
+		(points: readonly (readonly [number, number])[]) => readonly number[]
+	>,
+] = [true, true];

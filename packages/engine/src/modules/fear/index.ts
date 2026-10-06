@@ -1,6 +1,8 @@
 import {
+	band,
 	type Cell,
 	type CellReader,
+	curve,
 	defineModule,
 	FAIL,
 	type FieldView,
@@ -11,6 +13,7 @@ import {
 	type ReadCtx,
 	type Slot,
 } from "../../core/module/api";
+import { watchAction } from "./behaviours/watch";
 import { fearConfig } from "./config";
 import { cells, schema } from "./schema";
 
@@ -159,7 +162,14 @@ export const fear = defineModule({
 		const diet = b.read("diet");
 		const edible = b.read("edible");
 		const burning = b.read("fire")?.left;
+		const temperament = b.read("temperament");
+		const tempered = temperament ? b.query(["temperament"]) : undefined;
+		const satiety = b.read("satiety");
+		const fed = satiety ? b.query(["satiety"]) : undefined;
 		const wary = b.query(["wary"]);
+		const { fleeing } = b.write("wary");
+		const flightByBoldness = curve(cfg.flightByBoldness);
+		const watchScore = band("vigilance", cfg.watchWeight);
 		const danger = b.cells("danger");
 		const previous = b.previous("danger");
 		const burns = b.cells("burns");
@@ -171,6 +181,22 @@ export const fear = defineModule({
 		// A burning cell next door is always a threat, so no radius lets a creature step into fire.
 		const fireReach = Math.max(cfg.fireRadius, 1);
 		const heat = fireReach + MARGIN;
+
+		// Within this Chebyshev distance a perceived eater makes the actor flee; beyond it, watch.
+		const flightDistance = (actor: Slot): number => {
+			let flight =
+				temperament && tempered?.has(actor)
+					? (flightByBoldness[temperament.boldness.get(actor)] ?? 0)
+					: PERCEPTION_RADIUS;
+			if (
+				satiety &&
+				fed?.has(actor) &&
+				satiety.value.get(actor) < cfg.riskBelow
+			)
+				flight--;
+			if ((fleeing[actor] ?? 0) !== 0) flight++;
+			return Math.min(PERCEPTION_RADIUS, Math.max(cfg.flightMin, flight));
+		};
 
 		// Marks every cell from which a wary creature could see an eater of its class, or
 		// stand within fireRadius of a burning cell, this round, so a calm one skips perception.
@@ -197,9 +223,19 @@ export const fear = defineModule({
 				}
 			}
 			if (!edible || !diet || !eaters) return;
+			// Calms on last round's danger: this round's is stamped below, from the mask built here.
+			const previousEats = previous.eats.read(ctx);
 			let preyMask = 0;
-			for (let i = 0; i < prey.length; i++)
-				preyMask |= edible.class.get(prey.at(i));
+			for (let i = 0; i < prey.length; i++) {
+				const s = prey.at(i);
+				const kind = edible.class.get(s);
+				preyMask |= kind;
+				if (
+					(fleeing[s] ?? 0) !== 0 &&
+					(previousEats.get(ctx.cellOf(s)) & kind) === 0
+				)
+					fleeing[s] = 0;
+			}
 			if (preyMask === 0) return;
 			const rows = eaters.slots(ctx);
 			for (let i = 0; i < rows.length; i++) {
@@ -215,7 +251,6 @@ export const fear = defineModule({
 					}
 			}
 			// Only where danger is new: a creature already in it keeps its cached reaction.
-			const previousEats = previous.eats.read(ctx);
 			for (let c = hunted.next(NO_CELL); c !== NO_CELL; c = hunted.next(c))
 				arrived.set(c, hunted.get(c) & ~previousEats.get(c));
 		});
@@ -251,9 +286,12 @@ export const fear = defineModule({
 				);
 				const here = ctx.cellOf(actor);
 				if (cell === NO_CELL || cell === here) return FAIL;
+				fleeing[actor] = 1;
 				return ctx.instead(ctx.step, cell);
 			},
 		);
+
+		const watch = watchAction(b, { diet, edible, flightDistance });
 
 		// Targets nothing: the fire it flees moves and dies out, but the intent stays valid
 		// for as long as any burning cell is near. Staying put is a way to flee too.
@@ -299,13 +337,18 @@ export const fear = defineModule({
 			const heated =
 				fire !== undefined && nearFire(ctx, actor, fire, fireReach);
 			if (!hunted && !heated) return;
+			// Perception lists rings outward: the first eater found is the nearest.
 			let threat = NO_ENTITY;
+			let distance = 0;
 			for (let i = 0; hunted && i < perception.count; i++)
 				if (((eats?.get(perception.slot(i)) ?? 0) & prey) !== 0) {
 					threat = perception.id(i);
+					distance = perception.dist(i);
 					break;
 				}
-			if (threat === NO_ENTITY && !heated) return;
+			const close = threat !== NO_ENTITY && distance <= flightDistance(actor);
+			if (threat !== NO_ENTITY && !close) out.push(watch, threat, watchScore);
+			if (!close && !heated) return;
 			const cell = fleeCell(
 				ctx,
 				actor,
@@ -316,8 +359,7 @@ export const fear = defineModule({
 				fireReach,
 			);
 			if (cell === NO_CELL) return;
-			if (threat !== NO_ENTITY && cell !== here)
-				out.push(flee, threat, cfg.score);
+			if (close && cell !== here) out.push(flee, threat, cfg.score);
 			if (heated) out.push(avoid, null, cfg.fireScore);
 		});
 	},
