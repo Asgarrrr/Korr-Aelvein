@@ -2,6 +2,7 @@ export interface Contracts {
 	readonly satiety: { readonly value: "i32" };
 	readonly diet: { readonly eats: "u8" };
 	readonly edible: { readonly nutrition: "i16"; readonly class: "u8" };
+	readonly temperament: { readonly boldness: "u8" };
 }
 
 export interface CellContracts {

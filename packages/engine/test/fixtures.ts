@@ -1,3 +1,9 @@
+import { species } from "../src/content/species";
+import { ember } from "../src/content/species/ember";
+import { rat } from "../src/content/species/rat";
+import { stairs } from "../src/content/species/stairs";
+import { CAP } from "../src/core/config";
+import type { Engine } from "../src/core/engine";
 import { UNNAMED } from "../src/core/lifecycle/species";
 import {
 	type AnyModule,
@@ -14,6 +20,8 @@ import {
 import { saveWorld } from "../src/core/persistence/save";
 import { createWorld, loadEngine } from "../src/core/world/world";
 import { game } from "../src/game";
+import { exploreConfig } from "../src/modules/explore/config";
+import { starter } from "../src/world/starter";
 
 export const SIZE = 32;
 
@@ -101,6 +109,7 @@ export function forwardBuilder<S extends Schema, K extends Schema>(
 		tick: (run) => b.tick(run),
 		action: (name, kind, requires, run) => b.action(name, kind, requires, run),
 		propose: (run) => b.propose(run),
+		alarm: (table, field, requires) => b.alarm(table, field, requires),
 		event: (name) => b.event(name),
 		species: (wanted) => b.species(wanted),
 	};
@@ -200,4 +209,120 @@ export function idleRounds(
 	for (let r = 0; r < rounds; r++)
 		for (let due = world.advance(); due.length > 0; due = world.advance())
 			for (const p of due) world.input(p, "core/idle", null);
+}
+
+// Calls `change` for every intent change of an entity after its first decision.
+function intentChanges(
+	engine: Engine,
+	rounds: number,
+	change: (
+		slot: number,
+		id: number,
+		from: readonly [number, number],
+		to: readonly [number, number],
+		round: number,
+	) => void,
+): void {
+	const { ids, highWater, floors } = engine.storage;
+	const { intentKey, intentTarget } = engine;
+	const lastId = new Int32Array(ids.length);
+	const lastKey = new Int32Array(ids.length);
+	const lastTarget = new Int32Array(ids.length);
+	const decided = new Uint8Array(ids.length);
+	for (let r = 0; r <= rounds; r++) {
+		if (r > 0) engine.runRound();
+		for (let f = 0; f < floors; f++)
+			for (let s = f * CAP; s < f * CAP + (highWater[f] ?? 0); s++) {
+				const id = ids[s] ?? 0;
+				const key = intentKey[s] ?? 0;
+				const target = intentTarget[s] ?? 0;
+				if (id !== lastId[s]) decided[s] = 0;
+				else if (
+					decided[s] === 1 &&
+					(key !== lastKey[s] || target !== lastTarget[s])
+				)
+					change(
+						s,
+						id,
+						[lastKey[s] ?? 0, lastTarget[s] ?? 0],
+						[key, target],
+						r,
+					);
+				if (key !== 0) decided[s] = 1;
+				lastId[s] = id;
+				lastKey[s] = key;
+				lastTarget[s] = target;
+			}
+	}
+}
+
+// Oscillation measure: an entity's first decision is not a switch, only later changes are.
+export function intentSwitches(engine: Engine, rounds: number): number {
+	let switches = 0;
+	intentChanges(engine, rounds, () => switches++);
+	return switches;
+}
+
+const REVERSAL_ROUNDS = 2;
+
+// Jitter measure: a switch back to the intent held before the previous switch (A to B to A),
+// at most REVERSAL_ROUNDS rounds after it.
+export function intentReversals(engine: Engine, rounds: number): number {
+	const size = engine.storage.ids.length;
+	const backId = new Int32Array(size);
+	const backKey = new Int32Array(size);
+	const backTarget = new Int32Array(size);
+	const backRound = new Int32Array(size);
+	let reversals = 0;
+	intentChanges(engine, rounds, (s, id, from, to, round) => {
+		if (
+			backId[s] === id &&
+			round - (backRound[s] ?? 0) <= REVERSAL_ROUNDS &&
+			backKey[s] === to[0] &&
+			backTarget[s] === to[1]
+		)
+			reversals++;
+		backId[s] = id;
+		backKey[s] = from[0];
+		backTarget[s] = from[1];
+		backRound[s] = round;
+	});
+	return reversals;
+}
+
+const RESTLESS = exploreConfig.restlessBelow - 1;
+
+// The starter floor plus an ember and a restless rat beside stairs to a second floor, so every
+// game proposer has a reason to push.
+export function seededWorld(list: readonly AnyModule[]) {
+	const world = createWorld({
+		seed: 7,
+		floors: 2,
+		width: starter.width,
+		height: starter.height,
+		modules: list,
+		species,
+	});
+	for (const { species: name, x, y } of starter.layout)
+		world.spawn(0, name, x, y);
+	world.spawn(0, ember, 16, 3);
+	world.spawn(
+		0,
+		{ ...stairs, components: { link: { floor: 1, x: 1, y: 1 } } },
+		21,
+		13,
+	);
+	world.spawn(
+		0,
+		{ ...rat, components: { ...rat.components, satiety: { value: RESTLESS } } },
+		20,
+		12,
+	);
+	world.spawn(
+		1,
+		{ ...stairs, components: { link: { floor: 0, x: 20, y: 13 } } },
+		0,
+		0,
+	);
+	return world;
 }

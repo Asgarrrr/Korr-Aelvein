@@ -34,6 +34,12 @@ a second name anywhere.
   Content data, compiled once per world. Each entity saves its species as
   an index into the world's sorted species names; 0 means unnamed (spawned
   from a shape, tests only), and `entities` refuses unnamed entities.
+  A field may hold a range `{ min, max }`. Each entity draws its own value
+  from the range at birth: triangular and deterministic. A spawn value
+  overrides the draw. Core fields take no range.
+- **Range**: the `{ min, max }` of a species field, the bounds of the value
+  each entity draws at birth. A band bounds candidate scores; a range bounds
+  a field value. A Trait is a field with a Range.
 - **Actor**: an entity the scheduler runs. A **player** is an actor whose
   decision comes from a recorded input.
 
@@ -43,12 +49,27 @@ a second name anywhere.
   or the environment that shapes them.
 - **Candidate**: a scored (action, target) a module proposes for an actor.
   The core picks one per actor.
+- **Band**: a fixed range of candidate scores (`BANDS` in `core/config.ts`).
+  A candidate in a higher band beats any candidate in a lower band. From
+  high to low: reflex, urgent, vigilance, routine.
+- **Curve**: a list of `[input, output]` points, both 0..255, linear
+  between points and flat beyond the ends. `curve` compiles it once per
+  World into a 256-entry integer table a Mechanic indexes by a Trait.
+- **Flight distance**: the Chebyshev distance within which a wary creature
+  flees a perceived eater. Farther away, still in sight, it watches.
+  Boldness sets the distance through a Curve. Starving takes one cell off.
+  Fleeing adds one cell.
 - **Goal action**: an action whose target persists across turns (eat this
   food, flee this threat). It reaches `core.step` through `instead`.
 - **Intent**: the cached (action key, target) of an actor's last decision.
   A matching candidate gets inertia; a FAIL clears it.
 - **Period (P)**: how often an actor re-decides. Set per floor by distance
   to the nearest player; between decisions the actor repeats its intent.
+- **Alarm**: a u8 cell field a module sets only on the turn an eater first
+  comes within the module's alarm radius of a cell. An actor there with the
+  alarm's required components decides in full instead of replaying its
+  Intent, unless that Intent is an action of the same module. Every action
+  of the declaring module revalidates the alarm's condition when it replays.
 - **Requires**: the components an action needs on its actor. Without them
   the action is a FAIL.
 - **Harm**: buffered health loss, applied by the core after each callback.
@@ -78,6 +99,10 @@ a second name anywhere.
   components and systems. Removing it leaves a running game.
 - **Contract**: a component or cell field read by a second module, typed
   in `contracts/` and read through a getter view.
+- **Trait**: one independent personality axis of an individual, such as
+  boldness. Each entity draws its value from its species Range at birth.
+- **Temperament**: the module and component that hold an individual's
+  Traits. It stores values only: it proposes no action and runs no tick.
 - **Game**: the registry plus the species table: what the server runs.
   Code: `game` (`packages/engine/src/game.ts`). `createGame` / `loadGame`
   build a World running the Game.

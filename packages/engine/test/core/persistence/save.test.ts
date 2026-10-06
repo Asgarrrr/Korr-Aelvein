@@ -76,7 +76,12 @@ test("loading with another registry, config, species table or format throws", ()
 		),
 		// Same width, so only the fingerprint tells the cell columns apart.
 		modules.map((m) =>
-			m === fear ? { ...fear, cells: { danger: { eats: "i8" } } as const } : m,
+			m === fear
+				? {
+						...fear,
+						cells: { ...fear.cells, heat: { reach: "i8" } } as const,
+					}
+				: m,
 		),
 	];
 	for (const list of others)

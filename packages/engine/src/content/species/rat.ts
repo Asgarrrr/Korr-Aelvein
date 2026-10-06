@@ -8,6 +8,7 @@ export const rat = {
 		diet: { eats: foodClass.forage },
 		edible: { nutrition: 400, class: foodClass.meat },
 		wary: {},
+		temperament: { boldness: { min: 20, max: 140 } },
 		vitality: { hp: 10, max: 10 },
 	},
 } satisfies GameSpecies;

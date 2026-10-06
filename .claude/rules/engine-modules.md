@@ -18,6 +18,8 @@ Context, terms and recipes: `engine.md`. Example: `bench/reference/thirst.ts`.
 4. Propose goal actions whose target persists (an `EntityId`). Reach
    `ctx.step` / `ctx.idle` / `ctx.travel` only through `instead`. The
    action re-validates its target on every run: it may run cached.
+4a. A module that declares an alarm: every action of that module
+   revalidates the alarm's condition when it replays.
 5. `requires` lists every component the action writes or needs on the
    actor. Names come from the own schema, `contracts/` or the core.
 6. A second module reads your component: add it to `Contracts`, and the
@@ -25,6 +27,20 @@ Context, terms and recipes: `engine.md`. Example: `bench/reference/thirst.ts`.
    column: `CellContracts`, on `cells` (`modules/fire/schema.ts`).
 7. Any state in `setup` that outlives a callback (a `let`, a mutated
    array, map or object) passes the lint but breaks save/load. Forbidden.
+   Scratch fully overwritten at the start of every callback, and never
+   read before that overwrite, is not state.
+
+## New behaviour
+
+Template: `modules/fear/behaviours/flee.ts`.
+
+1. Create `behaviours/<behaviour>.ts`. Export `defineX(b, sense, cfg)`.
+2. In `defineX`, register the action with `b.action`. Return a proposal.
+3. If the behaviour needs a new fact, add it to `Situation` and fill it in `sense.fill`.
+4. In `index.ts`, call `defineX` once. Call the returned proposal inside the `b.propose` callback.
+5. Add a seeded test in `test/modules/<mechanic>/`.
+
+A module with one behaviour needs no `sense` or `Situation`. Add them when two behaviours share a derived fact.
 
 ## What the checks forbid
 

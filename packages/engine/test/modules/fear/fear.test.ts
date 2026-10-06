@@ -5,7 +5,6 @@ import { ember } from "../../../src/content/species/ember";
 import { rat } from "../../../src/content/species/rat";
 import { stoat } from "../../../src/content/species/stoat";
 import {
-	type ActionCtx,
 	type ActionFn,
 	ALTERNATE,
 	type AnyModule,
@@ -23,6 +22,7 @@ import { foodClass, hungerConfig } from "../../../src/modules/hunger/config";
 import { wander } from "../../../src/modules/wander";
 import { modules } from "../../../src/registry";
 import { probe } from "../../fixtures";
+import { gridCtx } from "./scene";
 
 const tracked = <T extends { components: object }>(shape: T) => ({
 	...shape,
@@ -260,9 +260,12 @@ const fleeWith = (hunger: boolean) => {
 					? { eats: { get: (s: number) => eats[s] ?? 0 } }
 					: { class: { get: (s: number) => classes[s] ?? 0 } },
 		query: () => ({ has: () => true }),
-		cells: () => ({ eats: ALERT, fire: ALERT }),
+		write: () => ({ fleeing: new Uint8Array(2) }),
+		cells: () => ({ eats: ALERT, near: ALERT, reach: ALERT }),
+		previous: () => ({ eats: ALERT }),
 		tick() {},
 		propose() {},
+		alarm() {},
 		action: (
 			name: string,
 			_kind: string,
@@ -276,32 +279,27 @@ const fleeWith = (hunger: boolean) => {
 	fear.setup(builder, fearConfig);
 	return { run: flee as ActionFn<"entity">, eats };
 };
-const ctxWith = (crowded = false) =>
-	({
-		x: () => 5,
-		y: () => 5,
-		cellAt: (x: number, y: number) => y * 32 + x,
-		cellOf: () => 5 * 32 + 5,
-		holdsActor: () => crowded,
-		instead: () => ALTERNATE,
-	}) as unknown as ActionCtx;
-// What the actor perceives when the action runs: the threat one cell east, or nothing.
-const sight = (seesThreat: boolean) =>
-	({
-		count: seesThreat ? 1 : 0,
-		slot: () => 1,
-		id: () => THREAT,
-		dx: () => 1,
-		dy: () => 0,
-		dist: () => 1,
-	}) as unknown as Perception;
+// The prey at (5, 5); with `seesThreat`, the threat one cell east.
+const PREY = 1 as EntityId;
+const ctxWith = (seesThreat: boolean, crowded = false) =>
+	gridCtx(
+		[
+			[0, PREY, 5, 5],
+			...(seesThreat
+				? [[1, THREAT, 6, 5] as [number, EntityId, number, number]]
+				: []),
+		],
+		SIDE,
+		crowded,
+	);
+const unused = {} as Perception;
 
-test("flee runs while it perceives its threat and has somewhere to go", () => {
+test("flee runs while it sees its threat and has somewhere to go", () => {
 	const { run } = fleeWith(true);
-	expect(run(ctxWith(), 0 as Slot, THREAT, sight(true))).toBe(ALTERNATE);
-	expect(run(ctxWith(), 0 as Slot, THREAT, sight(false))).toBe(FAIL);
-	expect(run(ctxWith(true), 0 as Slot, THREAT, sight(true))).toBe(FAIL);
-	expect(run(ctxWith(), 0 as Slot, (THREAT + 1) as EntityId, sight(true))).toBe(
+	expect(run(ctxWith(true), 0 as Slot, THREAT, unused)).toBe(ALTERNATE);
+	expect(run(ctxWith(false), 0 as Slot, THREAT, unused)).toBe(FAIL);
+	expect(run(ctxWith(true, true), 0 as Slot, THREAT, unused)).toBe(FAIL);
+	expect(run(ctxWith(true), 0 as Slot, (THREAT + 1) as EntityId, unused)).toBe(
 		FAIL,
 	);
 });
@@ -310,24 +308,24 @@ test("flee fails once its target no longer eats what the actor is, whoever else 
 	const { run, eats } = fleeWith(true);
 	eats[1] = foodClass.forage;
 	eats[2] = foodClass.meat;
-	expect(run(ctxWith(), 0 as Slot, THREAT, sight(true))).toBe(FAIL);
-	const crowd = {
-		count: 2,
-		slot: (i: number) => i + 1,
-		id: (i: number) => (i === 0 ? THREAT : THREAT + 1),
-		dx: () => 1,
-		dy: () => 0,
-		dist: () => 1,
-	} as unknown as Perception;
-	expect(run(ctxWith(), 0 as Slot, THREAT, crowd)).toBe(FAIL);
-	expect(run(ctxWith(), 0 as Slot, (THREAT + 1) as EntityId, crowd)).toBe(
+	expect(run(ctxWith(true), 0 as Slot, THREAT, unused)).toBe(FAIL);
+	const crowd = gridCtx(
+		[
+			[0, PREY, 5, 5],
+			[1, THREAT, 6, 5],
+			[2, (THREAT + 1) as EntityId, 6, 5],
+		],
+		SIDE,
+	);
+	expect(run(crowd, 0 as Slot, THREAT, unused)).toBe(FAIL);
+	expect(run(crowd, 0 as Slot, (THREAT + 1) as EntityId, unused)).toBe(
 		ALTERNATE,
 	);
 });
 
 test("flee fails without hunger: no creature is a threat then", () => {
 	const { run } = fleeWith(false);
-	expect(run(ctxWith(), 0 as Slot, THREAT, sight(true))).toBe(FAIL);
+	expect(run(ctxWith(true), 0 as Slot, THREAT, unused)).toBe(FAIL);
 });
 
 for (const [action, threat] of [

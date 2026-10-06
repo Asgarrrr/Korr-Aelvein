@@ -6,7 +6,6 @@ import { rat } from "../../../src/content/species/rat";
 import { stoat } from "../../../src/content/species/stoat";
 import { spawn } from "../../../src/core/lifecycle/lifecycle";
 import {
-	type ActionCtx,
 	type ActionFn,
 	ALTERNATE,
 	type AnyModule,
@@ -32,6 +31,7 @@ import { foodClass, hungerConfig } from "../../../src/modules/hunger/config";
 import { wander } from "../../../src/modules/wander";
 import { modules } from "../../../src/registry";
 import { probe } from "../../fixtures";
+import { gridCtx, scene } from "./scene";
 
 const tracked = { ...rat, components: { ...rat.components, where: {} } };
 
@@ -203,31 +203,42 @@ test("wary rats never step into fire, with or without hunger or stoats; without 
 	expect(burned).toBeGreaterThan(0);
 });
 
+const BOLD = 255;
 // Danger set on every cell, as fear's tick would stamp it around the scene the test builds.
 const ALERT = { read: () => ({ get: () => 0xff }) };
 
-test("avoid fails once no cell near burns, even with an eater in sight", () => {
+test("avoid fails once no cell near burns, even with an eater in sight, or once an eater comes within flight", () => {
 	let avoid: ActionFn<"none"> | undefined;
 	let lit = true;
 	const side = 32;
-	// The actor stands at (5, 5), fire at (6, 5), an eater of its class at (4, 5).
+	// The actor, bold (flight 1), stands at (5, 5), fire at (6, 5), an eater of its class at (3, 5).
 	const builder = {
 		read: (name: string) =>
-			name === "fire"
-				? {
-						left: {
-							read: () => ({
-								get: (cell: number) => (lit && cell === 5 * side + 6 ? 1 : 0),
-							}),
-						},
-					}
-				: name === "diet"
-					? { eats: { get: (s: number) => (s === 1 ? foodClass.meat : 0) } }
-					: { class: { get: (s: number) => (s === 0 ? foodClass.meat : 0) } },
+			name === "satiety"
+				? undefined
+				: name === "temperament"
+					? { boldness: { get: () => BOLD } }
+					: name === "fire"
+						? {
+								left: {
+									read: () => ({
+										get: (cell: number) =>
+											lit && cell === 5 * side + 6 ? 1 : 0,
+									}),
+								},
+							}
+						: name === "diet"
+							? { eats: { get: (s: number) => (s === 1 ? foodClass.meat : 0) } }
+							: {
+									class: { get: (s: number) => (s === 0 ? foodClass.meat : 0) },
+								},
 		query: () => ({ has: () => true }),
-		cells: () => ({ eats: ALERT, fire: ALERT }),
+		write: () => ({ fleeing: new Uint8Array(2) }),
+		cells: () => ({ eats: ALERT, near: ALERT, reach: ALERT }),
+		previous: () => ({ eats: ALERT }),
 		tick() {},
 		propose() {},
+		alarm() {},
 		action: (
 			name: string,
 			_kind: string,
@@ -239,26 +250,20 @@ test("avoid fails once no cell near burns, even with an eater in sight", () => {
 		},
 	} as unknown as Builder<typeof fear.schema>;
 	fear.setup(builder, fearConfig);
-	const ctx = {
-		x: () => 5,
-		y: () => 5,
-		cellAt: (x: number, y: number) => y * side + x,
-		cellOf: () => 5 * side + 5,
-		holdsActor: () => false,
-		instead: () => ALTERNATE,
-	} as unknown as ActionCtx;
-	const eater = {
-		count: 1,
-		slot: () => 1,
-		id: () => 9,
-		dx: () => -1,
-		dy: () => 0,
-		dist: () => 1,
-	} as unknown as Perception;
+	const at = (x: number) =>
+		gridCtx(
+			[
+				[0, 1 as EntityId, 5, 5],
+				[1, 9 as EntityId, x, 5],
+			],
+			side,
+		);
+	const eater = {} as Perception;
 	const run = avoid as ActionFn<"none">;
-	expect(run(ctx, 0 as Slot, null, eater)).toBe(ALTERNATE);
+	expect(run(at(3), 0 as Slot, null, eater)).toBe(ALTERNATE);
+	expect(run(at(4), 0 as Slot, null, eater)).toBe(FAIL);
 	lit = false;
-	expect(run(ctx, 0 as Slot, null, eater)).toBe(FAIL);
+	expect(run(at(3), 0 as Slot, null, eater)).toBe(FAIL);
 });
 
 test("with fireRadius 0, a burning cell next door is still a threat: rats never step into fire", () => {
@@ -286,4 +291,22 @@ test("a rat that stays put to avoid fire keeps avoid as its intent", () => {
 		engine.intentKey[slot],
 		engine.intentTarget[slot],
 	]).toEqual([2, hashName("fear/avoid") | 0, 0]);
+});
+
+test("a starving rat beside fire with a stoat next to it flees away from both, then stops", () => {
+	const { engine, intent, ratAt, stoatAt } = scene(16);
+	spawn(engine, 0, ember, 5, 5);
+	const id = ratAt(6, 5, 128, fearConfig.riskBelow - 150);
+	stoatAt(7, 6);
+	const path = [];
+	for (let round = 0; round < 3; round++) {
+		engine.runRound();
+		const s = engine.storage.slotOf(0, id);
+		path.push([intent(id), engine.grid.x[s], engine.grid.y[s]]);
+	}
+	expect(path).toEqual([
+		["fear/flee", 7, 4],
+		["fear/flee", 8, 3],
+		["core/idle", 8, 3],
+	]);
 });

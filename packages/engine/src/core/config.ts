@@ -26,3 +26,11 @@ export const LOD_PERIODS: readonly number[] = [
 	NEAR_FLOOR_PERIOD,
 	FAR_FLOOR_PERIOD,
 ];
+
+// Score bands, inclusive: a candidate in a higher band overrides any in a lower one.
+export const BANDS = {
+	reflex: { min: 900, max: 1000 },
+	urgent: { min: 100, max: 899 },
+	vigilance: { min: 60, max: 99 },
+	routine: { min: 1, max: 59 },
+} as const;

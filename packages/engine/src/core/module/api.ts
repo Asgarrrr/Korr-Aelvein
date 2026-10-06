@@ -12,6 +12,8 @@ import type { CoreSchema } from "../health/vitality";
 import type { SpeciesShape } from "../lifecycle/species";
 
 export { PERCEPTION_RADIUS } from "../config";
+export { band } from "../decision/bands";
+export { curve } from "../decision/curve";
 export type { Cell, EntityId, Slot } from "../ecs/ids";
 export { NO_CELL, NO_ENTITY, NONE } from "../ecs/ids";
 export type { SlotList } from "../ecs/query";
@@ -204,6 +206,20 @@ export interface Builder<S extends Schema, K extends Schema = NoCells> {
 		run: ActionFn<K>,
 	): ActionRef<K>;
 	propose(run: ProposeFn): void;
+	// Replaying actors with every component of `requires` decide in full while `table.field`, an
+	// own u8 cell field, is nonzero at their cell, unless their cached action is this module's.
+	alarm<N extends keyof K & string>(
+		table: N,
+		field: {
+			[F in keyof K[N]]: K[N][F] extends "u8" ? F : never;
+		}[keyof K[N]] &
+			string,
+		requires: readonly (
+			| (keyof S & string)
+			| keyof Contracts
+			| keyof CoreSchema
+		)[],
+	): void;
 	event(name: string): EventRef;
 	// Resolved when the world is built: an unknown name throws there, not at the first spawn.
 	species(wanted: string | SpeciesShape): SpeciesRef;

@@ -3,6 +3,7 @@ import { type Cell, type EntityId, NO_CELL, NONE } from "../ecs/ids";
 import type { Column } from "../ecs/schema";
 import { PLAYER } from "../ecs/storage";
 import type { Engine } from "../engine";
+import { bounded, draw, PHASE, SUBJECT } from "../random/rng";
 import { frozenCopy } from "../setup/canonical";
 import { validLink } from "../travel/link";
 import { attach, detach } from "./membership";
@@ -12,13 +13,13 @@ import {
 	checkHealth,
 	checkKey,
 	compileSpecies,
+	type RangeDraw,
+	type SpawnValues,
 	type SpeciesShape,
 	speciesError,
 } from "./species";
 
 const NO_CAUSE = 0 as EntityId;
-
-export type SpawnValues = SpeciesShape["components"];
 
 // A shape compiles on every call, from a frozen copy so its getters run once: a direct spawn is
 // setup work, and a cache would serve an edited object stale. A name is the fast path.
@@ -175,11 +176,50 @@ export function place(
 	e.speciesIndex[slot] = species.index;
 	for (let i = 0; i < columns.length; i++)
 		(columns[i] as Column)[slot] = values[i] ?? 0;
+	if (species.ranges.length > 0) drawRanges(e, slot, species.ranges, overrides);
 	const { spawnColumns, spawnValues } = e;
 	for (let i = 0; i < overrides; i++)
 		(spawnColumns[i] as Column)[slot] = spawnValues[i] ?? 0;
 	attach(e, floor, slot, x, y, at);
 	return (storage.ids[slot] ?? 0) as EntityId;
+}
+
+function drawRanges(
+	e: Engine,
+	slot: number,
+	ranges: readonly RangeDraw[],
+	overrides: number,
+): void {
+	const id = e.storage.ids[slot] ?? 0;
+	const { seed, spawnColumns } = e;
+	next: for (let i = 0; i < ranges.length; i++) {
+		const { column, min, max, ownerKey, fieldKey } = ranges[i] as RangeDraw;
+		for (let j = 0; j < overrides; j++)
+			if (spawnColumns[j] === column) continue next;
+		const width = max - min + 1;
+		// A birth draw ignores time, so the time slot tells the two draws apart.
+		const a = draw(
+			seed,
+			ownerKey,
+			PHASE.spawn,
+			0,
+			SUBJECT.entity,
+			id,
+			fieldKey,
+		);
+		const b = draw(
+			seed,
+			ownerKey,
+			PHASE.spawn,
+			1,
+			SUBJECT.entity,
+			id,
+			fieldKey,
+		);
+		// An odd sum rounds up or down on a spare bit of b: flooring would favour min.
+		column[slot] =
+			min + ((bounded(a, width) + bounded(b, width) + (b & 1)) >> 1);
+	}
 }
 
 export function kill(

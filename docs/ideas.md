@@ -55,3 +55,5 @@ the spec is updated to include it.
   server supplies the inputs (see `docs/plans/ecs-core.md`, D13).
 - Floors without a player that advance asynchronously, within one round of
   their neighbours.
+- Class-aware alarms: an alarm byte holds eaten-class bits, but `alarmed()` wakes every actor with the required components. With a second prey class, check the bits against the actor's own class.
+- Reactive far floors: an alarm stamped over sight (radius 3), separate from danger's reach (4), wakes far rats when a predator comes into view, so they really flee and watch. Measured +28% world round (`docs/plans/creature-decision.md`, D6). Needs a second stamp in fear.

@@ -1,8 +1,22 @@
 import { species } from "../../../src/content/species";
+import type { GameSpecies } from "../../../src/content/species/types";
 import { createWorld } from "../../../src/core/world/world";
 import { modules } from "../../../src/registry";
 
-createWorld({ seed: 1, floors: 1, width: 4, height: 4, modules, species });
+const world = createWorld({
+	seed: 1,
+	floors: 1,
+	width: 4,
+	height: 4,
+	modules,
+	species,
+});
+({
+	actor: true,
+	components: { satiety: { value: { min: 1, max: 2 } } },
+}) satisfies GameSpecies;
+// @ts-expect-error a spawn's values are integers: only a species draws from a range
+world.spawn(0, "rat", 0, 0, { satiety: { value: { min: 1, max: 2 } } });
 createWorld({
 	seed: 1,
 	floors: 1,

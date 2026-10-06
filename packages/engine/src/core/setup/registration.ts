@@ -37,6 +37,7 @@ import { hashName } from "../random/rng";
 import { cellField, cellView } from "../space/cells";
 import { Inbox } from "../travel/inbox";
 import { canonical, frozenCopy } from "./canonical";
+import { registerComponents } from "./components";
 
 export interface WorldShape {
 	readonly seed: number;
@@ -88,17 +89,7 @@ export function createEngine(
 		componentCount: componentNames.length,
 		speciesNames,
 	});
-	for (const module of modules) {
-		for (const [name, fields] of Object.entries(module.schema)) {
-			const columns: Record<string, Column> = {};
-			for (const [field, kind] of Object.entries(fields))
-				columns[field] = engine.storage.column(kind);
-			engine.components.set(name, {
-				bit: engine.storage.componentBit(engine.components.size),
-				columns: Object.freeze(columns),
-			});
-		}
-	}
+	registerComponents(engine, modules);
 	const { floors } = shape;
 	for (const module of modules) {
 		for (const [name, fields] of Object.entries(module.cells ?? {})) {
@@ -257,13 +248,10 @@ class ModuleBuilder implements Builder<Schema, Schema> {
 		const columns = this.#ownedCells(name);
 		const { grid } = this.#engine;
 		const fields: Record<string, CellField<FieldKind>> = {};
-		for (const [field, column] of Object.entries(columns))
-			fields[field] = cellField(
-				column,
-				grid.stride,
-				grid.cells,
-				this.#audit ? `${name}.${field}` : undefined,
-			);
+		for (const [field, column] of Object.entries(columns)) {
+			const audit = this.#audit ? `${name}.${field}` : undefined;
+			fields[field] = cellField(column, grid.stride, grid.cells, audit);
+		}
 		return Object.freeze(fields) as CellColumns<Schema[N]>;
 	}
 
@@ -341,6 +329,17 @@ class ModuleBuilder implements Builder<Schema, Schema> {
 	propose(run: ProposeFn): void {
 		this.#open();
 		this.#engine.proposers.push({ moduleKey: this.#moduleKey, run });
+	}
+
+	alarm(table: string, field: string, requires: readonly string[]): void {
+		const columns = this.#ownedCells(table);
+		const column = Object.hasOwn(columns, field) ? columns[field] : undefined;
+		if (!(column instanceof Uint8Array))
+			throw new Error(
+				`${this.#module.name} alarm: ${table}.${field} is not a u8 cell field`,
+			);
+		const bits = this.#bits(requires, "requires");
+		this.#engine.addAlarm(this.#moduleKey, column, bits);
 	}
 
 	event(name: string): EventRef {

@@ -4,7 +4,12 @@ import { ALIVE } from "../ecs/storage";
 import { type ActionEntry, type Engine, KIND_CODE } from "../engine";
 import type { EventVisitor } from "../events/events";
 import { spawn } from "../lifecycle/lifecycle";
-import type { ComponentName, FieldName, Species } from "../lifecycle/species";
+import type {
+	ComponentName,
+	FieldName,
+	SpawnFields,
+	Species,
+} from "../lifecycle/species";
 import type { AnyModule } from "../module/api";
 import { engineDigest, hashHex } from "../persistence/hash";
 import { saveFloor, WORD } from "../persistence/image";
@@ -39,7 +44,7 @@ export class GameWorld<M extends readonly AnyModule[], S extends string>
 		species: string | Species<M>,
 		x: number,
 		y: number,
-		values?: Species<M>["components"],
+		values?: SpawnFields<M>,
 	): EntityId {
 		this.checkMutable();
 		return spawn(this.#engine, floor, species, x, y, false, values);
@@ -50,7 +55,7 @@ export class GameWorld<M extends readonly AnyModule[], S extends string>
 		species: string | Species<M>,
 		x: number,
 		y: number,
-		values?: Species<M>["components"],
+		values?: SpawnFields<M>,
 	): EntityId {
 		this.checkMutable();
 		return spawn(this.#engine, floor, species, x, y, true, values);

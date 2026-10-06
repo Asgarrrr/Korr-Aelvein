@@ -39,6 +39,7 @@ row fits, that is a design question: propose a new row before coding.
 | The `World` API the game wraps | `packages/engine/src/core/world/` |
 | One mechanic: its needs, components, systems | `packages/engine/src/modules/<mechanic>/` |
 | Tuning values of a mechanic: rates, thresholds | `packages/engine/src/modules/<mechanic>/config.ts` |
+| A behaviour of a mechanic: its action, in its own file | `packages/engine/src/modules/<mechanic>/behaviours/<behaviour>.ts` |
 | Species: which components, with which values | `packages/engine/src/content/species/` |
 | Type read by two or more modules | `packages/engine/src/contracts/` |
 | Which modules run, in which order | `packages/engine/src/registry.ts` |
@@ -146,7 +147,8 @@ the code around it: every needless comment breeds more.
 - A module writes only its own components. Health changes only through
   `harm`, applied by the core. A module reads another module's component
   only through a getter view typed by `contracts/`, and keeps no state
-  outside registered columns.
+  outside registered columns. Scratch fully overwritten at the start of
+  every callback, and never read before that overwrite, is not state.
 - Module order comes from one explicit list in `registry.ts`, never from
   file order. Only `registry.ts` and `content/` may import a module.
 - Every random draw derives from hash(seed, module name, phase, time,

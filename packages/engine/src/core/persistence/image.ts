@@ -330,6 +330,7 @@ export function readFloor(
 			: now,
 	);
 	engine.players[floor] = players;
+	engine.grid.invalidate();
 }
 
 // The section copy rewrites every row below the incoming high water; rows above it must go.
