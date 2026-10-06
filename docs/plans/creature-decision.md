@@ -280,13 +280,13 @@ content in English. Target ~150 lines of diff per slice.
      `wary`, `fill`, `hunted`, `sees`, `threatNear`, `heated`, `escape`,
      `flightDistance`, `starving` and `markFleeing`.
    - `Situation`: one object created in `setup`, overwritten at the start
-     of every proposal by `sense.fill` (prey, threat, distance, close,
-     heated, escape). It lives only during `propose`; actions run later
+     of every proposal by `sense.fill` (threat, close, heated, escape). It lives only during `propose`; actions run later
      from a cached decision and recompute from their own ctx, so flee
      keeps its fire gating. `escape` is searched only when `close ||
-     heated`. Rule 7 of `.claude/rules/engine-modules.md` gains one line:
-     scratch fully overwritten at the start of every callback is not
-     state.
+     heated`. The user approved a rule change, written in `CLAUDE.md` and
+     rule 7 of `.claude/rules/engine-modules.md`: scratch fully overwritten
+     at the start of every callback, and never read before that
+     overwrite, is not state.
    - `modules/fear/behaviours/{flee,watch,avoid}.ts`: each exports
      `defineX(b, sense, cfg)`, which registers its action and returns its
      proposal `(ctx, actor, situation, out)`. Action names stay `fear/flee`,

@@ -66,7 +66,7 @@ function consider(
 // The step never closer to any threat (eater in sight, burning cell within radius) that is
 // farthest from the nearest, straight steps first; else the actor's own cell; NO_CELL if no threat.
 // Each threat is read once into eight locals: a per-call array measured +60-100 MB of RSS (213-251
-// vs 152 MB), and a module keeps no scratch outside its columns.
+// vs 152 MB).
 export function fleeCell(
 	ctx: ReadCtx,
 	actor: Slot,

@@ -13,34 +13,40 @@ import {
 	type Slot,
 } from "../../core/module/api";
 import { fleeCell } from "./escape";
+import type { FearReaders } from "./readers";
 import { nearestEater, sees } from "./sight";
-import type { FearBuilder, FearConfig, Situation } from "./situation";
+import {
+	type FearBuilder,
+	type FearConfig,
+	fireReach,
+	type Situation,
+} from "./situation";
 
 export interface FearSense {
 	wary(actor: Slot): boolean;
 	// False when the actor is neither hunted nor near fire: no fear behaviour applies.
 	fill(ctx: ReadCtx, actor: Slot, s: Situation): boolean;
-	hunted(ctx: ReadCtx, actor: Slot): boolean;
+	hunted(ctx: ReadCtx, actor: Slot, here: Cell): boolean;
 	sees(ctx: ReadCtx, actor: Slot, threat: EntityId): boolean;
 	// Whether an eater of the actor's class stands within `radius`.
 	threatNear(ctx: ReadCtx, actor: Slot, radius: number): boolean;
-	// A burning cell within the fire's reach, read only where heat marks the cell.
-	heated(ctx: ReadCtx, actor: Slot): boolean;
-	escape(ctx: ReadCtx, actor: Slot): Cell;
+	// The burning cells, where heat marks `here`; else undefined: no fire is within reach.
+	fire(ctx: ReadCtx, here: Cell): Fire | undefined;
+	// A burning cell of `fire` within the fire's reach.
+	heated(ctx: ReadCtx, actor: Slot, fire: Fire | undefined): boolean;
+	escape(ctx: ReadCtx, actor: Slot, fire: Fire | undefined): Cell;
 	// Within this Chebyshev distance a perceived eater makes the actor flee; beyond it, watch.
 	flightDistance(actor: Slot): number;
 	starving(actor: Slot): boolean;
 	markFleeing(actor: Slot): void;
 }
 
-// A burning cell next door is always a threat, so no radius lets a creature step into fire.
-export const fireReach = (cfg: FearConfig): number =>
-	Math.max(cfg.fireRadius, 1);
+type Fire = CellReader<"u8">;
 
 function nearFire(
 	ctx: ReadCtx,
 	actor: Slot,
-	burning: CellReader<"u8">,
+	burning: Fire,
 	radius: number,
 ): boolean {
 	const x = ctx.x(actor);
@@ -79,17 +85,15 @@ function below(
 
 // What fear can see, with absent modules settled once: no diet or edible, no eater is sensed;
 // no temperament, flight is sight; no hunger, no creature runs short.
-export function senseFear(b: FearBuilder, cfg: FearConfig): FearSense {
-	const diet = b.read("diet");
-	const edible = b.read("edible");
-	const burning = b.read("fire")?.left;
+export function senseFear(
+	b: FearBuilder,
+	cfg: FearConfig,
+	readers: FearReaders,
+): FearSense {
+	const { diet, edible, burning, wary, fleeing, danger, heat, presence } =
+		readers;
 	const temperament = b.read("temperament");
 	const satiety = b.read("satiety");
-	const wary = b.query(["wary"]);
-	const { fleeing } = b.write("wary");
-	const danger = b.cells("danger");
-	const heat = b.cells("heat");
-	const presence = b.cells("presence");
 	const reach = fireReach(cfg);
 	const eater =
 		diet && edible ? { eats: diet.eats, kind: edible.class } : undefined;
@@ -112,18 +116,20 @@ export function senseFear(b: FearBuilder, cfg: FearConfig): FearSense {
 
 	// The same answer as the eater scan, without reading the grid: no eater in reach.
 	const hunted = eater
-		? (ctx: ReadCtx, actor: Slot): boolean =>
-				(danger.eats.read(ctx).get(ctx.cellOf(actor)) &
-					eater.kind.get(actor)) !==
-				0
+		? (ctx: ReadCtx, actor: Slot, here: Cell): boolean =>
+				(danger.eats.read(ctx).get(here) & eater.kind.get(actor)) !== 0
 		: never;
 	// Unmarked, no burning cell is within reach: the fire box would find nothing.
-	const marked = (ctx: ReadCtx, actor: Slot): boolean =>
-		burning !== undefined && heat.reach.read(ctx).get(ctx.cellOf(actor)) !== 0;
-	const escapeFrom = (
+	const fire = (ctx: ReadCtx, here: Cell): Fire | undefined =>
+		burning !== undefined && heat.reach.read(ctx).get(here) !== 0
+			? burning.read(ctx)
+			: undefined;
+	const heated = (ctx: ReadCtx, actor: Slot, near: Fire | undefined) =>
+		near !== undefined && nearFire(ctx, actor, near, reach);
+	const escapeCell = (
 		ctx: ReadCtx,
 		actor: Slot,
-		fire: CellReader<"u8"> | undefined,
+		near: Fire | undefined,
 	): Cell =>
 		fleeCell(
 			ctx,
@@ -131,7 +137,7 @@ export function senseFear(b: FearBuilder, cfg: FearConfig): FearSense {
 			eater?.eats,
 			presence.near.read(ctx),
 			eater ? eater.kind.get(actor) : 0,
-			fire,
+			near,
 			reach,
 		);
 	const nearestTo = (ctx: ReadCtx, actor: Slot, radius: number): Slot =>
@@ -149,11 +155,12 @@ export function senseFear(b: FearBuilder, cfg: FearConfig): FearSense {
 	return {
 		wary: (actor) => wary.has(actor),
 		fill(ctx, actor, s) {
-			const isHunted = hunted(ctx, actor);
-			if (!isHunted && !marked(ctx, actor)) return false;
-			const fire = burning?.read(ctx);
-			const heated = fire !== undefined && nearFire(ctx, actor, fire, reach);
-			if (!isHunted && !heated) return false;
+			const here = ctx.cellOf(actor);
+			const isHunted = hunted(ctx, actor, here);
+			const near = fire(ctx, here);
+			if (!isHunted && near === undefined) return false;
+			const isHeated = heated(ctx, actor, near);
+			if (!isHunted && !isHeated) return false;
 			const nearest = isHunted
 				? nearestTo(ctx, actor, PERCEPTION_RADIUS)
 				: NONE;
@@ -162,8 +169,8 @@ export function senseFear(b: FearBuilder, cfg: FearConfig): FearSense {
 				seen && chebyshev(ctx, nearest, actor) <= flightDistance(actor);
 			s.threat = seen ? ctx.idOf(nearest) : NO_ENTITY;
 			s.close = close;
-			s.heated = heated;
-			s.escape = close || heated ? escapeFrom(ctx, actor, fire) : NO_CELL;
+			s.heated = isHeated;
+			s.escape = close || isHeated ? escapeCell(ctx, actor, near) : NO_CELL;
 			return true;
 		},
 		hunted,
@@ -172,20 +179,9 @@ export function senseFear(b: FearBuilder, cfg: FearConfig): FearSense {
 					sees(ctx, actor, threat, eater.eats, eater.kind.get(actor))
 			: never,
 		threatNear: (ctx, actor, radius) => nearestTo(ctx, actor, radius) !== NONE,
-		heated: (ctx, actor) => {
-			const fire = burning?.read(ctx);
-			return (
-				fire !== undefined &&
-				marked(ctx, actor) &&
-				nearFire(ctx, actor, fire, reach)
-			);
-		},
-		escape: (ctx, actor) =>
-			escapeFrom(
-				ctx,
-				actor,
-				marked(ctx, actor) ? burning?.read(ctx) : undefined,
-			),
+		fire,
+		heated,
+		escape: escapeCell,
 		flightDistance,
 		starving,
 		markFleeing: (actor) => {

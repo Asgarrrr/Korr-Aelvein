@@ -36,3 +36,7 @@ export const newSituation = (): Situation => ({
 	heated: false,
 	escape: NO_CELL,
 });
+
+// A burning cell next door is always a threat, so no radius lets a creature step into fire.
+export const fireReach = (cfg: FearConfig): number =>
+	Math.max(cfg.fireRadius, 1);

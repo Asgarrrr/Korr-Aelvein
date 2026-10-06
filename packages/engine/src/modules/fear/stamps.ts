@@ -9,8 +9,8 @@ import {
 	type TickFn,
 } from "../../core/module/api";
 import { MARGIN } from "./config";
-import { fireReach } from "./sense";
-import type { FearBuilder, FearConfig } from "./situation";
+import type { FearReaders } from "./readers";
+import { type FearBuilder, type FearConfig, fireReach } from "./situation";
 
 const REACH = PERCEPTION_RADIUS + MARGIN;
 
@@ -57,18 +57,16 @@ function calm(
 
 // Marks every cell from which a wary creature could see an eater of its class, or
 // stand within fireRadius of a burning cell, this round, so a calm one skips perception.
-export function stampFear(b: FearBuilder, cfg: FearConfig): TickFn {
-	const diet = b.read("diet");
-	const edible = b.read("edible");
-	const burning = b.read("fire")?.left;
-	const wary = b.query(["wary"]);
+export function stampFear(
+	b: FearBuilder,
+	cfg: FearConfig,
+	readers: FearReaders,
+): TickFn {
+	const { diet, edible, burning, wary, fleeing, danger, heat, presence } =
+		readers;
 	const eaters = diet ? b.query(["diet"]) : undefined;
-	const { fleeing } = b.write("wary");
-	const danger = b.cells("danger");
 	const previousDanger = b.previous("danger");
-	const heat = b.cells("heat");
 	const alarm = b.cells("alarm");
-	const presence = b.cells("presence");
 	const heatReach = fireReach(cfg) + MARGIN;
 	return (ctx) => {
 		const huntedCells = danger.eats.write(ctx);
@@ -89,7 +87,6 @@ export function stampFear(b: FearBuilder, cfg: FearConfig): TickFn {
 		const preyMask = calm(ctx, prey, edible.class, fleeing, previousEats);
 		if (preyMask === 0) return;
 		// Inline on purpose: as separate functions these loops measured +5-12% on this tick.
-		// Keep them inline.
 		const rows = eaters.slots(ctx);
 		for (let i = 0; i < rows.length; i++) {
 			const s = rows.at(i);

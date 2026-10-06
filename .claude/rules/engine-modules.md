@@ -38,7 +38,7 @@ Template: `modules/fear/behaviours/flee.ts`.
 2. In `defineX`, register the action with `b.action`. Return a proposal.
 3. If the behaviour needs a new fact, add it to `Situation` and fill it in `sense.fill`.
 4. In `index.ts`, call `defineX` once. Call the returned proposal inside the `b.propose` callback.
-5. Add a seeded test in `test/modules/fear/`.
+5. Add a seeded test in `test/modules/<mechanic>/`.
 
 A module with one behaviour needs no `sense` or `Situation`. Add them when two behaviours share a derived fact.
 

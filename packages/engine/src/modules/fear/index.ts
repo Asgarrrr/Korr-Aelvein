@@ -3,6 +3,7 @@ import { defineAvoid } from "./behaviours/avoid";
 import { defineFlee } from "./behaviours/flee";
 import { defineWatch } from "./behaviours/watch";
 import { fearConfig } from "./config";
+import { readFear } from "./readers";
 import { cells, schema } from "./schema";
 import { senseFear } from "./sense";
 import { newSituation } from "./situation";
@@ -14,11 +15,12 @@ export const fear = defineModule({
 	cells,
 	config: fearConfig,
 	setup(b, cfg) {
-		const sense = senseFear(b, cfg);
+		const readers = readFear(b);
+		const sense = senseFear(b, cfg, readers);
 		// Far floors replay for up to 64 turns; this makes a wary creature decide again when danger
 		// first reaches its cell.
 		b.alarm("alarm", "eats", ["wary"]);
-		b.tick(stampFear(b, cfg));
+		b.tick(stampFear(b, cfg, readers));
 		const flee = defineFlee(b, sense, cfg);
 		const watch = defineWatch(b, sense, cfg);
 		const avoid = defineAvoid(b, sense, cfg);
