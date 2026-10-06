@@ -79,8 +79,9 @@ same path as any server bug.
 - One connection = one session = one game with one player, in memory. No
   persistence, no reconnection, no several players (D13 of `ecs-core.md`
   and `docs/idees.md`).
-- `open`: create the game from a seed, populate the starter floor, spawn
-  the player, advance until the player is due, send the first view.
+- `open`: build the game with `createStarterGame(seed)`, spawn the player
+  at `starter.start`, advance until the player is due, send the first
+  snapshot.
 - `message`: map the command, `world.input`, advance until the player is
   due again or dead, send the snapshot (or `over`).
 - Events are off (`createGame({ events: false })`): nothing reads them yet,
@@ -119,9 +120,14 @@ names the engine's getter views; "Image" names saved floor bytes. A
   view shows the whole floor (debug view).
 - No events and no death cause in this plan: their `a`/`b` payloads are
   untyped (`docs/idees.md`).
-- Floor size: one `FLOOR = { width, height }` const in the server, which
-  owns its `createGame` options. No `world.size()`: nothing loads a game
-  yet.
+- Floor size comes from `starter` (`starter.width`, `starter.height`). The
+  server reads it for the snapshot and for the move cell index. No
+  `world.size()`: nothing loads a game yet.
+- `entities` excludes the player, which has its own `player` field.
+  Protocol exports `Entity`, one `[id, species, x, y]` tuple. `species` is
+  a plain string: protocol imports no workspace package.
+- Measured: the largest snapshot over 30 seeds was 873 bytes (39
+  entities); the opening is 461 bytes. JSON holds.
 
 ### D6. Engine additions (World API, not the frozen module API)
 
@@ -199,10 +205,13 @@ red-team and a blue-team review of the diff before the next slice. Target
 5. **The client sees the floor and can eat.** `entities` in the snapshot,
    `createStarterGame` in the session, `eat` command. `FLOOR` and `START`
    leave `session.ts`; it reads `starter`.
-   Tests: the first snapshot lists the starter layout; a hungry player
-   spawned next to cheese eats it (the cheese leaves the snapshot, satiety
-   rises); an `eat` on food 3 cells away moves the player one step closer;
-   same seed and commands give the same snapshots.
+   `eat.target` is an integer in [1, 2^31 - 1]; any other id plays as idle
+   in the engine (`game-world.ts:81-87`) and never poisons the world.
+   Tests: the first snapshot lists the starter layout (creatures may have
+   moved one step); a player next to cheese eats it (the cheese leaves the
+   snapshot, satiety rises); an `eat` on food 3 cells away moves the player
+   one step closer; a stoat kill ends the game with `over` (seed 21); same seed and
+   commands give the same snapshots, a different seed differs.
 6. **ASCII debug view.** `apps/web/src/debug/` renders a snapshot to text
    (one glyph per species in `apps/web/src/theme.ts`),
    `apps/web/src/input/` maps keys to commands (arrows and hjkl/yubn move,

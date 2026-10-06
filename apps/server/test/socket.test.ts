@@ -13,6 +13,9 @@ const RIGHT: Command = { type: "move", dx: 1, dy: 0 };
 const BAD_INPUTS: [string, unknown][] = [
 	["a delta out of range", { type: "move", dx: 2, dy: 0 }],
 	["an extra key", { type: "wait", extra: 1 }],
+	["an eat target of 0", { type: "eat", target: 0 }],
+	["an eat target as a string", { type: "eat", target: "1" }],
+	["an eat target past i32", { type: "eat", target: 2 ** 31 }],
 	["plain text", "not json"],
 	["broken JSON", "{not json"],
 ];

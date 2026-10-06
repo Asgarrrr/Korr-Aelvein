@@ -1,8 +1,11 @@
-import { createGame, type EntityId, type World } from "@korr/engine";
-import type { Command, ServerMessage, Snapshot } from "@korr/protocol";
+import {
+	createStarterGame,
+	type EntityId,
+	starter,
+	type World,
+} from "@korr/engine";
+import type { Command, Entity, ServerMessage, Snapshot } from "@korr/protocol";
 
-export const FLOOR = { width: 16, height: 12 } as const;
-export const START = { x: 8, y: 6 } as const;
 // Every action costs one turn, so two advances end this round and reach the player in the next.
 const MAX_ADVANCES = 8;
 
@@ -13,8 +16,13 @@ export class Session {
 	#over = false;
 
 	constructor(seed: number) {
-		this.#world = createGame({ seed, floors: 1, ...FLOOR, events: false });
-		this.#player = this.#world.spawnPlayer(0, "rat", START.x, START.y);
+		this.#world = createStarterGame(seed);
+		this.#player = this.#world.spawnPlayer(
+			0,
+			"rat",
+			starter.start.x,
+			starter.start.y,
+		);
 		this.opening = this.#settle();
 	}
 
@@ -24,10 +32,14 @@ export class Session {
 			this.#world.input(this.#player, "core/idle", null);
 			return this.#settle();
 		}
+		if (command.type === "eat") {
+			this.#world.input(this.#player, "hunger/eat", command.target);
+			return this.#settle();
+		}
 		if (command.dx === 0 && command.dy === 0)
 			return { type: "rejected", reason: "invalid" };
 		const { x, y } = this.#position();
-		const cell = (y + command.dy) * FLOOR.width + (x + command.dx);
+		const cell = (y + command.dy) * starter.width + (x + command.dx);
 		this.#world.input(this.#player, "core/step", cell);
 		return this.#settle();
 	}
@@ -56,9 +68,14 @@ export class Session {
 	#snapshot(): Snapshot {
 		const id = this.#player;
 		const { x, y } = this.#position();
+		const entities: Entity[] = [];
+		this.#world.entities(0, (other, species, atX, atY) => {
+			if (other !== id) entities.push([other, species, atX, atY]);
+		});
 		return {
 			type: "snapshot",
-			...FLOOR,
+			width: starter.width,
+			height: starter.height,
 			player: {
 				id,
 				x,
@@ -66,6 +83,7 @@ export class Session {
 				hp: this.#world.peek("vitality", "hp", id),
 				satiety: this.#world.peek("satiety", "value", id),
 			},
+			entities,
 		};
 	}
 }
