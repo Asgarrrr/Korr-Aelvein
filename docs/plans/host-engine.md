@@ -213,13 +213,17 @@ red-team and a blue-team review of the diff before the next slice. Target
    one step closer; a stoat kill ends the game with `over` (seed 21); same seed and
    commands give the same snapshots, a different seed differs.
 6. **ASCII debug view.** `apps/web/src/debug/` renders a snapshot to text
-   (one glyph per species in `apps/web/src/theme.ts`),
-   `apps/web/src/input/` maps keys to commands (arrows and hjkl/yubn move,
-   `.` waits, `e` eats an adjacent edible entity), `apps/web/src/main.ts`
-   wires the socket.
-   Tests (`apps/web/test/`): render of a fixed snapshot gives a fixed
-   string; key → command table; no value import from `@korr/protocol`
-   under `apps/web/src/`.
-   Manual run: `bun run dev`, play until death, screenshot.
+   (one glyph per species in `apps/web/src/theme.ts`).
+   `apps/web/src/input/` maps a key and the last snapshot to a command:
+   arrows and hjkl/yubn move, `.` waits, `e` eats the lowest-id food the
+   player can eat within one cell. `apps/web/src/main.ts` wires the
+   socket: one command in flight at a time, a rejected command shows for
+   `rejectedNoticeMs`, and keys stop after `over` or a closed socket.
+   Tests (`apps/web/test/`, in the typecheck): render of a fixed snapshot
+   gives a fixed string; key → command table; `e` choices; no value import
+   from `@korr/protocol` under `apps/web/src/` (only `import type`: an
+   inline `type` specifier still loads the module).
+   Manual run: `bun run dev`, a WebSocket client through the Vite proxy
+   gets a snapshot and plays a move.
 
 Then `/code-review` on the whole branch.

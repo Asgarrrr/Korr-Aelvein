@@ -84,7 +84,7 @@ a second name anywhere.
 
 ## Server and client
 
-- **Command**: what a client sends for its player's turn (`move`, `wait`).
+- **Command**: what a client sends for its player's turn (`move`, `wait`, `eat`).
   The server maps it to an engine action. Not an Intent.
 - **Session**: One connection owns one Session. A Session holds one World
   and one player, in memory. Code: `Session` (`apps/server/src/session.ts`).
