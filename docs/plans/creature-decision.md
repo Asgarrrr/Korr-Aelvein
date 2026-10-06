@@ -31,8 +31,12 @@ per budget; FAIL rows do not change the exit code, so read them):
   count on the same seed (oscillation guard).
 - A wary rat caching `eat` on a P=64 floor re-decides on the turn an
   alarm reaches its cell; a stoat never re-decides because of it.
-- Bench: cached actor turn at P=64 <= 120 ns; player floor <= today + 10%;
-  world round median <= 80 ms; RSS <= 160 MB.
+- Bench, paired: each perf-sensitive slice is benched right after its
+  base, under the same machine load. Cached actor turn at P=64 and world
+  round within +5% of the base; player floor within +10%; RSS <= 160 MB.
+  Absolute budgets are re-checked on an idle machine: on 2026-10-06 a
+  loaded machine (load average ~3.8) measured 96-100 ms rounds and
+  180-186 ns cached turns on both `c0a8774` and `e50a6d8`.
 - The game runs with `temperament`, `fear` or `hunger` removed. The golden
   hash is re-pinned only on purpose, with the reason in the commit.
 
@@ -164,13 +168,14 @@ Every change to `core/module/api.ts` is a deliberate commit that updates
 `test/core/module/api-surface.types.ts` and `api.test.ts`. All repo
 content in English. Target ~150 lines of diff per slice.
 
-1. **Priority bands.** `core/decision/bands.ts`, the band table in
-   `core/config.ts`, `band()` exported; fear, hunger, explore and wander
-   push through `band()` with unchanged values.
-   Tests: on a seeded 300-round world, every score a game module pushes
-   lies in a band; existing tests pass; golden hash unchanged.
-   Helper: count intent switches per slot from `intentKey`/`intentTarget`
-   (`test/fixtures.ts`), and record today's count on a fixed seed.
+1. **Priority bands.** The band table in `core/config.ts`. Modules and
+   their configs stay untouched: configs enter the fingerprint, and
+   hunger's scores (100, 120 … 300) are not reachable from a 0..255
+   weight. `band()` arrives in slice 5 with `watch`, its first user.
+   Tests: on a seeded 300-round world, each action's pushes lie in its
+   expected band; golden hash unchanged.
+   Helper: intent switches per entity, first decision excluded
+   (`test/fixtures.ts`); baselines pinned as upper bounds on two seeds.
 2. **Alarms.** `b.alarm(field, requires)`, the check in `decide()`, fear's
    `danger.alarm` stamp.
    Tests: a wary rat caching `eat` on a P=64 floor re-decides the turn an
@@ -189,7 +194,8 @@ content in English. Target ~150 lines of diff per slice.
    ranges, registry entry.
    Tests: boldness differs between rats of one seed; the game runs
    without temperament.
-5. **Fear reads traits.** `core/decision/curve.ts` (exported), the flight
+5. **Fear reads traits.** `core/decision/{bands,curve}.ts` with `band()`
+   and `curve()` exported, the flight
    curve, nearest-threat scan, satiety shift, `fleeing` hysteresis,
    `fear/behaviours/watch.ts`.
    Tests: forced shy and bold rats flee at 3 and 1; a sated average rat

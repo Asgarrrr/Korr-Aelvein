@@ -1,3 +1,5 @@
+import { CAP } from "../src/core/config";
+import type { Engine } from "../src/core/engine";
 import { UNNAMED } from "../src/core/lifecycle/species";
 import {
 	type AnyModule,
@@ -200,4 +202,35 @@ export function idleRounds(
 	for (let r = 0; r < rounds; r++)
 		for (let due = world.advance(); due.length > 0; due = world.advance())
 			for (const p of due) world.input(p, "core/idle", null);
+}
+
+// Oscillation measure: an entity's first decision is not a switch, only later changes are.
+export function intentSwitches(engine: Engine, rounds: number): number {
+	const { ids, highWater, floors } = engine.storage;
+	const { intentKey, intentTarget } = engine;
+	const lastId = new Int32Array(ids.length);
+	const lastKey = new Int32Array(ids.length);
+	const lastTarget = new Int32Array(ids.length);
+	const decided = new Uint8Array(ids.length);
+	let switches = 0;
+	for (let r = 0; r <= rounds; r++) {
+		if (r > 0) engine.runRound();
+		for (let f = 0; f < floors; f++)
+			for (let s = f * CAP; s < f * CAP + (highWater[f] ?? 0); s++) {
+				const id = ids[s] ?? 0;
+				const key = intentKey[s] ?? 0;
+				const target = intentTarget[s] ?? 0;
+				if (id !== lastId[s]) decided[s] = 0;
+				else if (
+					decided[s] === 1 &&
+					(key !== lastKey[s] || target !== lastTarget[s])
+				)
+					switches++;
+				if (key !== 0) decided[s] = 1;
+				lastId[s] = id;
+				lastKey[s] = key;
+				lastTarget[s] = target;
+			}
+	}
+	return switches;
 }

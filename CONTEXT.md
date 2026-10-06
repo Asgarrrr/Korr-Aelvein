@@ -43,6 +43,9 @@ a second name anywhere.
   or the environment that shapes them.
 - **Candidate**: a scored (action, target) a module proposes for an actor.
   The core picks one per actor.
+- **Band**: a fixed range of candidate scores (`BANDS` in `core/config.ts`).
+  A candidate in a higher band beats any candidate in a lower band. From
+  high to low: reflex, urgent, vigilance, routine.
 - **Goal action**: an action whose target persists across turns (eat this
   food, flee this threat). It reaches `core.step` through `instead`.
 - **Intent**: the cached (action key, target) of an actor's last decision.
