@@ -266,6 +266,53 @@ content in English. Target ~150 lines of diff per slice.
    Tests: each fix has a seeded test; the accepted limits, the one-turn
    action cost and fear's tie order against perception are pinned.
 
+7. **Fear as the behaviour template (refactor, behaviour-neutral).** A
+   self-review found fear correct and fast but not yet the template D1
+   promises: one 40-line `propose` decides flee, watch and avoid through
+   about ten intertwined conditions; `setup` is one 220-line closure;
+   absent-module guards repeat everywhere; `fleeCell` takes 7 parameters;
+   names such as `near.near` read poorly. New behaviours copy what they
+   see, so the template is fixed before more arrive.
+   - `modules/fear/sense.ts`: `senseFear(b, cfg)` returns a plain object
+     of functions, built once in `setup`: what fear can see. It settles
+     absent modules once (no diet or edible: fear senses no eater; no
+     temperament: flight is sight; no hunger: never starving) and offers
+     `wary`, `fill`, `hunted`, `sees`, `threatNear`, `heated`, `escape`,
+     `flightDistance`, `starving` and `markFleeing`.
+   - `Situation`: one object created in `setup`, overwritten at the start
+     of every proposal by `sense.fill` (prey, threat, distance, close,
+     heated, escape). It lives only during `propose`; actions run later
+     from a cached decision and recompute from their own ctx, so flee
+     keeps its fire gating. `escape` is searched only when `close ||
+     heated`. Rule 7 of `.claude/rules/engine-modules.md` gains one line:
+     scratch fully overwritten at the start of every callback is not
+     state.
+   - `modules/fear/behaviours/{flee,watch,avoid}.ts`: each exports
+     `defineX(b, sense, cfg)`, which registers its action and returns its
+     proposal `(ctx, actor, situation, out)`. Action names stay `fear/flee`,
+     `fear/watch`, `fear/avoid`: their keys break ties. `index.ts` builds
+     the sense, the stamps and the behaviours, then calls the proposals
+     directly in today's push order: watch, flee, avoid.
+   - `modules/fear/stamps.ts`: one function per tick stamp (heat, calm,
+     danger with presence and alarm), called only from `b.tick`, with the
+     same clear-then-fill order and early returns.
+   - Cell tables: `burns.near` becomes `heat.reach`, `reach.near`
+     becomes `presence.near`; `danger` and `alarm` keep their names.
+   - `modules/fear/situation.ts` holds the shared vocabulary (`Situation`,
+     `Proposal`, `FearBuilder`, `FearConfig`); `sense.ts` holds the sense.
+   - The danger, presence and alarm stamps stay inline in the tick: as
+     separate functions they measured +5-12% on the fear tick.
+   - `.claude/rules/engine-modules.md` gains a checklist for a new
+     behaviour: one file, one `defineX` call, one proposal call, a seeded
+     test. A module with one behaviour (hunger) needs no sense or
+     situation: those appear when two behaviours share derived facts.
+   Proof: for 40 reference rounds, every round, all 50 columns, every
+   creature's chosen action key and target, and `world.hash()` equal the
+   previous commit (renamed columns compared by value); a test disables
+   diet, edible, then fire and checks fear still runs; the full suite is
+   green with tests changed only for names; golden hash re-pinned for the
+   fingerprint only; paired bench within ±3%.
+
 ## 5. Closing
 
 Milestone 1 holds: shy, average and bold rats react differently to the

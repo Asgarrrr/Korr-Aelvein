@@ -10,7 +10,6 @@ import {
 	type ActionFn,
 	ALTERNATE,
 	type Builder,
-	type ContractView,
 	defineModule,
 	type EntityId,
 	FAIL,
@@ -19,8 +18,9 @@ import {
 } from "../../../../src/core/module/api";
 import { createWorld } from "../../../../src/core/world/world";
 import type { fear } from "../../../../src/modules/fear";
-import { watchAction } from "../../../../src/modules/fear/behaviours/watch";
+import { defineWatch } from "../../../../src/modules/fear/behaviours/watch";
 import { fearConfig } from "../../../../src/modules/fear/config";
+import type { FearSense } from "../../../../src/modules/fear/sense";
 import { foodClass } from "../../../../src/modules/hunger/config";
 import { decider, decisions, idleRounds } from "../../../fixtures";
 import { scene, still } from "../scene";
@@ -106,22 +106,21 @@ const watchWith = (eats: number[]) => {
 			return { index: 0 };
 		},
 	} as unknown as Builder<typeof fear.schema, NonNullable<typeof fear.cells>>;
-	const edible = {
-		class: { get: (s: number) => (s === 0 ? foodClass.meat : 0) },
-	} as unknown as ContractView<"edible">;
-	const eater = (slot: number, prey: number) =>
-		((eats[slot] ?? 0) & prey) !== 0;
-	watchAction(builder, {
-		edible,
+	const prey = (s: number) => (s === 0 ? foodClass.meat : 0);
+	const eater = (slot: number, kind: number) =>
+		((eats[slot] ?? 0) & kind) !== 0;
+	const sense: Partial<FearSense> = {
 		flightDistance: () => FLIGHT,
 		starving: () => hungry,
-		threatNear: (_ctx, _actor, prey, radius) =>
-			inSight.some(([slot, , d]) => eater(slot, prey) && d <= radius),
-		sees: (_ctx, _actor, threat, prey) =>
+		threatNear: (_ctx, actor, radius) =>
+			inSight.some(([slot, , d]) => eater(slot, prey(actor)) && d <= radius),
+		sees: (_ctx, actor, threat) =>
 			inSight.some(
-				([slot, id, d]) => id === threat && eater(slot, prey) && d <= SIGHT,
+				([slot, id, d]) =>
+					id === threat && eater(slot, prey(actor)) && d <= SIGHT,
 			),
-	});
+	};
+	defineWatch(builder, sense as FearSense, fearConfig);
 	return run as ActionFn<"entity">;
 };
 const ctx = { idle: {}, instead: () => ALTERNATE } as unknown as ActionCtx;

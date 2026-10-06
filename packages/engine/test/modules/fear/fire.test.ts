@@ -31,7 +31,7 @@ import { foodClass, hungerConfig } from "../../../src/modules/hunger/config";
 import { wander } from "../../../src/modules/wander";
 import { modules } from "../../../src/registry";
 import { probe } from "../../fixtures";
-import { gridCtx } from "./scene";
+import { gridCtx, scene } from "./scene";
 
 const tracked = { ...rat, components: { ...rat.components, where: {} } };
 
@@ -234,7 +234,7 @@ test("avoid fails once no cell near burns, even with an eater in sight, or once 
 								},
 		query: () => ({ has: () => true }),
 		write: () => ({ fleeing: new Uint8Array(2) }),
-		cells: () => ({ eats: ALERT, near: ALERT }),
+		cells: () => ({ eats: ALERT, near: ALERT, reach: ALERT }),
 		previous: () => ({ eats: ALERT }),
 		tick() {},
 		propose() {},
@@ -291,4 +291,22 @@ test("a rat that stays put to avoid fire keeps avoid as its intent", () => {
 		engine.intentKey[slot],
 		engine.intentTarget[slot],
 	]).toEqual([2, hashName("fear/avoid") | 0, 0]);
+});
+
+test("a starving rat beside fire with a stoat next to it flees away from both, then stops", () => {
+	const { engine, intent, ratAt, stoatAt } = scene(16);
+	spawn(engine, 0, ember, 5, 5);
+	const id = ratAt(6, 5, 128, fearConfig.riskBelow - 150);
+	stoatAt(7, 6);
+	const path = [];
+	for (let round = 0; round < 3; round++) {
+		engine.runRound();
+		const s = engine.storage.slotOf(0, id);
+		path.push([intent(id), engine.grid.x[s], engine.grid.y[s]]);
+	}
+	expect(path).toEqual([
+		["fear/flee", 7, 4],
+		["fear/flee", 8, 3],
+		["core/idle", 8, 3],
+	]);
 });

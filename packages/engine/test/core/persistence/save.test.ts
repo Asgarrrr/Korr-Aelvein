@@ -79,7 +79,7 @@ test("loading with another registry, config, species table or format throws", ()
 			m === fear
 				? {
 						...fear,
-						cells: { ...fear.cells, burns: { near: "i8" } } as const,
+						cells: { ...fear.cells, heat: { reach: "i8" } } as const,
 					}
 				: m,
 		),

@@ -27,6 +27,20 @@ Context, terms and recipes: `engine.md`. Example: `bench/reference/thirst.ts`.
    column: `CellContracts`, on `cells` (`modules/fire/schema.ts`).
 7. Any state in `setup` that outlives a callback (a `let`, a mutated
    array, map or object) passes the lint but breaks save/load. Forbidden.
+   Scratch fully overwritten at the start of every callback, and never
+   read before that overwrite, is not state.
+
+## New behaviour
+
+Template: `modules/fear/behaviours/flee.ts`.
+
+1. Create `behaviours/<behaviour>.ts`. Export `defineX(b, sense, cfg)`.
+2. In `defineX`, register the action with `b.action`. Return a proposal.
+3. If the behaviour needs a new fact, add it to `Situation` and fill it in `sense.fill`.
+4. In `index.ts`, call `defineX` once. Call the returned proposal inside the `b.propose` callback.
+5. Add a seeded test in `test/modules/fear/`.
+
+A module with one behaviour needs no `sense` or `Situation`. Add them when two behaviours share a derived fact.
 
 ## What the checks forbid
 

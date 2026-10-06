@@ -261,7 +261,7 @@ const fleeWith = (hunger: boolean) => {
 					: { class: { get: (s: number) => classes[s] ?? 0 } },
 		query: () => ({ has: () => true }),
 		write: () => ({ fleeing: new Uint8Array(2) }),
-		cells: () => ({ eats: ALERT, near: ALERT }),
+		cells: () => ({ eats: ALERT, near: ALERT, reach: ALERT }),
 		previous: () => ({ eats: ALERT }),
 		tick() {},
 		propose() {},

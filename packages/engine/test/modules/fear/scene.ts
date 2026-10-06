@@ -33,7 +33,8 @@ export const scene = (side: number, list: readonly AnyModule[] = still) => {
 		list,
 		species,
 	);
-	const names = new Map(engine.actions.map((a) => [a.key, a.name]));
+	// intentKey is an Int32Array, so a key above 2^31 reads back negative.
+	const names = new Map(engine.actions.map((a) => [a.key | 0, a.name]));
 	const slot = (id: EntityId) => engine.storage.slotOf(0, id);
 	const intent = (id: EntityId) =>
 		names.get(engine.intentKey[slot(id)] ?? 0) ?? "none";

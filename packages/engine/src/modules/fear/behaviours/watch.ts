@@ -1,43 +1,26 @@
-import {
-	type ActionRef,
-	type Builder,
-	type ContractView,
-	type EntityId,
-	FAIL,
-	type ReadCtx,
-	type Slot,
-} from "../../../core/module/api";
-import type { cells, schema } from "../schema";
-
-interface WatchDeps {
-	readonly edible: ContractView<"edible"> | undefined;
-	readonly flightDistance: (actor: Slot) => number;
-	readonly starving: (actor: Slot) => boolean;
-	readonly threatNear: (
-		ctx: ReadCtx,
-		actor: Slot,
-		prey: number,
-		radius: number,
-	) => boolean;
-	readonly sees: (
-		ctx: ReadCtx,
-		actor: Slot,
-		threat: EntityId,
-		prey: number,
-	) => boolean;
-}
+import { band, FAIL, NO_ENTITY } from "../../../core/module/api";
+import type { FearSense } from "../sense";
+import type { FearBuilder, FearConfig, Proposal } from "../situation";
 
 // Stands still with the threat in sight. Fails once the threat is out of sight, any eater of the
 // actor's class is within flight distance, or the actor is starving, so it decides again.
-export function watchAction(
-	b: Builder<typeof schema, typeof cells>,
-	{ edible, flightDistance, starving, threatNear, sees }: WatchDeps,
-): ActionRef<"entity"> {
-	return b.action("watch", "entity", ["wary"], (ctx, actor, threat) => {
-		if (!edible || starving(actor)) return FAIL;
-		const prey = edible.class.get(actor);
-		if (threatNear(ctx, actor, prey, flightDistance(actor))) return FAIL;
-		if (!sees(ctx, actor, threat, prey)) return FAIL;
+export function defineWatch(
+	b: FearBuilder,
+	sense: FearSense,
+	cfg: FearConfig,
+): Proposal {
+	const score = band("vigilance", cfg.watchWeight);
+	const watch = b.action("watch", "entity", ["wary"], (ctx, actor, threat) => {
+		if (
+			sense.starving(actor) ||
+			sense.threatNear(ctx, actor, sense.flightDistance(actor)) ||
+			!sense.sees(ctx, actor, threat)
+		)
+			return FAIL;
 		return ctx.instead(ctx.idle, null);
 	});
+	return (_ctx, actor, s, out) => {
+		if (s.threat !== NO_ENTITY && !s.close && !sense.starving(actor))
+			out.push(watch, s.threat, score);
+	};
 }
