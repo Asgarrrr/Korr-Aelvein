@@ -30,6 +30,8 @@ quand la spec est mise à jour pour l'inclure.
 - Marée qui monte dans le donjon.
 - Lumière comme ressource.
 - Échos des runs passés qui rejouent leurs actions.
+- Morsure via `harm` et carcasses : la prédation blesse au lieu de tuer, le corps reste comme nourriture.
+- Les créatures évitent d'entrer dans le feu même sans la peur, quand elles se déplacent pour une autre raison.
 
 ## Outillage
 
@@ -39,3 +41,11 @@ quand la spec est mise à jour pour l'inclure.
 
 - 3D avec textures pixel art, terrain en marches, lumière douce, palette désaturée.
 - Modèles faits dans MagicaVoxel.
+
+## Multijoueur
+
+- Modèle de tour à plusieurs joueurs : tours simultanés, minuteur, qui attend
+  qui. Le moteur reste neutre : il s'arrête quand un joueur est attendu, le
+  serveur fournit les entrées (voir `docs/plans/ecs-core.md`, D13).
+- Étages sans joueur qui avancent de façon asynchrone, à un round au plus
+  de leurs voisins.

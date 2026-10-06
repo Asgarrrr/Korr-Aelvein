@@ -32,7 +32,9 @@ row fits, that is a design question: propose a new row before coding.
 
 | What | Where |
 |---|---|
-| Foundation rule: grid, turns, actions, arbitration, death, events, RNG | `packages/engine/src/core/` |
+| Entity storage: ids, columns, queries (imports nothing else from core) | `packages/engine/src/core/ecs/` |
+| Foundation rule: grid, turns, actions, arbitration, health, death, events, RNG | `packages/engine/src/core/<domain>/` |
+| Tuning values of the core: score scale, ticks per turn, capacities | `packages/engine/src/core/config.ts` |
 | One mechanic: its needs, components, systems | `packages/engine/src/modules/<mechanic>/` |
 | Tuning values of a mechanic: rates, thresholds | `packages/engine/src/modules/<mechanic>/config.ts` |
 | Species: which components, with which values | `packages/engine/src/content/species/` |
@@ -46,6 +48,8 @@ row fits, that is a design question: propose a new row before coding.
 | Keys and clicks → player intents | `apps/web/src/input/` |
 | Rendering settings: sizes, durations, palette | `apps/web/src/theme.ts` |
 | Tests | `<package>/test/`, mirroring `src/` |
+| Engine benchmarks (`bun run bench`, not part of `verify`) | `packages/engine/bench/` |
+| Design plans | `docs/plans/` |
 | Repository tooling | `scripts/` |
 
 - One file = one subject. Past ~400 lines, or when a second subject
@@ -112,28 +116,46 @@ the code around it: every needless comment breeds more.
 
 ## Engine invariants
 
-- Core owns: grid, turn scheduler (energy), action execution, needs
-  arbitration, death, the event queue. These cannot be disabled.
+- Core owns: grid, position, turn scheduler, action execution, needs
+  arbitration, health, death, containment, the event queue. These cannot be
+  disabled. Full design: `docs/plans/ecs-core.md`.
 - Mechanic modules (hunger, fear, fire...) propose scored candidate actions.
-  They never set a creature's action; the core picks one per creature.
+  They never set a creature's action; the core picks one per creature. Ties
+  break on stable action keys, never on registry order.
+- A player is an actor whose decision comes from a recorded input. The
+  engine never waits: it stops when a player is due and the server supplies
+  inputs.
 - Creatures act one at a time on the current state. Bulk systems are only
-  for environment ticks (fire spread, need decay).
+  for environment ticks (fire spread, need decay). A bulk tick writes only
+  the row it iterates, an owned cell column read from its previous-turn
+  buffer, or an owned cell column it clears and fills by an
+  order-independent combine (OR, max); its kills and spawns are deferred.
 - Events broadcast facts; they never drive behaviour. One FIFO queue per
   turn, each event records its cause, a per-turn cap throws.
 - Ordered rules (death → drop → remove) are direct core calls, not events.
 - A module never imports another module. Shared types live in `contracts/`,
   and only once a second module reads them. Contracts hold no logic.
-- A module writes only its own components.
+- An action declares the components its actor must have; the core checks
+  them before every run.
+- A module writes only its own components. Health changes only through
+  `harm`, applied by the core. A module reads another module's component
+  only through a getter view typed by `contracts/`, and keeps no state
+  outside registered columns.
 - Module order comes from one explicit list in `registry.ts`, never from
   file order. Only `registry.ts` and `content/` may import a module.
-- Every random draw derives from hash(seed, module, turn, entity). Adding a
-  module must not shift other modules' draws.
+- Every random draw derives from hash(seed, module name, phase, time,
+  subject, draw index). Adding a module must not shift other modules' draws.
 - Config values used by the engine are integers (3 per turn, not 0.03).
 - Integer math in the engine. No `Math.pow`, `Math.exp` or other
   transcendental functions: their precision differs between engines.
-- Entity ids are monotonic and never reused.
-- Other floors run the same systems at a lower frequency. No separate
-  aggregate model unless measurement proves it necessary.
+- Entity ids are `originFloor * 2^25 + counter`: monotonic per origin floor,
+  never reused. Storage slots are recycled and never leave a core callback.
+- Every floor runs every system every turn. Creatures re-decide every P
+  turns, P set by distance to the nearest player; otherwise they repeat
+  their cached action. No separate aggregate model unless measurement
+  proves it necessary.
+- Hot bulk ticks are monomorphic inline loops over columns, never a shared
+  per-row callback.
 
 ## Testing
 

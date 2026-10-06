@@ -1,6 +1,7 @@
 // CLAUDE.md rules that Biome cannot express; the rest lives in biome.json.
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import { ALLOWED_SAMPLES, FORBIDDEN, forbiddenIn } from "./module-syntax";
 
 const ROOT = resolve(import.meta.dir, "..");
 const MAX_LINES = 400;
@@ -14,6 +15,13 @@ const workspaces = ["apps", "packages"].flatMap((group) =>
 const ENGINE = join(ROOT, "packages/engine/src") + sep;
 // The composition root: the only file outside modules/ allowed to import them.
 const REGISTRY = join(ENGINE, "registry.ts");
+// Entity storage is the foundation: it must stay usable without the rest of core.
+const ECS = join(ENGINE, "core/ecs") + sep;
+const CORE_CONFIG = join(ENGINE, "core/config.ts");
+// A module's whole view of the engine: the core API, shared contract types and its own folder.
+const API = join(ENGINE, "core/api.ts");
+const CONTRACTS = join(ENGINE, "contracts") + sep;
+const MODULES = join(ENGINE, "modules") + sep;
 
 // `import type` is erased before Bun's scanner sees it, but a type import
 // across modules is still coupling. Anchored to statement starts so that
@@ -35,6 +43,22 @@ const walk = (dir: string): string[] =>
 				return /\.tsx?$/.test(entry.name) ? [path] : [];
 			})
 		: [];
+
+// The bundler accepts extensionless and directory specifiers, so the rules must compare what it loads.
+const resolveImport = (file: string, spec: string) => {
+	const base = resolve(dirname(file), spec);
+	const candidates = [
+		base,
+		`${base}.ts`,
+		`${base}.tsx`,
+		join(base, "index.ts"),
+		join(base, "index.tsx"),
+	];
+	return (
+		candidates.find((path) => existsSync(path) && statSync(path).isFile()) ??
+		base
+	);
+};
 
 const importsOf = (source: string) => [
 	...transpiler.scanImports(source).map((entry) => entry.path),
@@ -62,17 +86,26 @@ const checkEngineImport = (file: string, target: string) => {
 			file,
 			`${from.area} must not import modules/; only registry.ts and content/ may`,
 		);
-	if (from.module && to.module && from.module !== to.module)
+	if (
+		from.area === "modules" &&
+		target !== API &&
+		!target.startsWith(CONTRACTS) &&
+		!target.startsWith(join(MODULES, from.module ?? "") + sep)
+	)
 		report(
 			file,
-			`module ${from.module} imports module ${to.module}; use contracts/ or events`,
+			`module ${from.module} imports ${relative(ENGINE, target)}; a module may import only core/api.ts, contracts/ and its own folder`,
 		);
 	if (from.area === "contracts" && to.area !== "contracts")
 		report(file, "contracts/ may only import contracts/");
+	if (file.startsWith(ECS) && !target.startsWith(ECS) && target !== CORE_CONFIG)
+		report(file, "core/ecs/ may only import core/ecs/ and core/config.ts");
 };
 
 for (const dir of workspaces) {
-	for (const file of [...walk(join(dir, "src")), ...walk(join(dir, "test"))]) {
+	for (const file of ["src", "test", "bench"].flatMap((sub) =>
+		walk(join(dir, sub)),
+	)) {
 		const source = readFileSync(file, "utf8");
 
 		const lines = source.split("\n").length - (source.endsWith("\n") ? 1 : 0);
@@ -84,7 +117,7 @@ for (const dir of workspaces) {
 
 		for (const spec of importsOf(source)) {
 			if (!spec.startsWith(".")) continue;
-			const target = resolve(dirname(file), spec);
+			const target = resolveImport(file, spec);
 			if (!target.startsWith(dir + sep))
 				report(
 					file,
@@ -92,8 +125,46 @@ for (const dir of workspaces) {
 				);
 			if (file.startsWith(ENGINE)) checkEngineImport(file, target);
 		}
+		if (file.startsWith(MODULES))
+			for (const what of new Set(forbiddenIn(source)))
+				report(file, `${what} is forbidden in modules/`);
 	}
 }
+
+// A known violation must still be reported, or an edit to this script could disable the rule unnoticed.
+const probe = join(ENGINE, "modules/probe/index.ts");
+const before = errors.length;
+for (const spec of [
+	"../../content/species/rat",
+	"../../registry",
+	"../../core/engine",
+	"../hunger/schema",
+	"../../core/api",
+	"../../contracts",
+	"./schema",
+])
+	checkEngineImport(probe, resolveImport(probe, spec));
+if (errors.length - before !== 4)
+	report(probe, "the modules import rule did not fire exactly 4 times");
+else errors.length = before;
+
+for (const { what, samples } of FORBIDDEN)
+	for (const sample of samples)
+		if (!forbiddenIn(sample).includes(what))
+			report(probe, `the ${what} rule misses "${sample}"`);
+for (const what of ALLOWED_SAMPLES.flatMap(forbiddenIn))
+	report(probe, `the ${what} rule fires on allowed code`);
+
+const ecsProbe = join(ECS, "probe.ts");
+const ecsBefore = errors.length;
+for (const spec of ["../engine", "../config", "./ids"])
+	checkEngineImport(ecsProbe, resolveImport(ecsProbe, spec));
+if (errors.length - ecsBefore !== 1)
+	report(
+		ecsProbe,
+		"the core/ecs -> rest of core rule did not fire exactly once",
+	);
+else errors.length = ecsBefore;
 
 if (errors.length > 0) {
 	console.error(`architecture check failed (${errors.length}):`);

@@ -1,0 +1,8 @@
+or {
+	`Bun.$_`,
+	`process.$_`,
+	`performance.$_`,
+	`globalThis`
+} as $access where {
+	register_diagnostic(span=$access, message="Runtime global in the engine simulation: the engine runs the same on every host.")
+}
