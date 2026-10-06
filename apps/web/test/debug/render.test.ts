@@ -21,7 +21,7 @@ test("a fixed snapshot renders to a fixed string", () => {
 			[5, "dragon", 0, 2],
 		]),
 	);
-	expect(text).toBe('r..%\n.@..\n?.".\npv 10  satiété 800');
+	expect(text).toBe('r..%\n.@..\n?.".\nhp 10  satiety 800');
 });
 
 test("on a shared cell the last entity in the list is drawn", () => {
@@ -50,5 +50,5 @@ test("entities outside the floor are skipped", () => {
 			[5, "rat", 0, -1],
 		]),
 	);
-	expect(text).toBe("....\n.@..\n....\npv 10  satiété 800");
+	expect(text).toBe("....\n.@..\n....\nhp 10  satiety 800");
 });

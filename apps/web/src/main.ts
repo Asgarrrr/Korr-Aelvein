@@ -35,22 +35,22 @@ socket.onmessage = (event) => {
 	if (message.type === "snapshot") {
 		snapshot = message;
 		if (view) view.textContent = render(message);
-		settle("serveur connecté");
+		settle("connected");
 	} else if (message.type === "over") {
 		over = true;
-		settle("partie terminée");
+		settle("game over");
 	} else if (message.type === "rejected") {
-		show(`commande refusée : ${message.reason}`);
+		show(`command rejected: ${message.reason}`);
 		clearTimeout(notice);
 		notice = setTimeout(() => show(state), rejectedNoticeMs);
 	}
 };
 socket.onerror = () => {
 	ended = true;
-	settle("serveur injoignable");
+	settle("server unreachable");
 };
 socket.onclose = () => {
-	if (!over && !ended) settle("connexion perdue");
+	if (!over && !ended) settle("connection lost");
 	ended = true;
 };
 

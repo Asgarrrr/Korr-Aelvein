@@ -4,7 +4,7 @@ Turn-based tactical roguelike in the browser, with an authoritative server.
 The dungeon lives without the player: on every floor, creatures eat, hunt,
 flee and migrate whether the player is there or not.
 
-Anything outside the current scope goes to `docs/idees.md`, never into code.
+Anything outside the current scope goes to `docs/ideas.md`, never into code.
 This file holds rules, not progress: progress lives in git and in the plan.
 
 ## How we build
@@ -85,7 +85,7 @@ the code around it: every needless comment breeds more.
   "as requested". A comment must read correctly to someone who never saw
   the diff. Change context goes in the commit message.
 - Never write plans or justifications: no "for later", "in case we need",
-  "TODO". Ideas go to `docs/idees.md`.
+  "TODO". Ideas go to `docs/ideas.md`.
 - One or two short lines. No comment blocks, no docstrings that repeat the
   signature.
 - Before committing a multi-file change, run the `comment-cleanup` skill on

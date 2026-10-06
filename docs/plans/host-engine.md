@@ -6,7 +6,7 @@ probe, moltar benchmarks (2026-10-02), a blue-team review of v1, a red-team revi
 
 User decisions:
 - JSON on the wire, both directions. Binary only if a measured frame size on
-  a real floor justifies it (recorded in `docs/idees.md`).
+  a real floor justifies it (recorded in `docs/ideas.md`).
 - `packages/protocol` holds TypeBox schemas, and the message types derive
   from them. One source of truth for the contract.
 - The server validates every client message with Elysia's `t` on `.ws()`.
@@ -78,7 +78,7 @@ same path as any server bug.
 
 - One connection = one session = one game with one player, in memory. No
   persistence, no reconnection, no several players (D13 of `ecs-core.md`
-  and `docs/idees.md`).
+  and `docs/ideas.md`).
 - `open`: build the game with `createStarterGame(seed)`, spawn the player
   at `starter.start`, advance until the player is due, send the first
   snapshot.
@@ -119,7 +119,7 @@ names the engine's getter views; "Image" names saved floor bytes. A
 - `species` is a `SpeciesName` string. Fog of war is out of scope: the
   view shows the whole floor (debug view).
 - No events and no death cause in this plan: their `a`/`b` payloads are
-  untyped (`docs/idees.md`).
+  untyped (`docs/ideas.md`).
 - Floor size comes from `starter` (`starter.width`, `starter.height`). The
   server reads it for the snapshot and for the move cell index. No
   `world.size()`: nothing loads a game yet.

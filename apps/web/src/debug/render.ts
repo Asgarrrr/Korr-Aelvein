@@ -11,6 +11,6 @@ export function render({ width, height, player, entities }: Snapshot): string {
 	const lines: string[] = [];
 	for (let y = 0; y < height; y++)
 		lines.push(cells.slice(y * width, (y + 1) * width).join(""));
-	lines.push(`pv ${player.hp}  satiété ${player.satiety}`);
+	lines.push(`hp ${player.hp}  satiety ${player.satiety}`);
 	return lines.join("\n");
 }
