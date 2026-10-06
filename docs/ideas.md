@@ -40,6 +40,8 @@ the spec is updated to include it.
 - Events and the cause of death in the snapshot sent to the client.
 - Binary frames for the snapshot, only if a size measurement on a real floor justifies it.
 - `world.size()` once the server loads a saved game.
+- Starter stoats that begin hungry (per-entity `values` in `world/starter.ts`), so predation shows from the first turns.
+- Creature satiety in the debug view, to see when a predator starts hunting.
 
 ## Visuals
 

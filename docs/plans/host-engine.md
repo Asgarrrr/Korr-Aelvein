@@ -1,4 +1,4 @@
-# Plan: host the engine in the server (v3, after red/blue review)
+# Plan: host the engine in the server (v3, closed)
 
 Inputs: map of the engine's public API (`packages/engine/src/index.ts`,
 `game.ts`, `core/world.ts`), Elysia 1.4.30 source, a WebSocket validation
@@ -227,3 +227,31 @@ red-team and a blue-team review of the diff before the next slice. Target
    gets a snapshot and plays a move.
 
 Then `/code-review` on the whole branch.
+
+## 5. Closing state
+
+One rat plays the starter floor in the ASCII debug view, through the Vite
+proxy, against the authoritative server. Tests: engine 532, server 23,
+web 24; `bun run verify` green.
+
+Deviations from the plan as reviewed:
+- Species come from a saved core column, not from the component mask. A
+  mask holds registered components only: with a mechanic removed, cheese
+  and mushroom share one. Cost: `FORMAT_VERSION` 6 -> 7, golden hash
+  re-pinned, bench RSS 155 -> 158 MB (budget 160).
+- Elysia's `.ws()` `error` hook gets the request context, not the socket.
+  It answers validation failures only; `open` and `message` catch their
+  own errors and close with 1011.
+- `createStarterGame(seed)` builds the world itself, so the layout never
+  meets a world of the wrong size.
+- The web keeps one command in flight: key repeat would otherwise play
+  several turns on a stale snapshot.
+
+Measured: the largest snapshot over 30 seeds is 873 bytes, so JSON holds.
+
+Tight margins: bench RSS 158 of 160 MB; `core/persistence/rows.ts` at 396
+of 400 lines.
+
+Observed in play: stoats start at 800 satiety and hunt below 500, so they
+ignore the player for about 100 turns (`docs/ideas.md`).
+
