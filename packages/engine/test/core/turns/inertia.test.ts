@@ -170,8 +170,8 @@ test("walking to food keeps one decision, eat on that food, at every step", () =
 			satiety: { value: hungerConfig.hungryBelow - 100 },
 		},
 	};
-	const eater = spawn(engine, 0, hungry, 2, 2, 0);
-	const food = spawn(engine, 0, cheese, 5, 2, 0) as EntityId;
+	const eater = spawn(engine, 0, hungry, 2, 2);
+	const food = spawn(engine, 0, cheese, 5, 2) as EntityId;
 	const slot = engine.storage.slotOf(0, eater);
 	const eat = hashName("hunger/eat") | 0;
 	const seen: [number, number, number][] = [];

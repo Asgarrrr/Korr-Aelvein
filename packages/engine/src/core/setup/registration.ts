@@ -26,7 +26,11 @@ import type { MaskBit } from "../ecs/storage";
 import { readView } from "../ecs/view";
 import { type Buffer, CORE, CORE_KEY, Engine } from "../engine";
 import { coreSchema } from "../health/vitality";
-import { compileSpecies, type SpeciesShape } from "../lifecycle/species";
+import {
+	type CompiledSpecies,
+	compileSpecies,
+	type SpeciesShape,
+} from "../lifecycle/species";
 import { sectionsOf } from "../persistence/image";
 import { hashName } from "../random/rng";
 import { cellField, cellView } from "../space/cells";
@@ -110,9 +114,26 @@ export function createEngine(
 		}
 		return copy;
 	};
+	const compiled = new Map<SpeciesShape, CompiledSpecies>();
+	const compiledOf = (shape: SpeciesShape, label: string) => {
+		let entry = compiled.get(shape);
+		if (!entry) {
+			const { components, storage } = engine;
+			entry = compileSpecies(
+				copyOf(shape),
+				components,
+				storage.maskWords,
+				label,
+			);
+			compiled.set(shape, entry);
+		}
+		return entry;
+	};
 	const table = new Map<string, string>();
-	for (const [name, shape] of Object.entries(species))
+	for (const [name, shape] of Object.entries(species)) {
 		table.set(name, speciesData(copyOf(shape), `species ${name}`));
+		engine.speciesByName.set(name, compiledOf(shape, `species ${name}`));
+	}
 	const refs = new Map<SpeciesShape, SpeciesRef>();
 	const resolved: string[] = [];
 	const resolve = (module: AnyModule, wanted: string | SpeciesShape) => {
@@ -131,8 +152,7 @@ export function createEngine(
 			const copy = copyOf(shape);
 			resolved.push(speciesData(copy, `${module.name} species`));
 			ref = Object.freeze({ index: engine.species.length }) as SpeciesRef;
-			const { components, storage } = engine;
-			engine.species.push(compileSpecies(copy, components, storage.maskWords));
+			engine.species.push(compiledOf(shape, `${module.name} species`));
 			refs.set(shape, ref);
 		}
 		return ref;

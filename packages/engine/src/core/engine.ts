@@ -141,6 +141,11 @@ export class Engine {
 	readonly proposers: Hook<ProposeFn>[] = [];
 	readonly eventNames = new Map<number, string>();
 	readonly species: CompiledSpecies[] = [];
+	readonly speciesByName = new Map<string, CompiledSpecies>();
+	// One spawn's values, read once: the checks and the writes see the same numbers.
+	readonly spawnColumns: Column[] = [];
+	readonly spawnValues: number[] = [];
+	spawning = false;
 
 	readonly vitality: Vitality;
 	readonly link: Link;

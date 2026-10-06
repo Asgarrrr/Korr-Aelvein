@@ -9,7 +9,7 @@ const SETTLE_MS = 3000;
 
 const empty = process.memoryUsage().rss;
 const e = buildReference();
-// Spawning compiles a species per call: that garbage belongs to the builder, not the world.
+// Building leaves garbage: it belongs to the builder, not the world.
 Bun.gc(true);
 await Bun.sleep(SETTLE_MS);
 const built = process.memoryUsage().rss;

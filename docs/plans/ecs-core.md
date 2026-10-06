@@ -376,7 +376,8 @@ Every section 1 budget is met on the reference world (`bun
 bench/reference.ts`, Bun 1.4.3, M5 Pro): world round 57-59 / 59-61 ms,
 player floor 3.4 ms, P=64 actor turn 108-113 ns, range scan ~5 µs,
 snapshot 88-96 µs (reused buffer; the tightest margin), fast restore
-~0.16 ms, floor hash ~70 µs, running RSS ~151 MB. Same seed and permuted floor order give the same hash.
+~0.16 ms, floor hash ~70 µs, running RSS ~151 MB (~156 MB since spawn
+by name, below). Same seed and permuted floor order give the same hash.
 
 Deviations from the plan as written:
 - The tick budget bounds the query range scan. A floor's whole tick phase
@@ -397,9 +398,13 @@ Deviations from the plan as written:
 RSS is the tightest budget: per-call allocation in a hot path shows up as
 RSS, not time (an 8-element array per flee cost +60–100 MB).
 
-Open, for world generation (`world/`): spawning compiles the species on
-every call, so building 50 floors peaks at ~450 MB RSS (145 MB with a GC
-per floor). Generation should compile each species once. Next: export
+World generation calls `spawn(floor, name, x, y, values?)`: the table's
+species compile once, and `values` set one entity's fields (needs, age,
+link), checked as a load would. Building 50 floors peaks at ~270 MB in
+~105 ms (was ~450 MB, ~190 ms): peak is the RSS child's maxRSS in the
+bench, time is `buildReference()` alone in a fresh process. Running RSS
+is ~156 MB (was ~151) for an identical world and live heap (+~30 KB):
+the allocator probably keeps more pages after the leaner build. Next: export
 the World API from `@korr/engine` and host it in `apps/server`.
 
 ## 5. Proposed CLAUDE.md changes

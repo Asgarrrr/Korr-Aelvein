@@ -35,8 +35,12 @@ export function frozenCopy<T>(value: T): T {
 	if (Array.isArray(value)) return Object.freeze(value.map(frozenCopy)) as T;
 	if (typeof value === "object" && value !== null && isPlain(value)) {
 		const copy: Record<string, unknown> = {};
+		// Defined, not assigned: assigning "__proto__" would set the prototype and drop the key.
 		for (const [key, item] of Object.entries(value))
-			copy[key] = frozenCopy(item);
+			Object.defineProperty(copy, key, {
+				value: frozenCopy(item),
+				enumerable: true,
+			});
 		return Object.freeze(copy) as T;
 	}
 	return value;

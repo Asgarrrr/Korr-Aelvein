@@ -275,9 +275,9 @@ test("a rat that stays put to avoid fire keeps avoid as its intent", () => {
 		modules,
 		species,
 	);
-	spawn(engine, 0, ember, 1, 0, 0);
-	spawn(engine, 0, ember, 4, 0, 0);
-	const id = spawn(engine, 0, rat, 2, 0, 0);
+	spawn(engine, 0, ember, 1, 0);
+	spawn(engine, 0, ember, 4, 0);
+	const id = spawn(engine, 0, rat, 2, 0);
 	engine.runRound();
 	engine.runRound();
 	const slot = engine.storage.slotOf(0, id);

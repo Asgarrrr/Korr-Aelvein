@@ -116,8 +116,8 @@ const engineWorld = () => {
 		{ seed: 1, floors: 4, width: 4, height: 4, popCap: 16, events: true },
 		[thinker],
 	);
-	const id = spawn(e, 3, body, 1, 1, 0);
-	spawn(e, 0, player, 3, 3, 0, true);
+	const id = spawn(e, 3, body, 1, 1);
+	spawn(e, 0, player, 3, 3, true);
 	const run = (rounds: number) => {
 		for (let r = 0; r < rounds; r++, round++)
 			for (let due = advance(e); due.length > 0; due = advance(e))

@@ -1,6 +1,7 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { species } from "../../../src/content/species";
 import { defineModule } from "../../../src/core/api";
+import * as compiler from "../../../src/core/lifecycle/species";
 import { createWorld, loadWorld } from "../../../src/core/world";
 import { modules } from "../../../src/registry";
 
@@ -53,6 +54,145 @@ test("a directly spawned species is read fresh on every spawn", () => {
 	loose.components.edible.nutrition = 77;
 	const second = w.spawn(0, loose, 1, 0);
 	expect(w.peek("edible", "nutrition", second)).toBe(77);
+});
+
+test("a spawn by name builds the same world as a spawn by shape", () => {
+	type Name = keyof typeof species;
+	const built = (by: (name: Name) => Name | (typeof species)[Name]) => {
+		const w = world(species);
+		w.spawnPlayer(0, by("rat"), 0, 0);
+		w.spawn(0, by("stoat"), 1, 0);
+		w.spawn(0, by("cheese"), 2, 0);
+		w.spawn(0, by("mushroom"), 2, 0);
+		return w.save();
+	};
+	expect(built((name) => name)).toEqual(built((name) => species[name]));
+});
+
+test("a name outside the world's species table throws, inherited keys included", () => {
+	const w = world(species);
+	expect(() => w.spawn(0, "toString", 0, 0)).toThrow(/no species toString/);
+	expect(() => w.spawnPlayer(0, "dragon", 0, 0)).toThrow(/no species dragon/);
+});
+
+test("a name spawns the species as the world copied it, whatever the caller edits later", () => {
+	const edible = { nutrition: 5 };
+	const table: Record<string, unknown> = {
+		...species,
+		mushroom: { actor: false, components: { edible } },
+	};
+	const w = world(table);
+	edible.nutrition = 6;
+	table.cheese = { actor: false, components: { edible: { nutrition: 7 } } };
+	const mushroom = w.spawn(0, "mushroom", 0, 0);
+	const cheese = w.spawn(0, "cheese", 1, 0);
+	expect(w.peek("edible", "nutrition", mushroom)).toBe(5);
+	expect(w.peek("edible", "nutrition", cheese)).toBe(
+		species.cheese.components.edible.nutrition,
+	);
+});
+
+test("a name spawn compiles nothing, values included; a shape spawn compiles on every call", () => {
+	const w = world(species);
+	const compile = spyOn(compiler, "compileSpecies");
+	try {
+		for (let x = 0; x < 3; x++)
+			w.spawn(0, "cheese", x, 0, { edible: { nutrition: x } });
+		expect(compile).toHaveBeenCalledTimes(0);
+		w.spawn(0, species.cheese, 3, 0);
+		expect(compile).toHaveBeenCalledTimes(1);
+	} finally {
+		compile.mockRestore();
+	}
+});
+
+test("creation compiles each distinct table shape once", () => {
+	const compile = spyOn(compiler, "compileSpecies");
+	try {
+		world({ ...species, alias: species.cheese });
+		expect(compile).toHaveBeenCalledTimes(Object.keys(species).length);
+	} finally {
+		compile.mockRestore();
+	}
+});
+
+test("a table species no one spawns is still checked at creation, by name", () => {
+	expect(() =>
+		world({
+			...species,
+			broken: { actor: false, components: { edible: { class: 300 } } },
+		}),
+	).toThrow(/species broken: edible.class/);
+});
+
+test("a loaded world spawns by name", () => {
+	const loaded = loadWorld(world(species).save(), { modules, species });
+	const rat = loaded.spawn(0, "rat", 0, 0, { satiety: { value: 300 } });
+	expect(loaded.peek("satiety", "value", rat)).toBe(300);
+});
+
+test("a shape is read once per spawn, so its checks and its writes agree", () => {
+	const w = createWorld({
+		seed: 1,
+		floors: 2,
+		width: 4,
+		height: 4,
+		modules,
+		species,
+	});
+	let vitalityReads = 0;
+	const flipping = {
+		actor: true,
+		components: {
+			...species.rat.components,
+			get vitality() {
+				vitalityReads++;
+				return vitalityReads === 1 ? { hp: 5, max: 5 } : { hp: 9, max: 5 };
+			},
+		},
+	};
+	let linkReads = 0;
+	const stairs = {
+		actor: false,
+		components: {
+			get link() {
+				linkReads++;
+				return { floor: linkReads === 1 ? 1 : 7, x: 1, y: 1 };
+			},
+		},
+	};
+	const rat = w.spawn(0, flipping, 0, 0);
+	const way = w.spawn(0, stairs, 1, 0);
+	expect(w.peek("vitality", "hp", rat)).toBe(5);
+	expect(w.peek("link", "floor", way)).toBe(1);
+	expect(() => loadWorld(w.save(), { modules, species })).not.toThrow();
+});
+
+test("a module's species errors name the module", () => {
+	const breeder = defineModule({
+		name: "breeder",
+		schema: { mark: { n: "u8" } },
+		config: {},
+		setup(b) {
+			b.species({ actor: false, components: { mark: { n: 300 } } });
+		},
+	});
+	expect(() =>
+		createWorld({
+			seed: 1,
+			floors: 1,
+			width: 4,
+			height: 4,
+			modules: [breeder],
+		}),
+	).toThrow(/breeder species: mark.n/);
+});
+
+test("__proto__ in a table species is named as such", () => {
+	const odd = JSON.parse('{"actor":false,"components":{"__proto__":{}}}');
+	expect(() => world({ ...species, odd })).toThrow(
+		/species odd: __proto__ is not a component or field name/,
+	);
 });
 
 test("a failed load leaves the caller's species and config untouched", () => {

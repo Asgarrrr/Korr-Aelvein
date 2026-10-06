@@ -354,8 +354,8 @@ test("a floor image with two actors in one cell throws", () => {
 		crowded.components,
 		crowded.storage.maskWords,
 	);
-	place(crowded, 0, body, 3, 3, 0);
-	place(crowded, 0, body, 3, 3, 0);
+	place(crowded, 0, body, 3, 3, 0, 0);
+	place(crowded, 0, body, 3, 3, 0, 0);
 	expect(() => loadFloor(freshEngine(0), saveFloor(crowded, 0), 0)).toThrow(
 		/two actors/,
 	);

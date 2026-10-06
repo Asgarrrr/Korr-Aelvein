@@ -1,8 +1,4 @@
 import { species as gameSpecies } from "../../src/content/species";
-import { cheese } from "../../src/content/species/cheese";
-import { ember } from "../../src/content/species/ember";
-import { moss } from "../../src/content/species/moss";
-import { mushroom } from "../../src/content/species/mushroom";
 import { rat } from "../../src/content/species/rat";
 import { stoat } from "../../src/content/species/stoat";
 import type { AnyModule } from "../../src/core/api";
@@ -85,27 +81,17 @@ const body = {
 	rate: 2,
 };
 
-// The i-th creature of a kind: its needs follow MIX, its age the spread.
-function creature(base: Ref, i: number, extra: Ref["components"]): Ref {
-	const k = i % MIX;
-	const satiety =
-		k < SATED_END || k >= RESTLESS_END
-			? STOCK
-			: k < HUNGRY_END
-				? HUNGRY_SATIETY
-				: RESTLESS_SATIETY;
-	const hydration = k >= RESTLESS_END ? THIRSTY_HYDRATION : STOCK;
-	const turns =
-		i % OLD_EVERY === 0 ? LIFESPAN - OLD_LEFT - (i % OLD_LEFT) : i % AGE_SPREAD;
+// A game creature with the bench modules' components; each spawn sets its needs and age.
+function creature(base: Ref, extra: Ref["components"]): Ref {
 	return {
 		actor: true,
 		components: {
 			...base.components,
 			...extra,
-			satiety: { value: satiety },
-			hydration: { value: hydration, max: STOCK, drank: 0 },
+			satiety: { value: STOCK },
+			hydration: { value: STOCK, max: STOCK, drank: 0 },
 			age: {
-				turns,
+				turns: 0,
 				adultAt: ADULT_AT,
 				elderAt: ELDER_AT,
 				lifespan: LIFESPAN,
@@ -116,6 +102,28 @@ function creature(base: Ref, i: number, extra: Ref["components"]): Ref {
 	};
 }
 
+// One object for every spawn: the engine reads values during the call and keeps none.
+const needs = {
+	satiety: { value: 0 },
+	hydration: { value: 0 },
+	age: { turns: 0 },
+};
+
+// The i-th creature of a kind: its needs follow MIX, its age the spread.
+function needsOf(i: number) {
+	const k = i % MIX;
+	needs.satiety.value =
+		k < SATED_END || k >= RESTLESS_END
+			? STOCK
+			: k < HUNGRY_END
+				? HUNGRY_SATIETY
+				: RESTLESS_SATIETY;
+	needs.hydration.value = k >= RESTLESS_END ? THIRSTY_HYDRATION : STOCK;
+	needs.age.turns =
+		i % OLD_EVERY === 0 ? LIFESPAN - OLD_LEFT - (i % OLD_LEFT) : i % AGE_SPREAD;
+	return needs;
+}
+
 const puddle: Ref = {
 	actor: false,
 	components: { spring: { gives: 200, left: 30 } },
@@ -124,12 +132,18 @@ const puddle: Ref = {
 export const referenceSpecies = {
 	...gameSpecies,
 	puddle,
+	scentedRat: creature(rat, { musk: { strength: MUSK, fade: 1 } }),
+	trackingStoat: creature(stoat, { tracker: { keen: 1, trail: 0, since: 0 } }),
+	player: creature(rat, {}),
 } satisfies Readonly<Record<string, Ref>>;
 
-const stairsTo = (floor: number, x: number, y: number): Ref => ({
-	actor: false,
-	components: { link: { floor, x, y } },
-});
+const way = { link: { floor: 0, x: 0, y: 0 } };
+const stairsTo = (floor: number, x: number, y: number) => {
+	way.link.floor = floor;
+	way.link.x = x;
+	way.link.y = y;
+	return way;
+};
 
 export function buildReference(
 	list: readonly AnyModule[] = referenceModules,
@@ -165,37 +179,31 @@ export function buildReference(
 			}
 		};
 		let items = 0;
-		const item = (kind: Ref, x = coord(), y = coord()) => {
-			spawn(e, f, kind, x, y, 0);
+		const item = (
+			kind: string,
+			x = coord(),
+			y = coord(),
+			values?: Ref["components"],
+		) => {
+			spawn(e, f, kind, x, y, false, values);
 			items++;
 		};
 		for (const x of STAIR_XS) {
-			if (f + 1 < FLOORS) item(stairsTo(f + 1, x + 1, UP_Y), x, DOWN_Y);
-			if (f > 0) item(stairsTo(f - 1, x + 1, DOWN_Y), x, UP_Y);
+			if (f + 1 < FLOORS)
+				item("stairs", x, DOWN_Y, stairsTo(f + 1, x + 1, UP_Y));
+			if (f > 0) item("stairs", x, UP_Y, stairsTo(f - 1, x + 1, DOWN_Y));
 		}
 		for (let i = 0; i < RATS; i++)
-			spawn(
-				e,
-				f,
-				creature(rat, i, { musk: { strength: MUSK, fade: 1 } }),
-				...free(),
-				0,
-			);
+			spawn(e, f, "scentedRat", ...free(), false, needsOf(i));
 		for (let i = 0; i < STOATS; i++)
-			spawn(
-				e,
-				f,
-				creature(stoat, i, { tracker: { keen: 1, trail: 0, since: 0 } }),
-				...free(),
-				0,
-			);
+			spawn(e, f, "trackingStoat", ...free(), false, needsOf(i));
 		if (PLAYER_FLOORS.includes(f))
-			spawn(e, f, creature(rat, 1, {}), ...free(), 0, true);
-		for (let i = 0; i < MUSHROOMS; i++) item(mushroom);
-		for (let i = 0; i < MOSS; i++) item(moss);
-		for (let i = 0; i < PUDDLES; i++) item(puddle);
-		for (let i = 0; i < EMBERS; i++) item(ember);
-		while (items < ITEMS) item(cheese);
+			spawn(e, f, "player", ...free(), true, needsOf(1));
+		for (let i = 0; i < MUSHROOMS; i++) item("mushroom");
+		for (let i = 0; i < MOSS; i++) item("moss");
+		for (let i = 0; i < PUDDLES; i++) item("puddle");
+		for (let i = 0; i < EMBERS; i++) item("ember");
+		while (items < ITEMS) item("cheese");
 	}
 	e.events.enabled.fill(1);
 	return e;
