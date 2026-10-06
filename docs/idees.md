@@ -38,7 +38,6 @@ quand la spec est mise à jour pour l'inclure.
 - Config en JSON, modifiable sans toucher au code : éditeur de niveaux, modding, réglages à chaud.
 - API moteur pour le serveur (snapshots) : typer le sens des payloads `a`/`b` de chaque événement, exporter `TICKS_PER_TURN` au premier appelant.
 - Événements et cause de la mort dans le snapshot envoyé au client.
-- Colonne core d'espèce (sauvegardée) si deux espèces finissent par avoir les mêmes composants, ou si un composant change en cours de partie : l'espèce se déduit aujourd'hui du masque.
 - Trames binaires pour le snapshot, seulement si une mesure de taille sur un vrai étage le justifie.
 - `world.size()` quand le serveur chargera une partie sauvegardée.
 

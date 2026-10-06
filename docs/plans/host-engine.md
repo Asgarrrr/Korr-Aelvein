@@ -125,18 +125,13 @@ names the engine's getter views; "Image" names saved floor bytes. A
 
 ### D6. Engine additions (World API, not the frozen module API)
 
-- **Species from the component mask.** Masks are saved and written only at
-  spawn (`lifecycle.ts:173-174`) and on arrival (`inbox.ts:93`). The 7
-  species have 7 distinct masks. `entities` maps a mask, without the
-  ALIVE and PLAYER bits, to its species name.
-- **Guard**: registration throws when two species compile to the same mask.
-  Today nothing checks it (`setup/registration.ts:132-136`). The mask →
-  name map and the guard live in a new `core/setup/species-masks.ts`:
-  `registration.ts` is at 375 of 400 lines. Test fixtures that register
-  species with identical components must be fixed, not exempted. A future
-  species that differs only by values, or a mechanic that changes a mask
-  at runtime, trips the guard or a test; the species column (saved,
-  `FORMAT_VERSION` bump) is then the fix, recorded in `docs/idees.md`.
+- **Species column.** A saved core column holds each entity's species
+  index, set at spawn. It goes into `coreColumns`, gets load checks, bumps
+  `FORMAT_VERSION`, and re-pins the golden hash on purpose.
+- Species from the component mask was tried and rejected: a mask holds
+  registered components only (`lifecycle/species.ts:90-100`). With a
+  mechanic removed, species collapse (without fire, cheese and mushroom
+  share a mask), and the game must run with any mechanic removed.
 - `world.entities(floor, visit: (id, species, x, y) => void)`: visitor, like
   `drainEvents`; no slot leaves the engine. Goes through `checkHealthy`.
 
@@ -184,15 +179,15 @@ red-team and a blue-team review of the diff before the next slice. Target
    connections have independent games.
 3. **The engine lists a floor's entities.**
    Files: `packages/engine/src/core/{world,game-world}.ts` (`entities`),
-   `core/setup/species-masks.ts` (mask → name, duplicate guard),
-   `registration.ts` (call site), `src/index.ts`, `test/index.types.ts`,
-   tests mirroring `src/`.
+   the species column (core columns, lifecycle, persistence), `src/index.ts`,
+   `test/index.types.ts`, tests mirroring `src/`.
    Tests: on `populatedWorld` (`test/fixtures.ts`), run 100 rounds; the ids
    `entities` lists equal the ids alive on the floor, with their species
    and cells, including regrown flora; save + load lists the same; hash
-   identical with `entities` called or not; two species with one mask
-   throw at registration; the player's species is reported without the
-   PLAYER bit.
+   identical with `entities` called or not; species stay correct in a game
+   with a mechanic removed (cheese and mushroom without fire); the
+   player's species is reported; a loaded image with an out-of-range
+   species index is refused.
 4. **A starter floor.** `packages/engine/src/world/starter.ts`
    (`populateStarter`), `src/index.ts`, test: the layout is placed, and a
    seeded run of N rounds has creatures eating (population of food drops).
