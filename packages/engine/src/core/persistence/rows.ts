@@ -1,6 +1,7 @@
 import { ID_FLOOR_STRIDE, MAX_TICK } from "../config";
 import { ACTOR, ALIVE, indexInsert, PLAYER } from "../ecs/storage";
 import { type ActionEntry, KIND_CODE } from "../engine";
+import { healthy } from "../health/vitality";
 import { END } from "../space/grid";
 import { validLink } from "../travel/link";
 import { validTarget } from "../turns/target";
@@ -350,8 +351,7 @@ export function checkVitality(
 		if (((masks[row * maskWords + word] ?? 0) & bit) === 0) continue;
 		const left = hp[row] ?? 0;
 		const top = max[row] ?? 0;
-		if (!(left > 0 && left <= top))
-			return report(VITALITY, base + row, left, top);
+		if (!healthy(left, top)) return report(VITALITY, base + row, left, top);
 	}
 	return OK;
 }

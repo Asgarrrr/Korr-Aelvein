@@ -5,6 +5,7 @@ import { PLAYER } from "../ecs/storage";
 import type { Engine } from "../engine";
 import { frozenCopy } from "../setup/canonical";
 import { validLink } from "../travel/link";
+import { attach, detach } from "./membership";
 import {
 	type CompiledSpecies,
 	checkField,
@@ -56,13 +57,7 @@ export function spawn(
 		throw new Error(`spawn at (${x}, ${y}): the cell holds an actor`);
 	if (crowded(e, floor))
 		throw new Error(`floor ${floor} is at its popCap (${e.popCap})`);
-	const id = place(e, floor, compiled, x, y, at, count);
-	if (player) {
-		const { masks, maskWords } = e.storage;
-		const word = e.storage.slotOf(floor, id) * maskWords;
-		masks[word] = (masks[word] ?? 0) | PLAYER;
-		e.players[floor] = (e.players[floor] ?? 0) + 1;
-	}
+	const id = place(e, floor, compiled, x, y, at, count, player);
 	e.emit(floor, e.spawned, NO_CAUSE, id, 0);
 	return id;
 }
@@ -153,6 +148,7 @@ export function place(
 	y: number,
 	at: number,
 	overrides: number,
+	player = false,
 ): EntityId {
 	if (species.actor && at > MAX_TICK)
 		throw new Error(`time ${at} exceeds ${MAX_TICK}`);
@@ -170,21 +166,18 @@ export function place(
 	}
 	const storage = e.storage;
 	const slot = storage.alloc(floor);
-	grid.insert(floor, slot, x, y);
 	const { masks, maskWords } = storage;
 	const { mask, columns, values } = species;
 	const base = slot * maskWords;
 	for (let w = 0; w < maskWords; w++)
 		masks[base + w] = (masks[base + w] ?? 0) | (mask[w] ?? 0);
+	if (player) masks[base] = (masks[base] ?? 0) | PLAYER;
 	for (let i = 0; i < columns.length; i++)
 		(columns[i] as Column)[slot] = values[i] ?? 0;
 	const { spawnColumns, spawnValues } = e;
 	for (let i = 0; i < overrides; i++)
 		(spawnColumns[i] as Column)[slot] = spawnValues[i] ?? 0;
-	if (species.actor) {
-		e.scheduler.nextAt[slot] = at;
-		e.scheduler.push(floor, slot);
-	}
+	attach(e, floor, slot, x, y, at);
 	return (storage.ids[slot] ?? 0) as EntityId;
 }
 
@@ -196,11 +189,7 @@ export function kill(
 ): void {
 	const slot = e.storage.slotOf(floor, id);
 	if (slot === NONE) return;
-	if (((e.storage.masks[slot * e.storage.maskWords] ?? 0) & PLAYER) !== 0)
-		e.players[floor] = (e.players[floor] ?? 0) - 1;
-	e.grid.remove(floor, slot);
-	e.scheduler.remove(floor, slot);
-	e.storage.release(floor, slot);
+	detach(e, floor, slot);
 	e.emit(floor, e.died, cause, id, 0);
 }
 

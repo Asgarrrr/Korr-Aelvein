@@ -9,12 +9,12 @@ const LAST_TIER = LOD_PERIODS.length - 1;
 // With no player anywhere every floor decides every turn: nobody is near enough to tell a
 // cheaper floor apart, and a world without players keeps the plain arbitration of every turn.
 export function startRound(e: Engine): void {
-	const { players, period } = e;
+	const { players, period, inbox } = e;
 	const floors = e.storage.floors;
 	for (let f = 0; f < floors; f++) {
 		let nearest = -1;
 		for (let g = 0; g < floors; g++) {
-			if ((players[g] ?? 0) === 0) continue;
+			if ((players[g] ?? 0) + inbox.players(g) === 0) continue;
 			const d = f > g ? f - g : g - f;
 			if (nearest < 0 || d < nearest) nearest = d;
 		}

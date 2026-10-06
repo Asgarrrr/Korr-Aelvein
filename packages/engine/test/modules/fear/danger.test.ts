@@ -23,7 +23,7 @@ import { createWorld } from "../../../src/core/world";
 import { fear } from "../../../src/modules/fear";
 import { foodClass, hungerConfig } from "../../../src/modules/hunger/config";
 import { modules } from "../../../src/registry";
-import { idleRounds, probe, reversed } from "../../fixtures";
+import { forwardBuilder, idleRounds, probe, reversed } from "../../fixtures";
 
 // Fear as if every cell were dangerous: its proposals never skip perception.
 function alwaysAlert<S extends Schema, C, K extends Schema>(
@@ -33,16 +33,7 @@ function alwaysAlert<S extends Schema, C, K extends Schema>(
 		...module,
 		setup(b, cfg) {
 			const alert: Builder<S, K> = {
-				write: (name) => b.write(name),
-				previous: (name) => b.previous(name),
-				read: (name) => b.read(name),
-				query: (names) => b.query(names),
-				tick: (run) => b.tick(run),
-				action: (name, kind, requires, run) =>
-					b.action(name, kind, requires, run),
-				propose: (run) => b.propose(run),
-				event: (name) => b.event(name),
-				species: (wanted) => b.species(wanted),
+				...forwardBuilder(b),
 				cells(name) {
 					const real = b.cells(name);
 					const fields: Record<string, CellField<"u8">> = {};

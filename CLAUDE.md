@@ -50,6 +50,7 @@ row fits, that is a design question: propose a new row before coding.
 | Tests | `<package>/test/`, mirroring `src/` |
 | Engine benchmarks (`bun run bench`, not part of `verify`) | `packages/engine/bench/` |
 | Design plans | `docs/plans/` |
+| Domain glossary: one name per concept | `CONTEXT.md` |
 | Repository tooling | `scripts/` |
 
 - One file = one subject. Past ~400 lines, or when a second subject

@@ -2,6 +2,7 @@ import { MAX_TICK } from "../config";
 import type { Column } from "../ecs/schema";
 import { ACTOR, ALIVE, indexHas, knownBits } from "../ecs/storage";
 import { type Engine, KIND_CODE } from "../engine";
+import { healthy } from "../health/vitality";
 import { ENTRY_HEAD, ID, TIME, X, Y } from "../travel/inbox";
 import { validTarget } from "../turns/target";
 
@@ -63,8 +64,7 @@ export function inboxProblem(
 			((entries[at + ENTRY_HEAD + vitality.word] ?? 0) & vitality.bit) !== 0;
 		const hp = entries[body + (slotOf.get(vitality.hp) ?? 0)] ?? 0;
 		const max = entries[body + (slotOf.get(vitality.max) ?? 0)] ?? 0;
-		if (lives && !(hp > 0 && hp <= max))
-			return `${where} has hp ${hp} of ${max}`;
+		if (lives && !healthy(hp, max)) return `${where} has hp ${hp} of ${max}`;
 	}
 	return undefined;
 }

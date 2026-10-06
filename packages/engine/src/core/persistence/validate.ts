@@ -11,28 +11,17 @@ import { type Engine, FLOOR_STAGE } from "../engine";
 import { END } from "../space/grid";
 import { validLink } from "../travel/link";
 import {
-	COUNTER,
-	EMITTED,
-	FINGERPRINT,
-	FLOOR,
 	FLOOR_HEADER,
 	FORMAT_VERSION,
-	FREE_COUNT,
-	HIGH_WATER,
-	INBOX,
 	imageChecksum,
 	imageWords,
-	PERIOD,
 	ROWS,
 	readFloor,
+	readHeader,
 	type Section,
-	STAGE,
 	SUM,
 	sectionCount,
-	TIME,
-	TRAFFIC,
 	tailMask,
-	VERSION,
 	WORD,
 } from "./image";
 import { inboxProblem } from "./inbox";
@@ -86,17 +75,14 @@ export function checkFloor(
 		image.byteOffset,
 		image.length / WORD,
 	);
-	checkVersion(words[VERSION]);
-	if (words[FINGERPRINT] !== (engine.fingerprint | 0))
+	const head = readHeader(words);
+	checkVersion(head.version);
+	if (head.fingerprint !== (engine.fingerprint | 0))
 		throw new Error("image registry fingerprint does not match these modules");
-	if (words[FLOOR] !== floor) fail(`claims floor ${words[FLOOR]}`);
-	const highWater = words[HIGH_WATER] ?? 0;
-	const freeCount = words[FREE_COUNT] ?? 0;
-	const counter = words[COUNTER] ?? 0;
-	const now = words[TIME] ?? 0;
-	const stage = words[STAGE] ?? 0;
-	const period = words[PERIOD] ?? 0;
-	const entries = words[INBOX] ?? 0;
+	if (head.floor !== floor) fail(`claims floor ${head.floor}`);
+	const { highWater, freeCount, counter, stage, period } = head;
+	const entries = head.inbox;
+	const now = head.time;
 	// Arrivals ignore popCap, so only CAP bounds the rows.
 	if (!(freeCount >= 0 && freeCount <= highWater && highWater <= CAP))
 		fail(`free count ${freeCount}, high water ${highWater}`);
@@ -123,7 +109,7 @@ export function checkFloor(
 		)
 	)
 		fail(`${entries} inbox entries`);
-	const emitted = words[EMITTED] ?? 0;
+	const emitted = head.emitted;
 	if (!(emitted >= 0 && emitted <= EVENT_CAP_PER_TURN))
 		fail(`${emitted} events this turn`);
 	const expected = imageWords(engine, highWater, freeCount, entries);
@@ -377,14 +363,16 @@ export function loadFloor(
 		engine.checkIndex,
 		check,
 	);
-	const header = new Int32Array(image.buffer, image.byteOffset, FLOOR_HEADER);
-	if (header[STAGE] !== FLOOR_STAGE.waiting)
+	const { stage, traffic } = readHeader(
+		new Int32Array(image.buffer, image.byteOffset, FLOOR_HEADER),
+	);
+	if (stage !== FLOOR_STAGE.waiting)
 		throw new Error(
 			`floor ${floor} image: saved mid-round, loads only at a round boundary`,
 		);
-	if (header[TRAFFIC] !== engine.traffic[floor])
+	if (traffic !== engine.traffic[floor])
 		throw new Error(
-			`floor ${floor} image: traffic ${header[TRAFFIC]}, the live floor has ${engine.traffic[floor]}`,
+			`floor ${floor} image: traffic ${traffic}, the live floor has ${engine.traffic[floor]}`,
 		);
 	readFloor(engine, image, engine.checkIndex, players);
 }

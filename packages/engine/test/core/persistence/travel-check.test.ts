@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
-import { defineModule } from "../../../src/core/api";
+import { defineModule, type EntityId } from "../../../src/core/api";
 import { CAP, EVENT_CAP_PER_TURN } from "../../../src/core/config";
-import { ACTOR, ALIVE, PLAYER } from "../../../src/core/ecs/storage";
+import { ACTOR, PLAYER } from "../../../src/core/ecs/storage";
 import { FLOOR_STAGE } from "../../../src/core/engine";
+import { I16_MAX } from "../../../src/core/health/vitality";
 import { spawn } from "../../../src/core/lifecycle/lifecycle";
 import { Checksum } from "../../../src/core/persistence/checksum";
 import {
@@ -196,6 +197,17 @@ const cases: [string, Edit, RegExp][] = [
 		/hp 0 of 0/,
 	],
 	[
+		"an entry whose max hp would wrap in its i16 column",
+		(w) => {
+			const at = entry(1, ENTRY_HEAD + target.vitality.word);
+			w[at] = (w[at] ?? 0) | target.vitality.bit;
+			const body = entry(1, ENTRY_HEAD + target.storage.maskWords);
+			w[body + target.carried.indexOf(target.vitality.hp)] = 1;
+			w[body + target.carried.indexOf(target.vitality.max)] = I16_MAX + 1;
+		},
+		/hp 1 of 32768/,
+	],
+	[
 		"a decision period on a floor waiting for its round",
 		(w) => {
 			w[PERIOD] = 4;
@@ -320,11 +332,11 @@ test("a save whose floors disagree on whether the round started never loads", ()
 test("an inbox holding more entries than the whole world has slots saves and loads", () => {
 	const crowded = engineAt(0);
 	const waiting = crowded.storage.floors * CAP + 1;
+	const actor = spawn(crowded, 1, { actor: true, components: {} }, 0, 0);
+	const slot = crowded.storage.slotOf(1, actor);
 	crowded.storage.counters[0] = waiting;
-	for (let id = 1; id <= waiting; id++) {
-		const at = crowded.inbox.insert(1, 100, id, 1, 1);
-		crowded.inbox.words(1)[at + ENTRY_HEAD] = ALIVE | ACTOR;
-	}
+	for (let id = 1; id <= waiting; id++)
+		crowded.inbox.post(1, 100, id as EntityId, 1, 1, slot);
 	const loaded = loadWorld(saveWorld(crowded), { modules });
 	expect(loaded.hash()).toBe(hashOf(crowded));
 });

@@ -52,22 +52,11 @@ export class Audit {
 
 	constructor(engine: Engine, modules: readonly AnyModule[]) {
 		this.#engine = engine;
-		const { storage, grid, scheduler } = engine;
+		const { storage } = engine;
 		const labels = new Map<Column, { owner: number; name: string }>();
 		const core = (array: Column, name: string) =>
 			labels.set(array, { owner: CORE_KEY, name });
-		core(storage.ids, "ids");
-		core(storage.masks, "masks");
-		core(storage.free, "free");
-		core(grid.heads, "cells");
-		core(grid.x, "x");
-		core(grid.y, "y");
-		core(grid.cellOf, "cellOf");
-		core(grid.next, "next");
-		core(grid.prev, "prev");
-		core(scheduler.nextAt, "nextAt");
-		core(engine.intentKey, "intent.key");
-		core(engine.intentTarget, "intent.target");
+		for (const { column, label } of engine.coreColumns) core(column, label);
 		for (const name of Object.keys(coreSchema))
 			for (const [field, column] of Object.entries(
 				engine.components.get(name)?.columns ?? {},

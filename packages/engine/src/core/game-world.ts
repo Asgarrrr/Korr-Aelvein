@@ -9,7 +9,6 @@ import { saveFloor, WORD } from "./persistence/image";
 import { saveWorld } from "./persistence/save";
 import { loadFloor } from "./persistence/validate";
 import { hashName } from "./random/rng";
-import { ID } from "./travel/inbox";
 import { advance, dueOn, playerTurn } from "./turns/round";
 import { validTarget } from "./turns/target";
 import type { InputRecord, LoadOptions, Location, World } from "./world";
@@ -125,12 +124,7 @@ export class GameWorld<M extends readonly AnyModule[]> implements World<M> {
 			const slot = storage.slotOf(floor, id);
 			return { floor, x: grid.x[slot] ?? 0, y: grid.y[slot] ?? 0 };
 		}
-		for (let f = 0; f < storage.floors; f++) {
-			const list = inbox.words(f);
-			for (let i = 0; i < inbox.count(f); i++)
-				if (list[i * inbox.width + ID] === id) return "transit";
-		}
-		return "dead";
+		return inbox.holds(id) ? "transit" : "dead";
 	}
 
 	peek<N extends ComponentName<M>>(

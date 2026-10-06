@@ -19,11 +19,11 @@ import { DeferredKills, DeferredSpawns } from "./lifecycle/deferred";
 import type { CompiledSpecies } from "./lifecycle/species";
 import { Checksum } from "./persistence/checksum";
 import type { WorldFields } from "./persistence/hash";
-import type { Section } from "./persistence/image";
+import { type Section, SUM } from "./persistence/image";
 import { hashName, PHASE } from "./random/rng";
 import { Grid } from "./space/grid";
 import { PerceptionBuffer } from "./space/perception";
-import { Inbox } from "./travel/inbox";
+import type { Inbox } from "./travel/inbox";
 import { travel } from "./travel/travel";
 import { CandidateBuffer } from "./turns/arbitration";
 import { Context } from "./turns/context";
@@ -80,6 +80,14 @@ export interface Link {
 	readonly bit: number;
 }
 
+// A saved array the core owns outside coreSchema. `travels` decides only for row columns
+// (`storage.columns`): masks always travel in the entry head; free and cells never travel.
+export interface CoreColumn {
+	readonly column: Column;
+	readonly label: string;
+	readonly travels: boolean;
+}
+
 export interface EngineOptions {
 	readonly seed: number;
 	readonly floors: number;
@@ -104,6 +112,7 @@ export class Engine {
 	readonly now: Int32Array;
 	readonly intentKey: Int32Array;
 	readonly intentTarget: Int32Array;
+	readonly coreColumns: readonly CoreColumn[];
 	readonly popCap: number;
 	readonly events: EventLog;
 	round = 0;
@@ -114,9 +123,9 @@ export class Engine {
 	readonly stage: Uint8Array;
 	// The decision period of each floor, fixed when its round starts.
 	readonly period: Int32Array;
-	// Derived from the rows like the scheduler, and rebuilt on load.
+	// Player rows per floor; players in transit are counted by the inbox. Rebuilt on load.
 	readonly players: Int32Array;
-	readonly inbox: Inbox;
+	inbox!: Inbox;
 	// A running hash of every departure from the floor and post into its inbox: an image restores
 	// only while it matches.
 	readonly traffic: Int32Array;
@@ -127,6 +136,7 @@ export class Engine {
 	readonly sum = new Checksum();
 	readonly floorSums: Int32Array;
 	readonly digest = new Int32Array(2);
+	readonly header = new Int32Array(SUM);
 	readonly shape: { -readonly [K in keyof WorldFields]: WorldFields[K] };
 	readonly checkFreed = new Uint8Array(CAP);
 	readonly checkListed = new Uint8Array(CAP);
@@ -177,6 +187,26 @@ export class Engine {
 		this.scheduler = new Scheduler(this.storage);
 		this.intentKey = this.storage.column("i32") as Int32Array;
 		this.intentTarget = this.storage.column("i32") as Int32Array;
+		const { storage, grid, scheduler } = this;
+		const own = (column: Column, label: string, travels: boolean) => ({
+			column,
+			label,
+			travels,
+		});
+		this.coreColumns = [
+			own(storage.ids, "ids", false),
+			own(storage.masks, "masks", true),
+			own(storage.free, "free", false),
+			own(grid.heads, "cells", false),
+			own(grid.x, "x", false),
+			own(grid.y, "y", false),
+			own(grid.cellOf, "cellOf", false),
+			own(grid.next, "next", false),
+			own(grid.prev, "prev", false),
+			own(scheduler.nextAt, "nextAt", false),
+			own(this.intentKey, "intent.key", false),
+			own(this.intentTarget, "intent.target", false),
+		];
 		for (const [name, fields] of Object.entries(coreSchema)) {
 			const columns: Record<string, Column> = {};
 			for (const [field, kind] of Object.entries(fields))
@@ -205,7 +235,6 @@ export class Engine {
 		this.stage = new Uint8Array(options.floors);
 		this.period = new Int32Array(options.floors);
 		this.players = new Int32Array(options.floors);
-		this.inbox = new Inbox(options.floors);
 		this.traffic = new Int32Array(options.floors);
 		this.floorOrder = Array.from({ length: options.floors }, (_, f) => f);
 		this.popCap = options.popCap;
