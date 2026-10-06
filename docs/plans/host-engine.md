@@ -62,15 +62,17 @@ the `.ws()` `error` hook (Elysia otherwise sends its own error body, outside
 the protocol). The socket stays open; the game does not advance. `reason`
 is a fixed enum (`invalid`, `over`), never Elysia's validator text.
 
-The `.ws()` `error` hook also receives errors thrown in `open`, `message`
-and `close` (Elysia `adapter/bun/index.js:275-283, 339`). It answers
-`rejected` only when `error.code === "VALIDATION"`. Any other error is a
-server bug: log it, drop the session, close the socket with 1011. The hook
-never throws: Elysia does not await or catch it.
+The `.ws()` `error` hook receives the request context, not the socket, so
+it cannot close the socket (Elysia `adapter/bun/index.js:278-281`). It
+answers `rejected` for a `ValidationError` and logs any other error.
+
+`open` and `message` catch their own errors. A caught error is a server
+bug: the handler logs it, drops the session, and closes the socket with
+1011.
 
 A throw inside the engine poisons the world for good
-(`game-world.ts:117-124`). The session is never retried: same path as any
-server bug.
+(`game-world.ts:117-124`). The session is never retried: it follows the
+same path as any server bug.
 
 ### D4. Session
 
@@ -91,7 +93,8 @@ server bug.
 - The advance loop stops when `advance()` returns the player, or when
   `world.locate(player)` is `"dead"`. Without that check a dead player
   loops forever. A round limit per command throws as a backstop.
-- `createApp({ seed? })`: tests pass a seed; production draws one u32
+- `createApp({ seed?, createSession? })`: tests pass a seed, and
+  `createSession` lets them inject a failing session; production draws one u32
   with `crypto.getRandomValues(new Uint32Array(1))[0]` (the server may be
   nondeterministic, the engine may not; `createGame` rejects anything but
   a u32).

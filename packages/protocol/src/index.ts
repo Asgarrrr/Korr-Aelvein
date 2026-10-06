@@ -3,9 +3,6 @@ import { type Static, Type } from "@sinclair/typebox";
 const closed = { additionalProperties: false } as const;
 const Delta = Type.Integer({ minimum: -1, maximum: 1 });
 
-export const Ping = Type.Object({ type: Type.Literal("ping") }, closed);
-export type Ping = Static<typeof Ping>;
-
 export const Move = Type.Object(
 	{ type: Type.Literal("move"), dx: Delta, dy: Delta },
 	closed,
@@ -17,12 +14,6 @@ export type Wait = Static<typeof Wait>;
 
 export const Command = Type.Union([Move, Wait]);
 export type Command = Static<typeof Command>;
-
-export const ClientMessage = Type.Union([Ping, Command]);
-export type ClientMessage = Static<typeof ClientMessage>;
-
-export const Pong = Type.Object({ type: Type.Literal("pong") }, closed);
-export type Pong = Static<typeof Pong>;
 
 export const Snapshot = Type.Object(
 	{
@@ -56,5 +47,5 @@ export const Rejected = Type.Object(
 );
 export type Rejected = Static<typeof Rejected>;
 
-export const ServerMessage = Type.Union([Pong, Snapshot, Over, Rejected]);
+export const ServerMessage = Type.Union([Snapshot, Over, Rejected]);
 export type ServerMessage = Static<typeof ServerMessage>;

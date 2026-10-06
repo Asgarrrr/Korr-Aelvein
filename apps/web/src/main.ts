@@ -1,13 +1,11 @@
-import type { ClientMessage, ServerMessage } from "@korr/protocol";
+import type { ServerMessage } from "@korr/protocol";
 
 const status = document.querySelector<HTMLParagraphElement>("#status");
 const socket = new WebSocket(`ws://${location.host}/ws`);
 
-socket.onopen = () =>
-	socket.send(JSON.stringify({ type: "ping" } satisfies ClientMessage));
 socket.onmessage = (event) => {
 	const message = JSON.parse(String(event.data)) as ServerMessage;
-	if (status && message.type === "pong")
+	if (status && message.type === "snapshot")
 		status.textContent = "serveur connecté";
 };
 socket.onerror = () => {
