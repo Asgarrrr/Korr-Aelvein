@@ -260,9 +260,11 @@ const fleeWith = (hunger: boolean) => {
 					? { eats: { get: (s: number) => eats[s] ?? 0 } }
 					: { class: { get: (s: number) => classes[s] ?? 0 } },
 		query: () => ({ has: () => true }),
-		cells: () => ({ eats: ALERT, fire: ALERT }),
+		cells: () => ({ eats: ALERT, near: ALERT }),
+		previous: () => ({ eats: ALERT }),
 		tick() {},
 		propose() {},
+		alarm() {},
 		action: (
 			name: string,
 			_kind: string,

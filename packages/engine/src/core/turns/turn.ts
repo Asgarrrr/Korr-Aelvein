@@ -3,6 +3,7 @@ import { type Cell, type EntityId, NO_CELL, NONE, type Slot } from "../ecs/ids";
 import { PLAYER } from "../ecs/storage";
 import {
 	type ActionEntry,
+	type Alarm,
 	type Buffer,
 	type Engine,
 	FLOOR_STAGE,
@@ -106,7 +107,12 @@ export function finishTurn(
 function decide(e: Engine, floor: number, slot: Slot, id: EntityId): number {
 	const period = e.period[floor] ?? 0;
 	const key = e.intentKey[slot] ?? 0;
-	if (period > 1 && key !== 0 && (e.round + id) % period !== 0) {
+	if (
+		period > 1 &&
+		key !== 0 &&
+		(e.round + id) % period !== 0 &&
+		!alarmed(e, floor, slot)
+	) {
 		const action = e.actionByKey.get(key);
 		if (action !== undefined) {
 			const target = e.intentTarget[slot] ?? 0;
@@ -120,6 +126,27 @@ function decide(e: Engine, floor: number, slot: Slot, id: EntityId): number {
 		e.intentTarget[slot] = 0;
 	}
 	return act(e, floor, slot);
+}
+
+function alarmed(e: Engine, floor: number, slot: Slot): boolean {
+	const alarms = e.alarms;
+	if (alarms.length === 0) return false;
+	const { masks, maskWords } = e.storage;
+	const row = slot * maskWords;
+	const at = floor * e.grid.stride + (e.grid.cellOf[slot] ?? 0);
+	for (let i = 0; i < alarms.length; i++) {
+		const alarm = alarms[i] as Alarm;
+		const word = alarm.requiresWord;
+		const bits = alarm.requiresBits;
+		if (
+			word < 0
+				? !alarm.requires.has(slot)
+				: ((masks[row + word] ?? 0) & bits) !== bits
+		)
+			continue;
+		if ((alarm.field[at] ?? 0) !== 0) return true;
+	}
+	return false;
 }
 
 export function act(e: Engine, floor: number, slot: Slot): number {

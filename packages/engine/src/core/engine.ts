@@ -51,6 +51,13 @@ export interface ActionEntry {
 	readonly run: ActionFn<TargetKind>;
 }
 
+export interface Alarm {
+	readonly field: Uint8Array;
+	readonly requires: MaskBits;
+	readonly requiresWord: number;
+	readonly requiresBits: number;
+}
+
 export interface Hook<F> {
 	readonly moduleKey: number;
 	readonly run: F;
@@ -105,6 +112,13 @@ export const NO_ACTION = -1;
 export const NO_FLOOR = -1;
 export const FLOOR_STAGE = { waiting: 0, acting: 1, done: 2 } as const;
 
+function inlineMask(requires: MaskBits) {
+	return {
+		requiresWord: requires.words.length > 1 ? -1 : (requires.words[0] ?? 0),
+		requiresBits: requires.bits.length > 1 ? 0 : (requires.bits[0] ?? 0),
+	};
+}
+
 export class Engine {
 	readonly seed: number;
 	readonly storage: Storage;
@@ -151,6 +165,7 @@ export class Engine {
 	readonly actionByName = new Map<string, number>();
 	readonly ticks: TickHook[] = [];
 	readonly proposers: Hook<ProposeFn>[] = [];
+	readonly alarms: Alarm[] = [];
 	readonly eventNames = new Map<number, string>();
 	readonly species: CompiledSpecies[] = [];
 	readonly speciesByName = new Map<string, CompiledSpecies>();
@@ -312,11 +327,15 @@ export class Engine {
 			kind: KIND_CODE[kind],
 			moduleKey,
 			requires,
-			requiresWord: requires.words.length > 1 ? -1 : (requires.words[0] ?? 0),
-			requiresBits: requires.bits.length > 1 ? 0 : (requires.bits[0] ?? 0),
+			...inlineMask(requires),
 			run: run as ActionFn<TargetKind>,
 		});
 		return Object.freeze({ index }) as ActionRef<K>;
+	}
+
+	addAlarm(field: Uint8Array, required: readonly MaskBit[]): void {
+		const requires = new MaskBits(this.storage, required);
+		this.alarms.push({ field, requires, ...inlineMask(requires) });
 	}
 
 	// Keyed by name hash, not registry position: adding a module never renumbers other events.

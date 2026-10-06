@@ -156,6 +156,14 @@ interface BuilderPin<S extends Schema, K extends Schema> {
 		run: ActionFn<A>,
 	): ActionRef<A>;
 	propose(run: ProposeFn): void;
+	alarm(
+		field: CellField<"u8">,
+		requires: readonly (
+			| (keyof S & string)
+			| keyof Contracts
+			| keyof CoreSchema
+		)[],
+	): void;
 	event(name: string): EventRef;
 	species(wanted: string | SpeciesShape): SpeciesRef;
 }

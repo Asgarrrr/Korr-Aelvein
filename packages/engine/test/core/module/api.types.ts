@@ -9,6 +9,21 @@ import { createWorld } from "../../../src/core/world/world";
 import { modules } from "../../../src/registry";
 
 defineModule({
+	name: "alarmed",
+	schema: { owned: {} },
+	cells: { glow: { on: "u8", heat: "i16" } },
+	config: {},
+	setup(b) {
+		const glow = b.cells("glow");
+		b.alarm(glow.on, ["owned", "satiety", "vitality"]);
+		// @ts-expect-error an alarm field is u8
+		b.alarm(glow.heat, []);
+		// @ts-expect-error wary belongs to fear and is not in contracts/
+		b.alarm(glow.on, ["wary"]);
+	},
+});
+
+defineModule({
 	name: "typed",
 	schema: { owned: { value: "i32" } },
 	config: {},

@@ -161,6 +161,11 @@ export const fear = defineModule({
 		const burning = b.read("fire")?.left;
 		const wary = b.query(["wary"]);
 		const danger = b.cells("danger");
+		const previous = b.previous("danger");
+		const burns = b.cells("burns");
+		const alarm = b.cells("alarm");
+		// Far floors replay for up to 64 turns; this makes a wary creature react on arrival.
+		b.alarm(alarm.eats, ["wary"]);
 		const eaters = diet ? b.query(["diet"]) : undefined;
 		const reach = PERCEPTION_RADIUS + MARGIN;
 		// A burning cell next door is always a threat, so no radius lets a creature step into fire.
@@ -171,9 +176,11 @@ export const fear = defineModule({
 		// stand within fireRadius of a burning cell, this round, so a calm one skips perception.
 		b.tick((ctx) => {
 			const hunted = danger.eats.write(ctx);
-			const heated = danger.fire.write(ctx);
+			const heated = burns.near.write(ctx);
+			const arrived = alarm.eats.write(ctx);
 			hunted.clear();
 			heated.clear();
+			arrived.clear();
 			const prey = wary.slots(ctx);
 			if (prey.length === 0) return;
 			if (burning) {
@@ -207,6 +214,10 @@ export const fear = defineModule({
 						if (cell !== NO_CELL) hunted.set(cell, hunted.get(cell) | bits);
 					}
 			}
+			// Only where danger is new: a creature already in it keeps its cached reaction.
+			const previousEats = previous.eats.read(ctx);
+			for (let c = hunted.next(NO_CELL); c !== NO_CELL; c = hunted.next(c))
+				arrived.set(c, hunted.get(c) & ~previousEats.get(c));
 		});
 
 		// Re-executed later from a cached decision, so the target must still be a perceived threat.
@@ -254,7 +265,7 @@ export const fear = defineModule({
 				const fire = burning?.read(ctx);
 				if (
 					!fire ||
-					danger.fire.read(ctx).get(ctx.cellOf(actor)) === 0 ||
+					burns.near.read(ctx).get(ctx.cellOf(actor)) === 0 ||
 					!nearFire(ctx, actor, fire, fireReach)
 				)
 					return FAIL;
@@ -282,7 +293,7 @@ export const fear = defineModule({
 			const hunted =
 				eats !== undefined && (danger.eats.read(ctx).get(here) & prey) !== 0;
 			const marked =
-				burning !== undefined && danger.fire.read(ctx).get(here) !== 0;
+				burning !== undefined && burns.near.read(ctx).get(here) !== 0;
 			if (!hunted && !marked) return;
 			const fire = burning?.read(ctx);
 			const heated =

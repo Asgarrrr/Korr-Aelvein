@@ -225,9 +225,11 @@ test("avoid fails once no cell near burns, even with an eater in sight", () => {
 					? { eats: { get: (s: number) => (s === 1 ? foodClass.meat : 0) } }
 					: { class: { get: (s: number) => (s === 0 ? foodClass.meat : 0) } },
 		query: () => ({ has: () => true }),
-		cells: () => ({ eats: ALERT, fire: ALERT }),
+		cells: () => ({ eats: ALERT, near: ALERT }),
+		previous: () => ({ eats: ALERT }),
 		tick() {},
 		propose() {},
+		alarm() {},
 		action: (
 			name: string,
 			_kind: string,

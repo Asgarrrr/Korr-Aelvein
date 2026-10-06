@@ -33,7 +33,7 @@ per budget; FAIL rows do not change the exit code, so read them):
   alarm reaches its cell; a stoat never re-decides because of it.
 - Bench, paired: each perf-sensitive slice is benched right after its
   base, under the same machine load. Cached actor turn at P=64 and world
-  round within +5% of the base; player floor within +10%; RSS <= 160 MB.
+  round within +5% of the base (slice 2 accepts +12%, see D6); player floor within +10%; RSS <= 160 MB.
   Absolute budgets are re-checked on an idle machine: on 2026-10-06 a
   loaded machine (load average ~3.8) measured 96-100 ms rounds and
   180-186 ns cached turns on both `c0a8774` and `e50a6d8`.
@@ -130,10 +130,19 @@ A module declares one of its own u8 cell fields as an alarm for actors
 with given components: `b.alarm(field, ["wary"])`. Before replaying a
 cached intent, `decide()` (`core/turns/turn.ts`) checks the actor's
 component mask, then reads the field at its cell; nonzero skips the replay
-and runs a full decision. Fear stamps a dedicated `danger.alarm` field
-around eaters, over a radius set in fear's config (default: the danger
-reach). Stoats lack `wary`, so they never pay for it. No new saved state,
-no format change. If the bench fails, the alarm radius shrinks first.
+and runs a full decision. Zero alarms cost nothing measurable.
+
+The alarm is edge-triggered. Fear stamps `alarm.eats = danger.eats &
+~previous danger.eats`: a cell alarms only on the turn danger first
+reaches it. A level-triggered alarm (any danger) made most rats on the
+reference world decide every turn: world round +190%. Fear's cells are
+split into `danger {eats}`, `burns {near}` and `alarm {eats}`, so the
+previous-turn copy holds one field. Stoats lack `wary` and never pay.
+
+Measured, paired on a loaded machine: world round and the P=64 actor turn
++12%, player floor unchanged. The user accepted this cost as the price of
+reflexes on far floors. Known limit: an actor that walks into standing
+danger keeps its cache until its next scheduled decision.
 
 ### D7. Tree
 
@@ -177,7 +186,7 @@ content in English. Target ~150 lines of diff per slice.
    Helper: intent switches per entity, first decision excluded
    (`test/fixtures.ts`); baselines pinned as upper bounds on two seeds.
 2. **Alarms.** `b.alarm(field, requires)`, the check in `decide()`, fear's
-   `danger.alarm` stamp.
+   edge stamp `alarm.eats` and its cell table split.
    Tests: a wary rat caching `eat` on a P=64 floor re-decides the turn an
    alarm reaches its cell, and not before; a stoat on an alarmed cell
    keeps replaying; hash identical across floor-order permutations.

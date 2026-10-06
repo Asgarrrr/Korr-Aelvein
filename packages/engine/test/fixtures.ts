@@ -103,6 +103,7 @@ export function forwardBuilder<S extends Schema, K extends Schema>(
 		tick: (run) => b.tick(run),
 		action: (name, kind, requires, run) => b.action(name, kind, requires, run),
 		propose: (run) => b.propose(run),
+		alarm: (field, requires) => b.alarm(field, requires),
 		event: (name) => b.event(name),
 		species: (wanted) => b.species(wanted),
 	};

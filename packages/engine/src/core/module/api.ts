@@ -204,6 +204,16 @@ export interface Builder<S extends Schema, K extends Schema = NoCells> {
 		run: ActionFn<K>,
 	): ActionRef<K>;
 	propose(run: ProposeFn): void;
+	// Replaying actors with every component of `requires` decide in full while `field` is nonzero
+	// at their cell. `field`: an own u8 cell field.
+	alarm(
+		field: CellField<"u8">,
+		requires: readonly (
+			| (keyof S & string)
+			| keyof Contracts
+			| keyof CoreSchema
+		)[],
+	): void;
 	event(name: string): EventRef;
 	// Resolved when the world is built: an unknown name throws there, not at the first spawn.
 	species(wanted: string | SpeciesShape): SpeciesRef;
