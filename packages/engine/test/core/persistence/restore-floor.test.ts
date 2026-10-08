@@ -88,6 +88,52 @@ const playRound = (
 			else world.input(p, "core/idle", null);
 };
 
+test("restoring the floor a player left, after it left, throws instead of duplicating it", () => {
+	const { world, player } = stairway(0);
+	expect(world.advance()).toEqual([player]);
+	const before = world.saveFloor(0);
+	world.input(player, "core/travel", 1);
+	expect(() => world.loadFloor(0, before)).toThrow(/round boundary/);
+});
+
+test("restoring the floor a player travels into, after it set off, throws instead of losing it", () => {
+	const { world, player } = stairway(0);
+	expect(world.advance()).toEqual([player]);
+	const before = world.saveFloor(1);
+	world.input(player, "core/travel", 1);
+	expect(() => world.loadFloor(1, before)).toThrow(/round boundary/);
+});
+
+test("a floor image whose traffic differs from the live floor's throws, even at the same round", () => {
+	const quiet = stairway(0);
+	const busy = stairway(0);
+	playRound(quiet.world, false);
+	playRound(busy.world, true);
+	playRound(quiet.world, false);
+	playRound(busy.world, false);
+	expect(() => busy.world.loadFloor(1, quiet.world.saveFloor(1))).toThrow(
+		/traffic/,
+	);
+	expect(() =>
+		quiet.world.loadFloor(1, quiet.world.saveFloor(1)),
+	).not.toThrow();
+});
+
+test("a floor loads only at a round boundary", () => {
+	const { world } = stairway(0);
+	const image = world.saveFloor(1);
+	expect(world.advance().length).toBe(1);
+	expect(() => world.loadFloor(1, image)).toThrow(/round boundary/);
+});
+
+test("a floor image saved mid-round never loads, even into a world at that round's start", () => {
+	const paused = stairway(0);
+	expect(paused.world.advance().length).toBe(1);
+	const midRound = paused.world.saveFloor(1);
+	const fresh = stairway(0);
+	expect(() => fresh.world.loadFloor(1, midRound)).toThrow(/saved mid-round/);
+});
+
 test("restoring the floor a player left, from a run where nobody left, throws", () => {
 	const quiet = stairway(0);
 	const left = stairway(0);

@@ -55,6 +55,15 @@ test("sends the opening snapshot on open", async () => {
 	client.close();
 });
 
+test("replies to each command with the session's snapshot", async () => {
+	const client = await connect(fixedSeedApp.server?.port);
+	await client.next();
+	const session = new Session(SEED);
+	expect(await client.send(RIGHT)).toEqual(session.handle(RIGHT));
+	expect(await client.send(WAIT)).toEqual(session.handle(WAIT));
+	client.close();
+});
+
 test.each(BAD_INPUTS)(
 	"rejects invalid messages and keeps the game playable: %s",
 	async (_reason, raw) => {

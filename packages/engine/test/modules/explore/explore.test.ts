@@ -136,6 +136,23 @@ test("the game runs without explore, and nobody leaves", () => {
 	populatedWorld(1, without).world.runRounds(300);
 });
 
+test("explore without hunger proposes nothing and does not throw", () => {
+	const world = createWorld({
+		seed: 1,
+		floors: 2,
+		width: SIDE,
+		height: SIDE,
+		modules: [explore, wander],
+	});
+	world.spawn(0, stairsTo(1, 8, 8), 3, 3);
+	const ids = [world.spawn(0, { actor: true, components: {} }, 2, 2)];
+	world.runRounds(40);
+	const floor0 = { departed: [] as Move[], arrived: [] as Move[] };
+	moves(world, 0, floor0);
+	expect(floor0.departed).toEqual([]);
+	expect(ids.every((id) => world.alive(id))).toBe(true);
+});
+
 const statue = { actor: true, components: {} };
 const tiny = (list: readonly AnyModule[]) => {
 	const world = createWorld({

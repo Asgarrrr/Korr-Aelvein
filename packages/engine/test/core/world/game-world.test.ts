@@ -5,6 +5,7 @@ import {
 	loadWorld,
 	type World,
 } from "../../../src/core/world/world";
+import { createGame } from "../../../src/index";
 import { game, idleRounds, populatedWorld, SIZE } from "../../fixtures";
 
 const ROUNDS = 100;
@@ -75,6 +76,18 @@ test("listing the entities every round leaves the world hash unchanged", () => {
 		idleRounds(unlisted, 1);
 	}
 	expect(listed.hash()).toBe(unlisted.hash());
+});
+
+test("a player is listed under its species", () => {
+	const world = createGame({ seed: 1, floors: 1, width: 8, height: 8 });
+	const player = world.spawnPlayer(0, "rat", 2, 3);
+	const stoat = world.spawn(0, "stoat", 5, 5);
+	const rows: Row[] = [];
+	world.entities(0, (id, species, x, y) => rows.push([id, species, x, y]));
+	expect(rows).toEqual([
+		[player, "rat", 2, 3],
+		[stoat, "stoat", 5, 5],
+	]);
 });
 
 test("species stay apart in a game without fire, where cheese and mushroom share every component", () => {

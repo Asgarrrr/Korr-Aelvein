@@ -51,6 +51,14 @@ test("band maps weight 0 to no candidate and 1..255 monotonically into the band"
 	}
 });
 
+test("below the top band, inertia never lifts a band's highest score out of it", () => {
+	for (const name of Object.keys(BANDS) as BandName[])
+		if (name !== TOP)
+			expect(band(name, WEIGHT_MAX) + INERTIA).toBeLessThanOrEqual(
+				BANDS[name].max,
+			);
+});
+
 test("a band below the top no wider than INERTIA is refused", () => {
 	expect(() => checkBands(BANDS, INERTIA)).not.toThrow();
 	const narrow = {

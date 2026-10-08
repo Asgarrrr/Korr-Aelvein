@@ -18,6 +18,7 @@ import { hunger } from "../../../src/modules/hunger";
 import { modules } from "../../../src/registry";
 import { populatedWorld } from "../../fixtures";
 
+// popCap binds once mushrooms pile up, so a restore that drops it diverges.
 const POP_CAP = 120;
 // Edible actors born into recycled slots put slot order out of id order.
 const walker = {
@@ -26,12 +27,37 @@ const walker = {
 };
 const walkers = { ...species, mushroom: walker };
 
-const build = () => {
-	const { world } = populatedWorld(1, modules, 50, { popCap: POP_CAP });
+const build = (table: Readonly<Record<string, SpeciesShape>> = species) => {
+	const { world } = populatedWorld(1, modules, 50, {
+		popCap: POP_CAP,
+		species: table,
+	});
 	for (let i = 0; i < 10; i++)
 		world.spawn(0, moss, (i * 7) % 32, (i * 13) % 32);
 	return world;
 };
+
+for (const [yields, table] of [
+	["mushrooms", species],
+	["walking mushrooms", walkers],
+] as const)
+	test(`200 rounds, save, load, 300 rounds equals 500 in one run (${yields})`, () => {
+		const straight = build(table);
+		straight.runRounds(500);
+		const first = build(table);
+		first.runRounds(200);
+		const resumed = loadWorld(first.save(), { modules, species: table });
+		resumed.runRounds(300);
+		expect(resumed.hash()).toBe(straight.hash());
+	});
+
+test("save, load, save gives the same bytes", () => {
+	const world = build();
+	world.runRounds(250);
+	const bytes = world.save();
+	expect(loadWorld(bytes, { modules, species }).save()).toEqual(bytes);
+	expect(world.saveFloor(0).length).toBeLessThan(bytes.length);
+});
 
 test("loading with another registry, config, species table or format throws", () => {
 	const bytes = build().save();
@@ -176,6 +202,30 @@ test("a save read from an unaligned view loads", () => {
 	shifted.set(bytes, 1);
 	const loaded = loadWorld(shifted.subarray(1), { modules, species });
 	expect(loaded.hash()).toBe(world.hash());
+});
+
+test("a floor image stored at another floor's position throws", () => {
+	const world = createWorld({
+		seed: 1,
+		floors: 2,
+		width: 16,
+		height: 16,
+		modules,
+		species,
+	});
+	world.spawn(0, rat, 1, 1);
+	world.spawn(1, moss, 2, 2);
+	world.runRounds(3);
+	const bytes = world.save();
+	const words = new Int32Array(bytes.buffer);
+	const floors = 2;
+	const header = 9 + 2 * floors;
+	const firstLength = words[9 + floors] ?? 0;
+	const secondFloorWord = header + firstLength / 4 + 2;
+	words[secondFloorWord] = 0;
+	expect(() => loadWorld(bytes, { modules, species })).toThrow(
+		/claims floor 0/,
+	);
 });
 
 // Three floors with their own churn, saved at several points, must resume exactly.

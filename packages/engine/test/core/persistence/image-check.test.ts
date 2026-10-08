@@ -92,7 +92,9 @@ const rows = [...Array(highWater).keys()];
 const isLive = (r: number) => ((masks[r * words] ?? 0) & ALIVE) !== 0;
 const isActor = (r: number) => ((masks[r * words] ?? 0) & ACTOR) !== 0;
 const ratRow = rows.find((r) => isLive(r) && isActor(r)) ?? -1;
-const [itemRow = -1] = rows.filter((r) => isLive(r) && !isActor(r));
+const [itemRow = -1, otherItemRow = -1] = rows.filter(
+	(r) => isLive(r) && !isActor(r),
+);
 const lacks = (name: string) => {
 	const bit = engine.components.get(name)?.bit ?? { word: 0, bit: 0 };
 	return rows.find(
@@ -136,9 +138,15 @@ const set16 =
 	};
 
 test("the corruption probes found the rows they need", () => {
-	expect([ratRow, itemRow, freeRow, loneRow, dietless, inedible]).not.toContain(
-		-1,
-	);
+	expect([
+		ratRow,
+		itemRow,
+		otherItemRow,
+		freeRow,
+		loneRow,
+		dietless,
+		inedible,
+	]).not.toContain(-1);
 	expect(emptyCell).toBeDefined();
 	expect(() => loadFloor(freshEngine(), image, 0)).not.toThrow();
 });
@@ -169,6 +177,19 @@ const cases: [string, Edit, RegExp][] = [
 		/not one this floor issued/,
 	],
 	["live id zero", set32(storage.ids, itemRow, 0), /not one this floor issued/],
+	[
+		"id held twice",
+		(copy) => {
+			const ids = view32(copy, storage.ids);
+			ids[otherItemRow] = ids[itemRow] ?? 0;
+		},
+		/held by two slots/,
+	],
+	[
+		"actor due in the past",
+		set32(scheduler.nextAt, ratRow, 0),
+		/next acts at 0/,
+	],
 	["position off the floor", set16(grid.x, itemRow, 99), /off the floor/],
 	[
 		"cell not matching position",
@@ -186,6 +207,11 @@ const cases: [string, Edit, RegExp][] = [
 		/outside this floor/,
 	],
 	["list cycle", set32(grid.next, itemRow, itemRow), /twice or in a cycle/],
+	[
+		"intent naming no registered action",
+		set32(engine.intentKey, ratRow, 12345),
+		/intends unknown action 12345/,
+	],
 	[
 		"no intent but a target",
 		(copy) => {
@@ -211,12 +237,28 @@ const cases: [string, Edit, RegExp][] = [
 		new RegExp(`intends target ${grid.cells}`),
 	],
 	[
+		"an entity intent with no entity",
+		(copy) => {
+			view32(copy, engine.intentKey)[ratRow] = keyOf("hunger/eat");
+			view32(copy, engine.intentTarget)[ratRow] = 0;
+		},
+		/intends target 0/,
+	],
+	[
 		"an entity intent with a negative target",
 		(copy) => {
 			view32(copy, engine.intentKey)[ratRow] = keyOf("hunger/eat");
 			view32(copy, engine.intentTarget)[ratRow] = -5;
 		},
 		/intends target -5/,
+	],
+	[
+		"an entity intent outside the id encoding",
+		(copy) => {
+			view32(copy, engine.intentKey)[ratRow] = keyOf("hunger/eat");
+			view32(copy, engine.intentTarget)[ratRow] = ID_FLOOR_STRIDE;
+		},
+		new RegExp(`intends target ${ID_FLOOR_STRIDE}`),
 	],
 	[
 		"an intent on a creature that does not act",
@@ -317,6 +359,12 @@ test("a floor image with two actors in one cell throws", () => {
 	expect(() => loadFloor(freshEngine(0), saveFloor(crowded, 0), 0)).toThrow(
 		/two actors/,
 	);
+});
+
+test("an edit without a new checksum throws on the checksum", () => {
+	const copy = image.slice();
+	set32(storage.ids, itemRow, 0)(copy);
+	expect(() => loadFloor(freshEngine(), copy, 0)).toThrow(/checksum mismatch/);
 });
 
 test("nonzero padding after a section throws", () => {

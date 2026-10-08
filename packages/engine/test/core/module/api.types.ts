@@ -17,6 +17,8 @@ defineModule({
 		b.alarm("glow", "on", ["owned", "satiety", "vitality"]);
 		// @ts-expect-error an alarm field is u8
 		b.alarm("glow", "heat", []);
+		// @ts-expect-error an alarm field belongs to the named table
+		b.alarm("glow", "missing", []);
 		// @ts-expect-error an alarm table is one of the module's own cells
 		b.alarm("fire", "left", []);
 		// @ts-expect-error wary belongs to fear and is not in contracts/
@@ -32,6 +34,8 @@ defineModule({
 		b.write("owned");
 		// @ts-expect-error satiety belongs to hunger
 		b.write("satiety");
+		// @ts-expect-error unknown field of an owned component
+		b.write("owned").missing;
 		const bite = b.action("bite", "entity", [], () => 100);
 		b.action("gnaw", "none", ["owned", "satiety", "vitality"], () => 100);
 		// @ts-expect-error wary belongs to fear and is not in contracts/

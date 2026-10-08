@@ -15,6 +15,21 @@ const STARVING = fearConfig.riskBelow - 1;
 // Groups this far apart see nothing of each other.
 const GAP = 2 * PERCEPTION_RADIUS + 2;
 
+test("facing the same stoat, a shy rat flees from distance 3 and a bold one only at 1", () => {
+	for (const d of [1, 2, 3]) {
+		const { engine, intent, ratAt, stoatAt } = scene(16);
+		stoatAt(8, 8);
+		const shy = ratAt(8 - d, 8, SHY);
+		const bold = ratAt(8 + d, 8, BOLD);
+		engine.runRound();
+		expect({ d, shy: intent(shy), bold: intent(bold) }).toEqual({
+			d,
+			shy: "fear/flee",
+			bold: d === 1 ? "fear/flee" : "fear/watch",
+		});
+	}
+});
+
 test("flight distance never increases with boldness, from 3 for the shyest to 1 for the boldest", () => {
 	const groups = BOLD + 1;
 	const row = 16;
@@ -56,6 +71,15 @@ test("200 rats drawn from species defaults, each 3 cells from a stoat, both flee
 	engine.runRound();
 	const outcomes = new Set(rats.map(intent));
 	expect([...outcomes].sort()).toEqual(["fear/flee", "fear/watch"]);
+});
+
+test("a starving bold rat keeps eating 2 cells from a stoat", () => {
+	const { engine, ratAt, stoatAt } = scene(16);
+	ratAt(8, 8, BOLD, STARVING);
+	const food = spawn(engine, 0, cheese, 8, 9);
+	stoatAt(10, 8);
+	engine.runRound();
+	expect(engine.storage.slotOf(0, food)).toBe(NONE);
 });
 
 test("starving takes one cell off flight: an average rat 2 cells from a stoat eats only then", () => {
@@ -100,6 +124,15 @@ test("a rat calms down once no danger reaches its cell, and watches again from 3
 	stoatAt(xOf(id) + PERCEPTION_RADIUS, 8);
 	engine.runRound();
 	expect(intent(id)).toBe("fear/watch");
+});
+
+test("a rat flees the nearest of two eaters it sees, not the farther one", () => {
+	const { engine, intent, target, ratAt, stoatAt } = scene(16);
+	const id = ratAt(8, 8, AVERAGE);
+	stoatAt(8, 8 + PERCEPTION_RADIUS);
+	const near = stoatAt(9, 8);
+	engine.runRound();
+	expect([intent(id), target(id)]).toEqual(["fear/flee", near]);
 });
 
 test("flight never drops below flightMin: a starving bold rat flees at 1, and fleeing keeps it at 1", () => {

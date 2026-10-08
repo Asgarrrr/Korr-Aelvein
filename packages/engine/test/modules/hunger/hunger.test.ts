@@ -56,6 +56,22 @@ test("a hungry rat walks to cheese at the edge of perception and eats it", () =>
 	);
 });
 
+for (const start of [
+	rat.components.satiety.value,
+	hungerConfig.decayPerTurn * 100,
+]) {
+	test(`a rat starting at ${start} starves at exactly ceil(start / decay) rounds`, () => {
+		const deathRound = Math.ceil(start / hungerConfig.decayPerTurn);
+		const world = smallWorld();
+		const ratId = world.spawn(0, ratAt(start), 8, 8);
+
+		world.runRounds(deathRound - 1);
+		expect(world.alive(ratId)).toBe(true);
+		world.runRounds(1);
+		expect(world.alive(ratId)).toBe(false);
+	});
+}
+
 test("rats with different reserves starve in their own rounds", () => {
 	const starts = [3, 30, 31, 60, 61, 90, 33, 4];
 	const world = smallWorld();

@@ -37,6 +37,16 @@ const fleeOnce = (
 	return [world.peek("where", "x", id), world.peek("where", "y", id)] as const;
 };
 
+test("a rat between two stoats steps closer to neither", () => {
+	const stoats: Point[] = [
+		[0, 2],
+		[4, 5],
+	];
+	const to = fleeOnce(6, 7, [2, 4], stoats);
+	for (const s of stoats)
+		expect(chebyshev(to, s)).toBeGreaterThanOrEqual(chebyshev([2, 4], s));
+});
+
 const SEEDS = 12;
 const TRIALS = 25;
 

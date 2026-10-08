@@ -19,6 +19,7 @@ import { createWorld } from "../../../src/core/world/world";
 import { fear } from "../../../src/modules/fear";
 import { fearConfig } from "../../../src/modules/fear/config";
 import { foodClass, hungerConfig } from "../../../src/modules/hunger/config";
+import { wander } from "../../../src/modules/wander";
 import { modules } from "../../../src/registry";
 import { probe } from "../../fixtures";
 import { gridCtx } from "./scene";
@@ -48,6 +49,23 @@ const cellOf = (world: AnyWorld, id: EntityId) => [
 	world.peek("where", "y", id),
 ];
 
+test("a rat next to a stoat steps to the free cell farthest from it", () => {
+	const world = worldOf(modules);
+	const prey = world.spawn(0, tracked(rat), 5, 5);
+	world.spawn(0, stoat, 6, 5);
+	world.runRounds(2);
+	expect(cellOf(world, prey)).toEqual([4, 5]);
+});
+
+test("a rat steps around another rat when fleeing", () => {
+	const world = worldOf(modules);
+	const prey = world.spawn(0, tracked(rat), 5, 5);
+	world.spawn(0, rat, 4, 5);
+	world.spawn(0, stoat, 6, 5);
+	world.runRounds(2);
+	expect(cellOf(world, prey)).toEqual([4, 4]);
+});
+
 test("a rat steps around any actor, eater or not", () => {
 	const world = worldOf(modules);
 	const prey = world.spawn(0, tracked(rat), 5, 5);
@@ -55,6 +73,34 @@ test("a rat steps around any actor, eater or not", () => {
 	world.spawn(0, stoat, 6, 5);
 	world.runRounds(2);
 	expect(cellOf(world, prey)).toEqual([4, 4]);
+});
+
+const chebyshev = (a: number[], b: readonly number[]) =>
+	Math.max(
+		Math.abs((a[0] ?? 0) - (b[0] ?? 0)),
+		Math.abs((a[1] ?? 0) - (b[1] ?? 0)),
+	);
+
+test("a cornered rat never steps closer to a stoat", () => {
+	const world = worldOf(modules);
+	const starts = [
+		[0, 0],
+		[0, 1],
+		[1, 1],
+	] as const;
+	const stoats = [
+		[2, 0],
+		[3, 0],
+	] as const;
+	const rats = starts.map(([x, y]) => world.spawn(0, tracked(rat), x, y));
+	for (const [x, y] of stoats) world.spawn(0, stoat, x, y);
+	world.runRounds(2);
+	const nearest = (cell: readonly number[]) =>
+		Math.min(...stoats.map((s) => chebyshev([...cell], s)));
+	for (let i = 0; i < rats.length; i++)
+		expect(nearest(cellOf(world, rats[i] as EntityId))).toBeGreaterThanOrEqual(
+			nearest(starts[i] as readonly number[]),
+		);
 });
 
 test("an edible creature that is not wary stays calm next to a stoat", () => {
@@ -76,6 +122,15 @@ test("a rat against the edge of the floor flees along it", () => {
 	world.spawn(0, stoat, 1, 4);
 	world.runRounds(2);
 	expect(cellOf(world, prey)).toEqual([0, 6]);
+});
+
+test("a rat flanked by two stoats sidesteps rather than near the farther one", () => {
+	const world = worldOf(modules);
+	const prey = world.spawn(0, tracked(rat), 5, 5);
+	world.spawn(0, stoat, 6, 5);
+	world.spawn(0, stoat, 2, 5);
+	world.runRounds(2);
+	expect(cellOf(world, prey)).toEqual([5, 4]);
 });
 
 test("with no predator in sight, fear changes nothing", () => {
@@ -173,20 +228,37 @@ test("the game runs without fear, deterministically", () => {
 	expect(run()).toBe(run());
 });
 
+test("without hunger, fear still sets up and a rat only wanders", () => {
+	const path = (list: readonly AnyModule[]) => {
+		const world = worldOf(list);
+		const prey = world.spawn(0, tracked(rat), 5, 5);
+		world.spawn(0, stoat, 6, 5);
+		const cells: number[][] = [];
+		for (let round = 0; round < 20; round++) {
+			world.runRounds(1);
+			cells.push(cellOf(world, prey));
+		}
+		return cells;
+	};
+	expect(path([fear, wander])).toEqual(path([wander]));
+});
+
 // Danger set on every cell, as fear's tick would stamp it around the scene the test builds.
 const ALERT = { read: () => ({ get: () => 0xff }) };
 
 // Slot 0 is the prey; slot 1, id THREAT, the creature it may flee.
 const THREAT = 9 as EntityId;
-const fleeWith = () => {
+const fleeWith = (hunger: boolean) => {
 	let flee: ActionFn<"entity"> | undefined;
 	const eats = [0, foodClass.meat];
 	const classes = [foodClass.meat, 0];
 	const builder = {
 		read: (name: string) =>
-			name === "diet"
-				? { eats: { get: (s: number) => eats[s] ?? 0 } }
-				: { class: { get: (s: number) => classes[s] ?? 0 } },
+			!hunger
+				? undefined
+				: name === "diet"
+					? { eats: { get: (s: number) => eats[s] ?? 0 } }
+					: { class: { get: (s: number) => classes[s] ?? 0 } },
 		query: () => ({ has: () => true }),
 		write: () => ({ fleeing: new Uint8Array(2) }),
 		cells: () => ({ eats: ALERT, near: ALERT, reach: ALERT }),
@@ -223,7 +295,7 @@ const ctxWith = (seesThreat: boolean, crowded = false) =>
 const unused = {} as Perception;
 
 test("flee runs while it sees its threat and has somewhere to go", () => {
-	const { run } = fleeWith();
+	const { run } = fleeWith(true);
 	expect(run(ctxWith(true), 0 as Slot, THREAT, unused)).toBe(ALTERNATE);
 	expect(run(ctxWith(false), 0 as Slot, THREAT, unused)).toBe(FAIL);
 	expect(run(ctxWith(true, true), 0 as Slot, THREAT, unused)).toBe(FAIL);
@@ -233,7 +305,7 @@ test("flee runs while it sees its threat and has somewhere to go", () => {
 });
 
 test("flee fails once its target no longer eats what the actor is, whoever else does", () => {
-	const { run, eats } = fleeWith();
+	const { run, eats } = fleeWith(true);
 	eats[1] = foodClass.forage;
 	eats[2] = foodClass.meat;
 	expect(run(ctxWith(true), 0 as Slot, THREAT, unused)).toBe(FAIL);
@@ -249,6 +321,11 @@ test("flee fails once its target no longer eats what the actor is, whoever else 
 	expect(run(crowd, 0 as Slot, (THREAT + 1) as EntityId, unused)).toBe(
 		ALTERNATE,
 	);
+});
+
+test("flee fails without hunger: no creature is a threat then", () => {
+	const { run } = fleeWith(false);
+	expect(run(ctxWith(true), 0 as Slot, THREAT, unused)).toBe(FAIL);
 });
 
 for (const [action, threat] of [

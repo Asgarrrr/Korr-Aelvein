@@ -13,6 +13,7 @@ import {
 } from "../../../src/core/world/world";
 import { fire } from "../../../src/modules/fire";
 import { fireConfig } from "../../../src/modules/fire/config";
+import { hunger } from "../../../src/modules/hunger";
 import { wander } from "../../../src/modules/wander";
 import { modules } from "../../../src/registry";
 import { reversed } from "../../fixtures";
@@ -68,6 +69,25 @@ test("a moss line burns out in pinned rounds; the ember's cell keeps burning and
 		[m3, m2, 3],
 		[m4, m3, 4],
 	]);
+});
+
+test("fire burns a rat standing on moss beside an ember: the moss it ignited is the cause", () => {
+	const world = createWorld({
+		seed: 7,
+		floors: 1,
+		width: 12,
+		height: 12,
+		modules: [hunger, fire],
+		species,
+	});
+	world.spawn(0, ember, 5, 5);
+	const fuel = world.spawn(0, moss, 6, 5);
+	const victim = world.spawn(0, rat, 6, 5);
+	world.drainEvents(0, () => {});
+	world.runRounds(30);
+	const died = deaths(world);
+	expect(died.find(([id]) => id === fuel)?.[2]).toBe(2);
+	expect(died.find(([id]) => id === victim)).toEqual([victim, fuel, 4]);
 });
 
 const SIDE = 24;

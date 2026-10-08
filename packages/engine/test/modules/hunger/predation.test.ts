@@ -42,7 +42,10 @@ test("a hungry stoat next to a rat eats it, and the rat dies of the stoat", () =
 	expect(world.peek("satiety", "value", hunter)).toBeGreaterThan(HUNGRY);
 });
 
-for (const [name, kind] of [["stoat", hungryStoat]] as const)
+for (const [name, kind] of [
+	["stoat", hungryStoat],
+	["rat", hungryRat],
+] as const)
 	test(`a hungry ${name} never eats another ${name}`, () => {
 		const world = smallWorld();
 		const ids: EntityId[] = [];

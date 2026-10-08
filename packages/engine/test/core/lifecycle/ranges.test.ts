@@ -5,6 +5,8 @@ import {
 	type EntityId,
 } from "../../../src/core/module/api";
 import { createWorld, loadWorld } from "../../../src/core/world/world";
+import { probe } from "../../fixtures";
+import { aimAt, climber, climberBody, stairsTo } from "../travel/climber";
 
 const traits = defineModule({
 	name: "traits",
@@ -143,6 +145,20 @@ test("an explicit spawn value wins and the other ranges draw what they would hav
 	);
 });
 
+test("a load restores drawn and given values without drawing again", () => {
+	const w = world();
+	const ids = [
+		...spawnMany(w, 5),
+		w.spawn(0, "ranged", 0, 0, { traits: { bold: 250 } }),
+	];
+	const values = traitsOf(w, ids);
+	const loaded = loadWorld(w.save(), {
+		modules: [traits],
+		species: { ranged, narrow },
+	});
+	expect(traitsOf(loaded as never, ids)).toEqual(values);
+});
+
 test("a range enters the fingerprint: a save refuses a world with other bounds", () => {
 	const w = world();
 	spawnMany(w, 1);
@@ -158,6 +174,30 @@ test("a range enters the fingerprint: a save refuses a world with other bounds",
 			species: { ranged: wider, narrow },
 		}),
 	).toThrow(/fingerprint/);
+});
+
+test("a traveller arrives with its drawn and given values", () => {
+	const w = createWorld({
+		seed: 1,
+		floors: 2,
+		width: 8,
+		height: 8,
+		modules: [climber, probe, traits],
+	});
+	const body = {
+		...climberBody,
+		components: {
+			...climberBody.components,
+			traits: ranged.components.traits,
+		},
+	};
+	aimAt("stairs");
+	w.spawn(0, stairsTo(1, 5, 6), 2, 2);
+	const id = w.spawn(0, body, 3, 3, { traits: { bold: 250 } });
+	const before = traitsOf(w, [id]);
+	w.runRounds(4);
+	expect(w.locate(id)).toEqual({ floor: 1, x: 5, y: 6 });
+	expect(traitsOf(w, [id])).toEqual(before);
 });
 
 test("a range that cannot be drawn into its column throws when the species compiles", () => {
@@ -189,4 +229,12 @@ test("a spawn value holding a range throws", () => {
 	expect(() => world().spawn(0, "ranged", 0, 0, range as never)).toThrow(
 		/traits.bold is not an integer/,
 	);
+});
+
+test("a core field takes no range", () => {
+	const shape = {
+		actor: true,
+		components: { vitality: { hp: { min: 1, max: 2 }, max: 2 } },
+	};
+	expect(() => world(1, [traits], { shape })).toThrow(/vitality.hp/);
 });

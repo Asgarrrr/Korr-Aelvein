@@ -180,6 +180,29 @@ for (const write of ["set", "clear"] as const)
 		);
 	});
 
+test("clear empties every cell of the floor, the last one included", () => {
+	const seen: number[] = [];
+	const sweeper = defineModule({
+		name: "sweeper",
+		schema: {},
+		cells: { dust: { v: "u8" } },
+		config: {},
+		setup(b) {
+			const dust = b.cells("dust").v;
+			b.tick((ctx) => {
+				const last = ctx.cellAt(5, 6);
+				const cells = dust.write(ctx);
+				cells.set(last, 7);
+				cells.set(0 as Cell, 7);
+				cells.clear();
+				seen.push(cells.get(0 as Cell), cells.get(last));
+			});
+		},
+	});
+	createWorld({ ...options(), modules: [sweeper] }).runRounds(1);
+	expect(seen).toEqual([0, 0, 0, 0]);
+});
+
 // Each round, every `heat` row adds `heat.add` to what its cell held at the previous tick,
 // read from the buffer, and records the result in `seen`.
 const ripple = (buffered: boolean) =>
@@ -270,6 +293,57 @@ test("a module buffers only its own cells, once", () => {
 	expect(build("warmth", false)).toThrow(/greedy does not own cells warmth/);
 	expect(build("mine", true)).toThrow(/mine is already buffered/);
 	expect(build("mine", false)).not.toThrow();
+});
+
+const KINDS = {
+	a: "u8",
+	b: "i8",
+	c: "u16",
+	d: "i16",
+	e: "i32",
+	f: "entity",
+} as const;
+// Values per kind, and the cells they go to: around word edges, the first cell and the last.
+const VALUES = { a: 200, b: -3, c: 60_000, d: -2, e: -70_000, f: 9 } as const;
+const SPOTS = [0, 3, 4, 7, 8, 9, 17, 41];
+
+test("next walks exactly the nonzero cells of every kind, in order, from NO_CELL", () => {
+	const walked: Record<string, number[][]> = {};
+	const marker = defineModule({
+		name: "marker",
+		schema: {},
+		cells: { marks: KINDS },
+		config: {},
+		setup(b) {
+			const marks = b.cells("marks");
+			b.tick((ctx) => {
+				for (const field of Object.keys(KINDS) as (keyof typeof KINDS)[]) {
+					const cells = marks[field].write(ctx);
+					for (const spot of SPOTS)
+						cells.set(spot as Cell, VALUES[field] as never);
+					for (const walker of [cells, marks[field].read(ctx)]) {
+						const seen: number[][] = [];
+						for (
+							let c = walker.next(NO_CELL);
+							c !== NO_CELL;
+							c = walker.next(c)
+						)
+							seen.push([c, walker.get(c)]);
+						expect(walker.next(41 as Cell)).toBe(NO_CELL);
+						expect(walker.next(4 as Cell)).toBe(7 as Cell);
+						expect(walker.next(13 as Cell)).toBe(17 as Cell);
+						walked[field] = seen;
+					}
+				}
+			});
+		},
+	});
+	createWorld({ ...options(), modules: [marker] }).runRounds(1);
+	for (const field of Object.keys(KINDS) as (keyof typeof KINDS)[])
+		expect({ field, seen: walked[field] }).toEqual({
+			field,
+			seen: SPOTS.map((spot) => [spot, VALUES[field]]),
+		});
 });
 
 test("a previous buffer is readable only in its owner's tick", () => {

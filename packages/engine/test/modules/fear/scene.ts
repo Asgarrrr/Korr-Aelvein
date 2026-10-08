@@ -38,6 +38,7 @@ export const scene = (side: number, list: readonly AnyModule[] = still) => {
 	const slot = (id: EntityId) => engine.storage.slotOf(0, id);
 	const intent = (id: EntityId) =>
 		names.get(engine.intentKey[slot(id)] ?? 0) ?? "none";
+	const target = (id: EntityId) => engine.intentTarget[slot(id)] ?? 0;
 	const xOf = (id: EntityId) => engine.grid.x[slot(id)] ?? 0;
 	const ratAt = (x: number, y: number, boldness?: number, satiety?: number) =>
 		spawn(engine, 0, rat, x, y, false, {
@@ -45,7 +46,7 @@ export const scene = (side: number, list: readonly AnyModule[] = still) => {
 			...(satiety === undefined ? {} : { satiety: { value: satiety } }),
 		});
 	const stoatAt = (x: number, y: number) => spawn(engine, 0, stoat, x, y);
-	return { engine, intent, xOf, ratAt, stoatAt };
+	return { engine, intent, target, xOf, ratAt, stoatAt };
 };
 
 // An action ctx over a few bodies on a side x side floor, as [slot, id, x, y]; fear reads sight

@@ -45,6 +45,21 @@ test("deferred spawns past popCap are refused, lowest causes first in", () => {
 	expect(() => world.runRounds(1)).not.toThrow();
 });
 
+test("a direct spawn past popCap throws", () => {
+	const world = createWorld({
+		seed: 1,
+		floors: 2,
+		width: 4,
+		height: 4,
+		popCap: 3,
+		modules: [],
+	});
+	const item = { actor: false, components: {} };
+	for (let i = 0; i < 3; i++) world.spawn(0, item, 0, 0);
+	expect(() => world.spawn(0, item, 0, 0)).toThrow(/popCap/);
+	expect(() => world.spawn(1, item, 0, 0)).not.toThrow();
+});
+
 test("popCap outside [1, CAP] is rejected", () => {
 	for (const popCap of [0, CAP + 1, 1.5])
 		expect(() =>

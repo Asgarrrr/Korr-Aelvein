@@ -14,7 +14,16 @@ function snapshot(entities: Entity[] = []): Snapshot {
 
 test.each([
 	["ArrowLeft", -1, 0],
+	["ArrowRight", 1, 0],
+	["ArrowUp", 0, -1],
+	["ArrowDown", 0, 1],
+	["h", -1, 0],
+	["l", 1, 0],
+	["k", 0, -1],
 	["j", 0, 1],
+	["y", -1, -1],
+	["u", 1, -1],
+	["b", -1, 1],
 	["n", 1, 1],
 ])("%s moves by (%d, %d)", (key, dx, dy) => {
 	expect(commandFor(key, snapshot())).toEqual({ type: "move", dx, dy });
@@ -58,6 +67,17 @@ test("e skips non-edible and non-adjacent entities to pick an adjacent edible on
 		]),
 	);
 	expect(command).toEqual({ type: "eat", target: 6 });
+});
+
+test("e picks the cheese over a lower-id adjacent rat, which the player rat cannot eat", () => {
+	const command = commandFor(
+		"e",
+		snapshot([
+			[2, "rat", 4, 3],
+			[3, "cheese", 5, 4],
+		]),
+	);
+	expect(command).toEqual({ type: "eat", target: 3 });
 });
 
 test("e gives no command with no entity, or with only non-edible or distant ones", () => {
