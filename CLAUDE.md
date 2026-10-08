@@ -171,3 +171,13 @@ the code around it: every needless comment breeds more.
   assert an observable outcome (a migration, a death, a population change).
 - Every engine bug gets a test with the seed that reproduces it.
 - Each mechanic module has a test proving the game runs with it disabled.
+- Write the test before the code, and watch it fail first. Never write a
+  test after the code to restate it.
+- Keep a test only if you can name the plausible bug it catches, and that
+  bug makes it fail. Never restate a constant or the implementation's logic.
+- Default to the engine scenario above. A narrower test is for a contract a
+  scenario cannot pin down: save/load, determinism, a guard, an edge case.
+- A test that breaks on a refactor with no behaviour change is a defect:
+  rewrite it to assert behaviour, never patch it to match.
+- A pinned hash detects a change but never justifies deleting a test: it is
+  re-pinned on every intended change, so it guards no single bug.
