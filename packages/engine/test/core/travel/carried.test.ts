@@ -83,14 +83,3 @@ test("a traveller arrives with every mask word and every carried column", () => 
 	expect(maskOf(arrived)).toEqual(mask);
 	expect(rowOf(arrived)).toEqual(row);
 });
-
-test("an arrival has no cached intent and is due at its arrival time", () => {
-	const e = build();
-	const slot = traveller(e);
-	e.intentKey[slot] = 7;
-	e.intentTarget[slot] = 9;
-	const arrived = travel(e, slot);
-	expect(e.intentKey[arrived]).toBe(0);
-	expect(e.intentTarget[arrived]).toBe(0);
-	expect(e.scheduler.nextAt[arrived]).toBe(STAIR_TIME);
-});

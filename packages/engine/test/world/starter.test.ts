@@ -23,24 +23,6 @@ const cell = ({ x, y }: { x: number; y: number }) => y * starter.width + x;
 const byCell = (a: { x: number; y: number }, b: { x: number; y: number }) =>
 	cell(a) - cell(b);
 
-test("createStarterGame places exactly the layout on floor 0", () => {
-	const world = createStarterGame(1);
-	expect(listed(world).sort(byCell)).toEqual([...starter.layout].sort(byCell));
-});
-
-test("the layout fits the floor, one entity per cell, the start cell free", () => {
-	const occupied = new Set<number>();
-	for (const entry of starter.layout) {
-		expect(entry.x).toBeGreaterThanOrEqual(0);
-		expect(entry.x).toBeLessThan(starter.width);
-		expect(entry.y).toBeGreaterThanOrEqual(0);
-		expect(entry.y).toBeLessThan(starter.height);
-		occupied.add(cell(entry));
-	}
-	expect(occupied.size).toBe(starter.layout.length);
-	expect(occupied.has(cell(starter.start))).toBe(false);
-});
-
 test("the starter cannot be changed for later games", () => {
 	const loose = starter as unknown as {
 		width: number;

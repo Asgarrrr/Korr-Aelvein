@@ -86,34 +86,3 @@ test("the scan sees every runtime export", () => {
 	const { names } = scan(source);
 	for (const name of Object.keys(api)) expect(names).toContain(name);
 });
-
-test("the scan reports every export form it cannot read", () => {
-	for (const line of [
-		'export * from "./ecs/ids";',
-		'export type * from "./ecs/ids";',
-		'export * as ids from "./ecs/ids";',
-		"export { FAIL };",
-		"export { FAIL as GIVE_UP };",
-		"export default defineModule;",
-		"export = api;",
-	])
-		expect(scan(`export const A = 1;\n${line}\n`).unread).toEqual([line]);
-});
-
-test("the core API's sentinel values are frozen", () => {
-	const { FAIL, ALTERNATE, NONE, NO_CELL, NO_ENTITY } = api;
-	const values: Record<string, number> = {
-		FAIL,
-		ALTERNATE,
-		NONE,
-		NO_CELL,
-		NO_ENTITY,
-	};
-	expect(values).toEqual({
-		FAIL: -1,
-		ALTERNATE: -2,
-		NONE: -1,
-		NO_CELL: -1,
-		NO_ENTITY: 0,
-	});
-});

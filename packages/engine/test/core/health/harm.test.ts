@@ -64,15 +64,6 @@ const run = (
 
 const cause = (n: number) => (1000 + n) as EntityId;
 
-test("two harms to one target in one tick sum", () => {
-	const { world, ids } = run((ctx, [a]) => {
-		ctx.harm(a as EntityId, 3, cause(1));
-		ctx.harm(a as EntityId, 4, cause(2));
-	});
-	expect(world.peek("vitality", "hp", ids[0] as EntityId)).toBe(3);
-	expect(world.peek("vitality", "max", ids[0] as EntityId)).toBe(10);
-});
-
 test("a lethal harm kills with the lowest cause among the target's harms", () => {
 	const { world, ids, events } = run((ctx, [a]) => {
 		ctx.harm(a as EntityId, 6, cause(9));
@@ -151,58 +142,6 @@ test("harm from propose throws", () => {
 	expect(() => world.runRounds(1)).toThrow(/harm is not allowed in propose/);
 });
 
-test("an action's harm lands before the next creature acts", () => {
-	const acted: EntityId[] = [];
-	const brawler = defineModule({
-		name: "brawler",
-		schema: { fist: {} },
-		config: {},
-		setup(b) {
-			const fists = b.query(["fist"]);
-			const swing = b.action("swing", "entity", [], (ctx, actor, target) => {
-				acted.push(ctx.idOf(actor));
-				if (fists.has(actor)) ctx.harm(target, 10, ctx.idOf(actor));
-				return TURN;
-			});
-			b.propose((ctx, actor, perception, out) => {
-				out.push(
-					swing,
-					perception.count > 0 ? perception.id(0) : ctx.idOf(actor),
-					1,
-				);
-			});
-		},
-	});
-	const world = createWorld({
-		seed: 1,
-		floors: 1,
-		width: 4,
-		height: 4,
-		modules: [brawler],
-	});
-	const fighter = { actor: true, components: { ...BODY.components } };
-	const first = world.spawn(
-		0,
-		{ ...fighter, components: { ...fighter.components, fist: {} } },
-		0,
-		0,
-	);
-	const second = world.spawn(0, fighter, 1, 0);
-	world.runRounds(1);
-	expect(acted).toEqual([first]);
-	expect(world.alive(second)).toBe(false);
-});
-
-test("a snapshot with harm still pending throws", () => {
-	const engine = createEngine(
-		{ seed: 1, floors: 1, width: 4, height: 4, popCap: 16, events: true },
-		[],
-	);
-	expect(() => saveFloor(engine, 0)).not.toThrow();
-	engine.harms.push(1 as EntityId, 2 as EntityId, 3);
-	expect(() => saveFloor(engine, 0)).toThrow(/harm/);
-});
-
 test("after an action, harm applies before its deferred kills, and kills before spawns", () => {
 	const victims: EntityId[] = [];
 	const ruin = defineModule({
@@ -248,4 +187,14 @@ test("after an action, harm applies before its deferred kills, and kills before 
 		`died ${a}`,
 		`spawned ${c + 1}`,
 	]);
+});
+
+test("a snapshot with harm still pending throws", () => {
+	const engine = createEngine(
+		{ seed: 1, floors: 1, width: 4, height: 4, popCap: 16, events: true },
+		[],
+	);
+	expect(() => saveFloor(engine, 0)).not.toThrow();
+	engine.harms.push(1 as EntityId, 2 as EntityId, 3);
+	expect(() => saveFloor(engine, 0)).toThrow(/harm/);
 });

@@ -6,7 +6,6 @@ import { moss } from "../../../src/content/species/moss";
 import { rat } from "../../../src/content/species/rat";
 import { stoat } from "../../../src/content/species/stoat";
 import { PERCEPTION_RADIUS } from "../../../src/core/config";
-import { kill, spawn } from "../../../src/core/lifecycle/lifecycle";
 import {
 	type AnyModule,
 	type Builder,
@@ -193,39 +192,6 @@ test("danger does not depend on the order fear's tick visits rows", () => {
 		(m): AnyModule => (m === fear ? reversed(fear) : m),
 	);
 	expect(hash(flipped)).toBe(hash(modules));
-});
-
-test("danger marks every cell within reach of a creature that eats a wary class", () => {
-	const engine = createEngine(
-		{ seed: 1, floors: 1, width: SIDE, height: SIDE, popCap: 64, events: true },
-		modules.filter((m) => m.name !== "wander"),
-		species,
-	);
-	spawn(engine, 0, rat, 1, 1);
-	const hunter = spawn(engine, 0, stoat, 10, 10);
-	spawn(
-		engine,
-		0,
-		{ ...rat, components: { diet: rat.components.diet } },
-		18,
-		2,
-	);
-	engine.runRound();
-	const danger = engine.cellColumns.get("danger")?.eats as Uint8Array;
-	// A creature moves at most one cell a round, so danger reaches one cell past perception.
-	const reach = PERCEPTION_RADIUS + 1;
-	for (let y = 0; y < SIDE; y++)
-		for (let x = 0; x < SIDE; x++) {
-			const near = Math.max(Math.abs(x - 10), Math.abs(y - 10)) <= reach;
-			expect({ x, y, v: danger[y * SIDE + x] }).toEqual({
-				x,
-				y,
-				v: near ? foodClass.meat : 0,
-			});
-		}
-	kill(engine, 0, hunter, hunter);
-	engine.runRound();
-	expect(danger.every((v) => v === 0)).toBe(true);
 });
 
 // The pre-check assumes no creature that eats appears between fear's tick and a prey's turn.

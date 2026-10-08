@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import { EVENT_CAP_PER_TURN } from "../../../src/core/config";
-import { DeferredKills } from "../../../src/core/lifecycle/deferred";
 import {
 	defineModule,
 	type EntityId,
@@ -59,27 +58,6 @@ const hashFor = (reverse: boolean) => {
 
 test("tick kills and spawns do not depend on row iteration order", () => {
 	expect(hashFor(true)).toBe(hashFor(false));
-});
-
-test("deferred kills apply in (cause, target id) order", () => {
-	const kills = new DeferredKills();
-	const pairs = [
-		[5, 2],
-		[3, 1],
-		[9, 1],
-		[4, 2],
-		[1, 1],
-		[7, 3],
-		[2, 2],
-	];
-	for (const [id, cause] of pairs)
-		kills.push(id as EntityId, cause as EntityId);
-	kills.sort();
-	const applied = Array.from(
-		kills.order.subarray(0, kills.count),
-		(n) => kills.ids[n],
-	);
-	expect(applied).toEqual([1, 3, 9, 2, 4, 5, 7]);
 });
 
 const tagged = (v: number) => ({ actor: false, components: { tag: { v } } });

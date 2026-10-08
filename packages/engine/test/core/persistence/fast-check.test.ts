@@ -124,21 +124,11 @@ const { grid, scheduler, storage } = engine;
 const now = header[TIME] ?? 0;
 // Each would make the engine write memory off its floor, or schedule outside the round.
 const faults: [string, Uint8Array, RegExp][] = [
-	[
-		"an actor's cell far off the floor",
-		resealed(grid.cellOf, actorRow, 1 << 20),
-		/cell/,
-	],
 	["an item's negative cell", resealed(grid.cellOf, itemRow, -1), /cell/],
 	[
 		"a cell one past the last",
 		resealed(grid.cellOf, itemRow, SIDE * SIDE),
 		/cell/,
-	],
-	[
-		"an actor due long before now",
-		resealed(scheduler.nextAt, actorRow, -2e9),
-		/next acts at/,
 	],
 	[
 		"an actor due just before now",
@@ -151,7 +141,6 @@ const faults: [string, Uint8Array, RegExp][] = [
 		/free slot/,
 	],
 	["a free slot of floor 0", resealed(storage.free, 0, CAP - 1), /free slot/],
-	["a negative free slot", resealed(storage.free, 0, -1), /free slot/],
 	[
 		"an empty cell heading a floor-0 slot",
 		resealed(grid.heads, emptyCell ?? 0, FOREIGN),

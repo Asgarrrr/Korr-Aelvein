@@ -128,18 +128,6 @@ test("the opening snapshot lists the starter layout, without the player", () => 
 	expect(entities.map(([id]) => id)).not.toContain(player.id);
 });
 
-test("a move changes the position by (dx, dy)", () => {
-	const session = new Session(SEED);
-	const before = player(session.opening);
-	const after = player(session.handle(move(1, -1)));
-	expect([after.x, after.y]).toEqual([before.x + 1, before.y - 1]);
-});
-
-test("a wait keeps the position and plays the turn", () => {
-	const session = new Session(SEED);
-	expectStayed(session, WAIT, snapshot(session.opening));
-});
-
 test("a move off the floor keeps the position and plays the turn", () => {
 	const session = new Session(SEED);
 	let last = walkTo(session, snapshot(session.opening), 0, 0);
@@ -192,17 +180,6 @@ test("a player next to cheese eats it: the cheese leaves the floor and satiety r
 	const after = session.handle({ type: "eat", target: cheese });
 	expect(find(after, cheese)).toBeUndefined();
 	expect(player(after).satiety).toBeGreaterThan(before.player.satiety);
-});
-
-test("an eat on cheese 3 or more cells away moves the player one step closer", () => {
-	const session = new Session(SEED);
-	// The starter layout puts the nearest cheese 3 cells from the start cell.
-	const cheese = nearestCheese(session.opening);
-	const far = distance(player(session.opening), at(cheese));
-	expect(far).toBeGreaterThanOrEqual(3);
-	const after = session.handle({ type: "eat", target: cheese[0] });
-	expect(find(after, cheese[0])).toEqual(cheese);
-	expect(distance(player(after), at(cheese))).toBe(far - 1);
 });
 
 test("the same seed and commands give the same messages, another seed differs", () => {

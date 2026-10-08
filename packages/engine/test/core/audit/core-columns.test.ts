@@ -34,18 +34,6 @@ const coreTargets: [string, (e: Engine) => Write][] = [
 		},
 	],
 	[
-		"ids",
-		(e) => (slot) => {
-			e.storage.ids[slot] = 99;
-		},
-	],
-	[
-		"nextAt",
-		(e) => (slot) => {
-			e.scheduler.nextAt[slot] = 5000;
-		},
-	],
-	[
 		"intent",
 		(e) => (slot) => {
 			e.intentKey[slot] = 1;

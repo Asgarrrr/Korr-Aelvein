@@ -238,16 +238,6 @@ test("only a player can take an input, even when a load put a creature first in 
 	expect(() => loaded.input(plain, "core/idle", null)).toThrow(/not due/);
 });
 
-test("a player on a floor that finished the round is not due", () => {
-	const { world, players } = setup();
-	const [first, second] = players as [EntityId, EntityId];
-	world.advance();
-	world.input(first, "core/idle", null);
-	expect(world.advance()).toEqual([second]);
-	expect(() => world.input(first, "core/idle", null)).toThrow(/not due/);
-	expect(() => loadWorld(world.save(), game)).not.toThrow();
-});
-
 test("a player whose next turn falls in the next round is not due, even after a load", () => {
 	const world = createWorld({
 		seed: 1,

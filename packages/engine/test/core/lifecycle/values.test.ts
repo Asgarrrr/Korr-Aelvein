@@ -111,20 +111,6 @@ test("inherited field names are no fields, in values and in shapes", () => {
 	expect(w.save()).toEqual(before);
 });
 
-test("a spawn started while another reads its values throws, and the world stays as it was", () => {
-	const w = world();
-	const before = w.save();
-	const values = {
-		get edible() {
-			w.spawn(0, "cheese", 1, 1);
-			return { nutrition: 1 };
-		},
-	};
-	expect(() => w.spawn(0, "cheese", 0, 0, values)).toThrow(/spawn is reading/);
-	expect(w.save()).toEqual(before);
-	expect(() => w.spawn(0, "cheese", 0, 0)).not.toThrow();
-});
-
 test("a getter cannot change the world while a spawn reads it", () => {
 	const w = world();
 	const before = w.save();

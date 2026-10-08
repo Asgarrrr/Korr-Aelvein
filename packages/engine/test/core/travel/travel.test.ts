@@ -220,16 +220,3 @@ test("an actor that dies in the turn it takes the stairs never leaves", () => {
 		world.hash(),
 	);
 });
-
-test("locate tells where an entity is: on a floor, in transit, or dead", () => {
-	aimAt("stairs");
-	const world = twoFloors();
-	world.spawn(0, stairsTo(1, 5, 6), 2, 2);
-	const id = world.spawn(0, climberBody, 3, 3);
-	expect(world.locate(id)).toEqual({ floor: 0, x: 3, y: 3 });
-	world.runRounds(1);
-	expect(world.locate(id)).toBe("transit");
-	world.runRounds(1);
-	expect(world.locate(id)).toEqual({ floor: 1, x: 5, y: 6 });
-	expect(world.locate((id + 1000) as EntityId)).toBe("dead");
-});

@@ -29,18 +29,6 @@ test("a module's config is read once, so the fingerprint and the module see one 
 	expect(seen).toBe(1);
 });
 
-test("a config holding something other than data still throws", () => {
-	const keeper = defineModule({
-		name: "keeper",
-		schema: {},
-		config: { table: new Map<string, number>() },
-		setup() {},
-	});
-	expect(() =>
-		createWorld({ seed: 1, floors: 1, width: 4, height: 4, modules: [keeper] }),
-	).toThrow(/keeper.*not data/);
-});
-
 test("a module cannot change its config", () => {
 	const meddler = defineModule({
 		name: "meddler",

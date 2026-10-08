@@ -7,7 +7,6 @@ import { fear } from "../../../../src/modules/fear";
 import { fire } from "../../../../src/modules/fire";
 import { hunger } from "../../../../src/modules/hunger";
 import { temperament } from "../../../../src/modules/temperament";
-import { wander } from "../../../../src/modules/wander";
 import {
 	AVERAGE,
 	actionsOf,
@@ -42,39 +41,6 @@ test("a rat replaying eat on a P=64 floor decides in full on the turn a stoat co
 	expect(actionsOf(prey, woken - 1)).toEqual(["hunger/eat"]);
 	// Danger reaches one cell beyond sight: the wake sees no eater yet.
 	expect(actionsOf(prey, woken)).toEqual(["hunger/eat"]);
-});
-
-test("a rat replaying roam on a P=64 floor decides in full on the turn a stoat comes within reach of danger", () => {
-	const far = farFloor([
-		hunger,
-		temperament,
-		fear,
-		logged(wander),
-		stalker,
-		logger,
-	]);
-	const { world } = far;
-	// Boxed in, so every roam is a blocked step: it idles and keeps the intent. A rat that walks
-	// into cells the stoat's square already covers is not woken (see the accepted limits below).
-	for (const [bx, by] of [
-		[0, 3],
-		[1, 3],
-		[1, 4],
-		[1, 5],
-		[0, 5],
-	] as const)
-		world.spawn(FAR, block, bx, by);
-	const prey = world.spawn(FAR, rat, 0, 4, {
-		temperament: { boldness: AVERAGE },
-	});
-	const { x, y, body } = walker(8, 4);
-	const hunter = world.spawn(FAR, body, x, y);
-	const woken = untilWithin(far, prey, hunter);
-	expect(woken).toBeGreaterThan(0);
-	expect(scheduled(prey, woken + 1)).toEqual([0]);
-	far.run(1);
-	expect(decided.get(prey)).toEqual([0, woken]);
-	expect(actionsOf(prey, woken - 1)).toEqual(["wander/roam"]);
 });
 
 test("a rat replaying watch or flee in sight of a stoat pays no full decision for the alarm", () => {

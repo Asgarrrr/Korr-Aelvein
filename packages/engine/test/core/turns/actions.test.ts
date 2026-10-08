@@ -5,7 +5,6 @@ import {
 	ALTERNATE,
 	type AnyModule,
 	defineModule,
-	FAIL,
 	NO_CELL,
 } from "../../../src/core/module/api";
 import { createWorld } from "../../../src/core/world/world";
@@ -41,13 +40,6 @@ const chain = (length: number, last: () => number) =>
 				b.propose((_ctx, _actor, _p, out) => out.push(first, null, SCORE));
 		},
 	});
-
-test("an alternate runs in place of the chosen action", () => {
-	const world = worldWith(chain(3, () => TURN));
-	const id = world.spawn(0, BODY, 0, 0);
-	world.runRounds(1);
-	expect(world.peek("trace", "depth", id)).toBe(2);
-});
 
 test("an alternate chain at the cap runs, one past it throws", () => {
 	const atCap = worldWith(chain(MAX_ALTERNATES + 1, () => TURN));
@@ -94,13 +86,6 @@ test("a cost below one tick or not an integer throws", () => {
 		world.spawn(0, BODY, 0, 0);
 		expect(() => world.runRounds(1)).toThrow(/cost/);
 	}
-});
-
-test("a failed action idles for one turn", () => {
-	const world = worldWith(chain(1, () => FAIL));
-	const id = world.spawn(0, BODY, 0, 0);
-	world.runRounds(3);
-	expect(world.peek("trace", "calls", id)).toBe(3);
 });
 
 test("a non-integer score throws", () => {

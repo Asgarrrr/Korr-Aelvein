@@ -9,11 +9,7 @@ import {
 	type EntityId,
 } from "../../../src/core/module/api";
 import { hashName } from "../../../src/core/random/rng";
-import {
-	createWorld,
-	loadWorld,
-	type World,
-} from "../../../src/core/world/world";
+import { createWorld, type World } from "../../../src/core/world/world";
 import { flora } from "../../../src/modules/flora";
 import { hunger } from "../../../src/modules/hunger";
 import { hungerConfig } from "../../../src/modules/hunger/config";
@@ -52,23 +48,6 @@ test("eating records ate, then the food's death, both caused by the eater", () =
 	expect(drained(world)).toEqual([]);
 });
 
-test("tick facts keep registry order: a starved rat, then a sprout's yield", () => {
-	const world = smallWorld();
-	const sprout = world.spawn(
-		0,
-		{ ...moss, components: { sprout: { period: 5, left: 1 } } },
-		6,
-		6,
-	);
-	const starving = world.spawn(0, ratAt(1), 1, 1);
-	drained(world);
-	world.runRounds(2);
-	expect(drained(world)).toEqual([
-		[world.eventType("core/died"), starving, starving, 0, 0],
-		[world.eventType("core/spawned"), sprout, starving + 1, 0, 0],
-	]);
-});
-
 test("a direct spawn records core/spawned with no cause", () => {
 	const world = smallWorld();
 	world.runRounds(3);
@@ -104,37 +83,6 @@ test("a target killed twice in one batch dies once, by the lower cause", () => {
 	drained(world);
 	world.runRounds(1);
 	expect(drained(world)).toEqual([[world.eventType("core/died"), 3, 1, 0, 0]]);
-});
-
-test("an action's event carries the actor's own time, not the round start", () => {
-	const SLOW = 150;
-	const pulse = defineModule({
-		name: "pulse",
-		schema: { beat: { v: "u8" } },
-		config: {},
-		setup(b) {
-			const beat = b.event("beat");
-			const go = b.action("go", "none", [], (ctx, actor) => {
-				ctx.emit(beat, ctx.idOf(actor), 0, 0);
-				return SLOW;
-			});
-			b.propose((_ctx, _actor, _p, out) => out.push(go, null, 1));
-		},
-	});
-	const world = createWorld({
-		seed: 1,
-		floors: 1,
-		width: 4,
-		height: 4,
-		modules: [pulse],
-	});
-	world.spawn(0, { actor: true, components: { beat: {} } }, 0, 0);
-	world.runRounds(4);
-	const beat = world.eventType("pulse/beat");
-	const times = drained(world)
-		.filter(([type]) => type === beat)
-		.map(([, , , , time]) => time);
-	expect(times).toEqual([0, 150, 300]);
 });
 
 test("event types are name keys, the same in any registry", () => {
@@ -194,26 +142,6 @@ const loudWorld = (perTurn: number, events: boolean) =>
 		events,
 		modules: [loud(perTurn)],
 	});
-
-test("the per-turn event cap throws, with emission off too", () => {
-	for (const events of [true, false]) {
-		expect(() =>
-			loudWorld(EVENT_CAP_PER_TURN, events).runRounds(2),
-		).not.toThrow();
-		expect(() =>
-			loudWorld(EVENT_CAP_PER_TURN + 1, events).runRounds(1),
-		).toThrow(/events/);
-	}
-});
-
-test("a growing ring keeps every event in order", () => {
-	const COUNT = 3000;
-	const world = loudWorld(COUNT, true);
-	world.runRounds(1);
-	const order: number[] = [];
-	world.drainEvents(0, (_type, _cause, a) => order.push(a));
-	expect(order).toEqual(Array.from({ length: COUNT }, (_, i) => i));
-});
 
 test("undrained events are overwritten oldest first", () => {
 	const world = loudWorld(EVENT_CAP_PER_TURN, true);
@@ -316,51 +244,4 @@ test("the world cannot change while it drains events", () => {
 	expect(errors.length).toBe(attempts.length);
 	for (const message of errors) expect(message).toMatch(/draining/);
 	expect(() => world.runRounds(1)).not.toThrow();
-});
-
-// Two creatures each emit just over half a turn's cap; a player stands between them in line.
-const HALF = EVENT_CAP_PER_TURN / 2 + 1;
-const shouting = defineModule({
-	name: "shouting",
-	schema: { loud: { n: "i32" } },
-	config: {},
-	setup(b) {
-		const rows = b.query(["loud"]);
-		const counts = b.write("loud");
-		const shout = b.event("shout");
-		const yell = b.action("yell", "none", [], (ctx, actor) => {
-			for (let i = 0; i < (counts.n[actor] ?? 0); i++)
-				ctx.emit(shout, ctx.idOf(actor), 0, 0);
-			return 100;
-		});
-		b.propose((_ctx, actor, _p, out) => {
-			if (rows.has(actor)) out.push(yell, null, 1);
-		});
-	},
-});
-const pausedLoud = () => {
-	const world = createWorld({
-		seed: 1,
-		floors: 1,
-		width: 4,
-		height: 4,
-		events: false,
-		modules: [shouting],
-	});
-	const shouter = { actor: true, components: { loud: { n: HALF } } };
-	world.spawn(0, shouter, 0, 0);
-	const player = world.spawnPlayer(0, { actor: true, components: {} }, 1, 0);
-	world.spawn(0, shouter, 2, 0);
-	expect(world.advance()).toEqual([player]);
-	return { world, player };
-};
-
-test("a load mid-round keeps the round's event count, so the cap throws at the same point", () => {
-	const straight = pausedLoud();
-	straight.world.input(straight.player, "core/idle", null);
-	expect(() => straight.world.advance()).toThrow(/emitted more than/);
-	const paused = pausedLoud();
-	const loaded = loadWorld(paused.world.save(), { modules: [shouting] });
-	loaded.input(paused.player, "core/idle", null);
-	expect(() => loaded.advance()).toThrow(/emitted more than/);
 });

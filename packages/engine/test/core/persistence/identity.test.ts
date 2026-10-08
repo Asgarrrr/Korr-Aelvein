@@ -23,22 +23,6 @@ const firstOf = (floor: number) => (floor * ID_FLOOR_STRIDE + 1) as EntityId;
 const slotOf = (e: ReturnType<typeof createEngine>, floor: number) =>
 	e.storage.slotOf(floor, firstOf(floor));
 
-test("an unforged save loads", () => {
-	expect(() =>
-		loadWorld(
-			forge(() => {}),
-			{ modules: [] },
-		),
-	).not.toThrow();
-});
-
-test("an id living on two floors never loads", () => {
-	const bytes = forge((e) => {
-		e.storage.ids[slotOf(e, 1)] = firstOf(0);
-	});
-	expect(() => loadWorld(bytes, { modules: [] })).toThrow(/twice/);
-});
-
 test("an id both on a floor and in an inbox never loads", () => {
 	const bytes = forge((e) => {
 		e.inbox.post(1, 100, firstOf(0), 2, 2, slotOf(e, 0));

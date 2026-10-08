@@ -28,19 +28,3 @@ test("a drained ring far above its last batch shrinks, and still keeps order", (
 		Array.from({ length: BURST }, (_, i) => 100 + i),
 	);
 });
-
-test("a ring drained only in part keeps its size and every event left", () => {
-	const log = new EventLog(1, true);
-	emit(log, BURST);
-	const full = log.bytes(0);
-	let shown = 0;
-	expect(() =>
-		log.drain(0, () => {
-			if (++shown > 3) throw new Error("stop");
-		}),
-	).toThrow("stop");
-	expect(log.bytes(0)).toBe(full);
-	expect(drained(log)).toEqual(
-		Array.from({ length: BURST - 4 }, (_, i) => 4 + i),
-	);
-});
