@@ -60,4 +60,25 @@ check. Paths below are relative to `apps/server-rs/`.
 - Use the LSP (rust-analyzer) for definitions, references and
   implementations before grepping.
 - Before a crate or API is used for the first time, confirm its current
-  version and API on docs.rs. Never write from memory.
+  version and API with `rust-skills:rust-learner` or `rust-skills:docs`.
+  Never write from memory.
+
+## Skills
+
+Load the matching `rust-skills` skill before writing, not after a failure:
+
+| Situation | Skill |
+|---|---|
+| Borrow, move or lifetime error | `rust-skills:m01-ownership` |
+| `&mut` conflict, interior mutability | `rust-skills:m03-mutability` |
+| Generics, traits, static against dynamic dispatch | `rust-skills:m04-zero-cost` |
+| Newtypes, ids, invalid states, builders | `rust-skills:m05-type-driven` |
+| `Result`, error enums, panic or return | `rust-skills:m06-error-handling` |
+| Threads, `Send`/`Sync`, async, floor parallelism | `rust-skills:m07-concurrency` |
+| A hot path, a benchmark, an allocation | `rust-skills:m10-performance` |
+| Adding a crate or a feature flag | `rust-skills:m11-ecosystem` |
+| The server: HTTP, WebSocket, axum, shared state | `rust-skills:domain-web` |
+| Rename or move a symbol | `rust-skills:rust-refactor-helper` |
+
+Before reporting a Rust change done, run `rust-skills:m15-anti-pattern` on
+the diff.
