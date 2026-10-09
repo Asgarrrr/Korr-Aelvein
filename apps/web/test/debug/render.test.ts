@@ -1,14 +1,22 @@
 import { expect, test } from "bun:test";
-import type { Entity, Snapshot } from "@korr/protocol";
+import type { Entity, Look, Snapshot } from "@korr/protocol";
 import { render } from "../../src/debug/render";
 
-function snapshot(entities: Entity[]): Snapshot {
+const fixedLooks: Record<string, Look> = Object.fromEntries(
+	["rat", "cheese", "mushroom", "stoat"].map((stem) => [
+		stem,
+		{ stem, tier: 0 },
+	]),
+);
+
+function snapshot(entities: Entity[], looks = fixedLooks): Snapshot {
 	return {
 		type: "snapshot",
 		width: 4,
 		height: 3,
 		player: { id: 1, x: 1, y: 1, hp: 10, satiety: 800 },
 		entities,
+		looks,
 	};
 }
 
@@ -51,4 +59,23 @@ test("entities outside the floor are skipped", () => {
 		]),
 	);
 	expect(text).toBe("....\n.@..\n....\nhp 10  satiety 800");
+});
+
+test("a species draws its stem's glyph, upper-cased above tier 0", () => {
+	const lines = render(
+		snapshot(
+			[
+				[2, "herbivore.0", 0, 0],
+				[3, "herbivore.1", 1, 0],
+				[4, "dragon", 2, 0],
+				[5, "herbivore.9", 3, 0],
+			],
+			{
+				"herbivore.0": { stem: "rat", tier: 1 },
+				"herbivore.1": { stem: "rat", tier: 0 },
+				dragon: { stem: "dragon", tier: 0 },
+			},
+		),
+	).split("\n");
+	expect(lines[0]).toBe("Rr??");
 });

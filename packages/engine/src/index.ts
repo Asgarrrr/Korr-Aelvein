@@ -1,3 +1,5 @@
+export { type Catalogue, catalogue } from "./content/catalogue";
+export type { Look } from "./content/catalogue/types";
 export type { EntityId } from "./core/ecs/ids";
 export type { EventVisitor } from "./core/events/events";
 export type {

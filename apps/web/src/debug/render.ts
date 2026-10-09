@@ -1,11 +1,23 @@
-import type { Snapshot } from "@korr/protocol";
+import type { Look, Snapshot } from "@korr/protocol";
 import { floorGlyph, glyphs, playerGlyph, unknownGlyph } from "../theme";
 
-export function render({ width, height, player, entities }: Snapshot): string {
+function glyphOf(look: Look | undefined): string {
+	const glyph = look === undefined ? undefined : glyphs.get(look.stem);
+	if (look === undefined || glyph === undefined) return unknownGlyph;
+	return look.tier > 0 ? glyph.toUpperCase() : glyph;
+}
+
+export function render({
+	width,
+	height,
+	player,
+	entities,
+	looks,
+}: Snapshot): string {
 	const cells = new Array<string>(width * height).fill(floorGlyph);
 	for (const [, species, x, y] of entities) {
 		if (x < 0 || x >= width || y < 0 || y >= height) continue;
-		cells[y * width + x] = glyphs.get(species) ?? unknownGlyph;
+		cells[y * width + x] = glyphOf(looks[species]);
 	}
 	cells[player.y * width + player.x] = playerGlyph;
 	const lines: string[] = [];

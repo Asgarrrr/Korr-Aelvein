@@ -7,6 +7,8 @@ const layout: readonly { species: SpeciesName; x: number; y: number }[] = [
 	{ species: "rat", x: 24, y: 4 },
 	{ species: "rat", x: 27, y: 11 },
 	{ species: "rat", x: 13, y: 13 },
+	{ species: "herbivore.0", x: 11, y: 13 },
+	{ species: "herbivore.0", x: 22, y: 10 },
 	{ species: "stoat", x: 29, y: 2 },
 	{ species: "stoat", x: 2, y: 14 },
 	{ species: "cheese", x: 6, y: 5 },

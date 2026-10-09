@@ -1,10 +1,18 @@
 import {
+	type Catalogue,
+	catalogue,
 	createStarterGame,
 	type EntityId,
 	starter,
 	type World,
 } from "@korr/engine";
-import type { Command, Entity, ServerMessage, Snapshot } from "@korr/protocol";
+import type {
+	Command,
+	Entity,
+	Look,
+	ServerMessage,
+	Snapshot,
+} from "@korr/protocol";
 
 // Every action costs one turn, so two advances end this round and reach the player in the next.
 const MAX_ADVANCES = 8;
@@ -13,10 +21,12 @@ export class Session {
 	readonly opening: ServerMessage;
 	readonly #world: World;
 	readonly #player: EntityId;
+	readonly #looks: Catalogue["looks"];
 	#over = false;
 
 	constructor(seed: number) {
 		this.#world = createStarterGame(seed);
+		this.#looks = catalogue(seed).looks;
 		this.#player = this.#world.spawnPlayer(
 			0,
 			"rat",
@@ -69,8 +79,12 @@ export class Session {
 		const id = this.#player;
 		const { x, y } = this.#position();
 		const entities: Entity[] = [];
+		const looks: Record<string, Look> = {};
 		this.#world.entities(0, (other, species, atX, atY) => {
-			if (other !== id) entities.push([other, species, atX, atY]);
+			if (other === id) return;
+			entities.push([other, species, atX, atY]);
+			const look = this.#looks[species];
+			if (look) looks[species] = look;
 		});
 		return {
 			type: "snapshot",
@@ -84,6 +98,7 @@ export class Session {
 				satiety: this.#world.peek("satiety", "value", id),
 			},
 			entities,
+			looks,
 		};
 	}
 }

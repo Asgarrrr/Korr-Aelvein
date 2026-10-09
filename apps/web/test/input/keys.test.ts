@@ -9,6 +9,7 @@ function snapshot(entities: Entity[] = []): Snapshot {
 		height: 8,
 		player: { id: 1, x: 4, y: 4, hp: 10, satiety: 800 },
 		entities,
+		looks: {},
 	};
 }
 

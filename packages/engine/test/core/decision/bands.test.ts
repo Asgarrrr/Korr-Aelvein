@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { species } from "../../../src/content/species";
+import { catalogue } from "../../../src/content/catalogue";
 import { BANDS, INERTIA } from "../../../src/core/config";
 import { band, checkBands } from "../../../src/core/decision/bands";
 import { spawn } from "../../../src/core/lifecycle/lifecycle";
@@ -134,6 +134,7 @@ test("on a seeded 300-round world, every game action scores in its own band", ()
 });
 
 const measuredOn = (seed: number, measure: typeof intentSwitches) => {
+	const { species } = catalogue(seed);
 	const engine = createEngine(
 		{
 			seed,
@@ -147,7 +148,7 @@ const measuredOn = (seed: number, measure: typeof intentSwitches) => {
 		species,
 	);
 	for (const { species: name, x, y } of starter.layout)
-		spawn(engine, 0, species[name], x, y);
+		spawn(engine, 0, name, x, y);
 	return measure(engine, 100);
 };
 
@@ -159,6 +160,6 @@ test("intent switches on the seeded starter floor stay at or below today's count
 
 // Oscillation guard: a new decision must not make creatures flip back and forth more.
 test("intent reversals on the seeded starter floor stay at or below today's count", () => {
-	expect(measuredOn(1, intentReversals)).toBeLessThanOrEqual(13);
+	expect(measuredOn(1, intentReversals)).toBeLessThanOrEqual(17);
 	expect(measuredOn(2, intentReversals)).toBeLessThanOrEqual(29);
 });

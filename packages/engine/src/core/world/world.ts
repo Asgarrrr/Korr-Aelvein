@@ -159,9 +159,14 @@ export function createWorld<
 	return new GameWorld<M, S>(build(options));
 }
 
+type Table<M extends readonly AnyModule[], S extends string> = Readonly<
+	Record<S, Species<M>>
+>;
+
+// A supplier builds the table from the seed in the save header.
 type LoadTable<M extends readonly AnyModule[], S extends string = string> = {
 	readonly modules: M;
-	readonly species?: Readonly<Record<S, Species<M>>>;
+	readonly species?: Table<M, S> | ((seed: number) => Table<M, S>);
 } & LoadOptions;
 
 export function loadWorld<
@@ -178,7 +183,11 @@ export function loadEngine<const M extends readonly AnyModule[]>(
 ): Engine {
 	const { header, hash, images } = readWorld(bytes);
 	const { round, events, ...shape } = header;
-	const { check = "full", modules, species } = options;
+	const { check = "full", modules } = options;
+	const species =
+		typeof options.species === "function"
+			? options.species(shape.seed)
+			: options.species;
 	const engine = build({
 		...shape,
 		modules,
