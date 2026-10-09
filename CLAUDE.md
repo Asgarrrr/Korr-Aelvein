@@ -41,6 +41,8 @@ row fits, that is a design question: propose a new row before coding.
 | Tuning values of a mechanic: rates, thresholds | `packages/engine/src/modules/<mechanic>/config.ts` |
 | A behaviour of a mechanic: its action, in its own file | `packages/engine/src/modules/<mechanic>/behaviours/<behaviour>.ts` |
 | Species: which components, with which values | `packages/engine/src/content/species/` |
+| Generated species: archetypes, genes, expression, looks, the catalogue | `packages/engine/src/content/catalogue/` |
+| Tuning values of the catalogue: expression rows, tiers, budgets, hues | `packages/engine/src/content/catalogue/config.ts` |
 | Type read by two or more modules | `packages/engine/src/contracts/` |
 | Which modules run, in which order | `packages/engine/src/registry.ts` |
 | The Game and its factories | `packages/engine/src/game.ts` |

@@ -107,6 +107,40 @@ a second name anywhere.
   Code: `game` (`packages/engine/src/game.ts`). `createGame` / `loadGame`
   build a World running the Game.
 
+## Generated species
+
+Plan: `docs/plans/generative-species.md`. Code:
+`packages/engine/src/content/catalogue/`.
+
+- **Archetype**: a hand-authored species template for a Niche: a body, a
+  stem and gene bounds. Rat is the first herbivore Archetype.
+- **Catalogue**: one World's species table and Looks, built from its seed
+  by `catalogue(seed)`. `createGame` builds it; `loadGame` rebuilds it
+  from the saved seed.
+- **Gene**: a named integer 0..`GENE_MAX` (255), such as `size`.
+- **Genome**: the values of every Gene of a generated species, drawn from
+  the seed within its Archetype's bounds.
+- **Expression**: the data rows `{gene, component, field, min, max}` and
+  the one pure function that turns a Genome into species field values.
+- **Niche**: the trophic place of a species: producer, herbivore,
+  predator, apex.
+- **Rank** (planned): the standing of a species or individual: normal,
+  boss; later mutant, tamed.
+- **Look**: what the player sees of a species: its stem, its size tier,
+  later its hue. Sent in the Snapshot.
+- **Stratum**: a band of floors deep in the dungeon. Each generated Niche
+  has one species per Stratum.
+- **Budget**: the gene points a generated species spends, set per Niche
+  by a Curve over depth.
+- **Mutant** (planned): an individual whose values differ from its
+  species: stronger, or with a need its species lacks.
+- **Boss** (planned): one boosted apex per Stratum, with the boss Rank,
+  named and announced to the player.
+- **Litter**: the offspring of one `breed` action, placed on free cells
+  around the parent; a crowded neighbourhood gives a partial Litter.
+- **Remains** (planned): what a death leaves on its cell: a carcass that
+  persists as food.
+
 ## Server and client
 
 - **Command**: what a client sends for its player's turn (`move`, `wait`, `eat`).
