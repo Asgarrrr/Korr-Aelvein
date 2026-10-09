@@ -34,8 +34,8 @@ const build = () =>
 function traveller(e: Engine): Slot {
 	const components: Record<string, Record<string, number>> = {};
 	let n = 0;
-	for (const [name, { columns }] of e.components) {
-		if (name === "link") continue;
+	for (const [name, { columns, sparse }] of e.components) {
+		if (name === "link" || sparse) continue;
 		const fields: Record<string, number> = {};
 		for (const field of Object.keys(columns)) fields[field] = (n++ % 100) + 1;
 		components[name] = fields;
@@ -57,11 +57,13 @@ function travel(e: Engine, slot: Slot): Slot {
 	return e.storage.slotOf(1, id);
 }
 
-test("the carried columns are exactly the component columns and the species index", () => {
+test("the carried columns are exactly the dense component columns and the species index", () => {
 	const e = build();
 	const components = [
 		e.speciesIndex,
-		...[...e.components.values()].flatMap((c) => Object.values(c.columns)),
+		...[...e.components.values()]
+			.filter((c) => !c.sparse)
+			.flatMap((c) => Object.values(c.columns)),
 	];
 	expect(e.carried.length).toBe(components.length);
 	expect(components.every((c) => e.carried.includes(c))).toBe(true);

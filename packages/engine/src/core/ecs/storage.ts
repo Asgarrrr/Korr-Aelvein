@@ -1,6 +1,7 @@
-import { CAP, ID_FLOOR_STRIDE } from "../config";
+import { CAP, ID_FLOOR_STRIDE, SPARSE_CAP } from "../config";
 import { type EntityId, NONE, type Slot } from "./ids";
 import { type Column, createColumn, type FieldKind } from "./schema";
+import { SparsePool } from "./sparse";
 
 export const ALIVE = 1;
 export const ACTOR = 2;
@@ -31,6 +32,7 @@ export class Storage {
 	readonly freeCount: Int32Array;
 	readonly free: Int32Array;
 	readonly counters: Int32Array;
+	readonly sparse: SparsePool;
 	// Open addressing over slots, linear probing; holds slot + 1 so 0 means empty.
 	private readonly index: Int32Array;
 
@@ -47,6 +49,8 @@ export class Storage {
 		this.index = new Int32Array(floors * INDEX_SIZE);
 		this.ids = new Int32Array(floors * CAP);
 		this.columns.push(this.ids);
+		this.sparse = new SparsePool(floors, SPARSE_CAP);
+		this.columns.push(this.sparse.rowOf);
 	}
 
 	column(kind: FieldKind): Column {
@@ -105,6 +109,7 @@ export class Storage {
 
 	release(floor: number, slot: Slot): void {
 		this.unindex(floor, slot);
+		this.sparse.release(floor, slot);
 		// Zero is every field's absent value, so the next entity in this slot starts clean.
 		const columns = this.columns;
 		for (let c = 0; c < columns.length; c++) {

@@ -102,6 +102,7 @@ export function forwardBuilder<S extends Schema, K extends Schema>(
 ): Builder<S, K> {
 	return {
 		write: (name) => b.write(name),
+		sparse: (name) => b.sparse(name),
 		cells: (name) => b.cells(name),
 		previous: (name) => b.previous(name),
 		read: (name) => b.read(name),

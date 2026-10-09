@@ -72,7 +72,8 @@ slot across all columns. An `EntityId` names an entity for life.
 | `module/api.ts` | The only engine surface a module sees. Frozen. |
 | `world/world.ts`, `world/game-world.ts` | `World` API (exported for the game only: `createGame`, `loadGame` in `src/game.ts`); call guards. |
 | `engine.ts` | All engine state; `coreColumns`; registers `core/step`, `core/idle`, `core/travel`. |
-| `setup/registration.ts` | Ownership checks, `ModuleBuilder`, fingerprint, carried columns (from `coreColumns`). |
+| `setup/registration.ts` | Module and species checks, fingerprint, carried columns (from `coreColumns`). |
+| `setup/builder.ts` | `ModuleBuilder`: ownership checks on `write`, `sparse`, `read`, `cells`. |
 | `turns/turn.ts` | Tick phase, actor loop, `decide`, `execute` (`requires`, alternates), `step` body. |
 | `turns/round.ts` | `advance`, LOD periods, player turns. |
 | `turns/target.ts` | `validTarget`: one rule for proposals, alternates, inputs and loads. |
@@ -87,7 +88,7 @@ slot across all columns. An `EntityId` names an entity for life.
 | `ecs/` | Storage, masks, queries, getter views; imports nothing else from core. |
 | `lifecycle/` | Spawn by name or shape, `values`, kill, deferred lists, floor membership. |
 | `persistence/image.ts` | Floor image layout, header codec, `FORMAT_VERSION`, `sectionsOf`, checksum. |
-| `persistence/validate.ts`, `rows.ts` | Load checks, fast and full. |
+| `persistence/validate.ts`, `rows.ts`, `sparse.ts` | Load checks, fast and full; `sparse.ts` checks the pool. |
 | `audit/` | Audit mode: column diffs around callbacks, range-checked writes. |
 
 ## Recipes
@@ -120,6 +121,17 @@ checks of a species shape (kind, health rule, link rule). A registered
 component the species lacks throws; an unregistered one is skipped. The
 engine keeps no `values` object. Stairs: `"stairs"` with `values.link`.
 `bench/reference/world.ts` switches events off while it generates.
+
+### Make a component sparse
+
+For a component held by few entities. List it in the module's `sparse`
+and access it with `b.sparse(name)`, never `b.write`. Index its columns
+by `row(slot)`, which is `NONE` for a slot without one. `b.query` and
+`requires` work unchanged. The pool holds `SPARSE_CAP` rows per floor:
+`world.spawn` throws on a full pool and a deferred spawn is dropped.
+Until travel carries pool rows, an actor species, a range or spawn values
+on a sparse component throw. `b.read` on a sparse component throws. The
+fingerprint folds the list, so the golden hash moves.
 
 ### Change the frozen core API
 
@@ -178,6 +190,9 @@ typecheck lists any you miss.
 - Per-call allocation in a hot path shows as RSS, not time. An 8-element
   array per flee cost 60–100 MB. Read into locals instead.
 - `ctx.kill` is deferred: the victim stays visible until the callback ends.
+- A pool row is valid in the current callback only. An applied kill moves
+  the floor's last pool row into the freed one. Store `EntityId`s and call
+  `row(slot)` again in each callback.
 - `b.read` returns `undefined` when the owner is not registered. `b.query`
   and `requires` throw on such names: guard them as `fear` does.
 - Audit mode (`audit: true`, tests only) catches writes to non-owned

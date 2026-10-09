@@ -58,8 +58,14 @@ Evolvability: a new mechanic touches its folder, `registry.ts`, at most one
 - Cell columns: `cells(name, {field: width})`, one array of `FLOORS*W*H`,
   same ownership rule as entity columns. Built with the first mechanic that
   needs per-cell state (fire).
-- Deferred: a sparse storage kind. Trigger: RSS over budget, or a component
-  with >= 4 fields on < 10% of entities.
+- Sparse storage kind: built (pool kind, `core/ecs/sparse.ts`), triggered
+  by per-individual genes against the RSS budget. One pool per world;
+  each floor has `SPARSE_CAP` rows shared by every sparse component. A u16
+  `rowOf` column (local row + 1, 0 = none) is the only per-slot cost. A
+  release swap-removes the floor's last row into the freed one. Saved as a
+  `POOL_COUNT` header word plus one POOL section per pool column. Non-actor
+  components only until travel carries pool rows
+  (`docs/plans/generative-species.md` S2).
 - Rejected: archetypes (churn 1.8x, table explosion with tags), per-component
   sparse sets (5x slower random reads), AoS/Map (memory, 10x random reads),
   global free list (budget-split dependence), growable capacity (stale
@@ -309,7 +315,7 @@ export const hunger = defineModule({
 Archetypes; cached or reactive queries; observers and lifecycle hooks;
 generic request channel; generic relations, wildcards, prefabs; generation
 bits; parallel workers; per-system access declarations; `Not` queries;
-float fields; sparse storage kind; shared response-curve helper; aggregate
+float fields; shared response-curve helper; aggregate
 distant-floor model; dt-aware step LOD; network delta encoding.
 
 ## 4. Slices

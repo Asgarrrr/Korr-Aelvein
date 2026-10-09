@@ -1,9 +1,9 @@
-import { CAP, TICKS_PER_TURN } from "../config";
+import { CAP, SPARSE_CAP, TICKS_PER_TURN } from "../config";
 import type { Column } from "../ecs/schema";
 import { type Engine, FLOOR_STAGE } from "../engine";
 import type { Checksum } from "./checksum";
 
-export const FORMAT_VERSION = 7;
+export const FORMAT_VERSION = 8;
 export const WORD = 4;
 export const VERSION = 0;
 export const FINGERPRINT = 1;
@@ -17,15 +17,17 @@ export const PERIOD = 8;
 export const INBOX = 9;
 export const TRAFFIC = 10;
 export const EMITTED = 11;
-export const SUM = 12;
+export const POOL_COUNT = 12;
+export const SUM = 13;
 // Then the sections, then the inbox entries.
-export const FLOOR_HEADER = 14;
+export const FLOOR_HEADER = 15;
 const BYTE_BITS = 8;
 
 export const FREE = 0;
 export const ROWS = 1;
 export const MASKS = 2;
 export const CELLS = 3;
+export const POOL = 4;
 
 export interface Section {
 	readonly array: Column;
@@ -57,6 +59,7 @@ export function sectionsOf(engine: Engine): Section[] {
 	return [
 		of(storage.free, FREE, CAP),
 		...storage.columns.map((column) => of(column, ROWS, CAP)),
+		...storage.sparse.columns.map((column) => of(column, POOL, SPARSE_CAP)),
 		of(storage.masks, MASKS, CAP * storage.maskWords),
 		of(grid.heads, CELLS, grid.cells),
 		...cellColumns.map((column) => of(column, CELLS, grid.stride)),
@@ -76,9 +79,11 @@ export function sectionCount(
 	section: Section,
 	highWater: number,
 	freeCount: number,
+	pool: number,
 ): number {
 	if (section.kind === FREE) return freeCount;
 	if (section.kind === ROWS) return highWater;
+	if (section.kind === POOL) return pool;
 	if (section.kind === MASKS) return highWater * engine.storage.maskWords;
 	return engine.grid.cells;
 }
@@ -90,6 +95,7 @@ export function imageWords(
 	engine: Engine,
 	highWater: number,
 	freeCount: number,
+	pool: number,
 	inbox: number,
 ): number {
 	const sections = engine.sections;
@@ -97,7 +103,7 @@ export function imageWords(
 	for (let i = 0; i < sections.length; i++) {
 		const section = sections[i] as Section;
 		const bytes =
-			sectionCount(engine, section, highWater, freeCount) * section.unit;
+			sectionCount(engine, section, highWater, freeCount, pool) * section.unit;
 		words += Math.ceil(bytes / WORD);
 	}
 	return words;
@@ -116,6 +122,7 @@ export interface FloorHeader {
 	readonly inbox: number;
 	readonly traffic: number;
 	readonly emitted: number;
+	readonly pool: number;
 }
 
 // The header words before the checksum.
@@ -138,6 +145,7 @@ export function writeHeader(
 	out[at + INBOX] = engine.inbox.count(floor);
 	out[at + TRAFFIC] = engine.traffic[floor] ?? 0;
 	out[at + EMITTED] = engine.events.emittedThisTurn(floor);
+	out[at + POOL_COUNT] = storage.sparse.counts[floor] ?? 0;
 }
 
 // Expects at least FLOOR_HEADER words.
@@ -155,6 +163,7 @@ export function readHeader(words: Int32Array): FloorHeader {
 		inbox: words[INBOX] ?? 0,
 		traffic: words[TRAFFIC] ?? 0,
 		emitted: words[EMITTED] ?? 0,
+		pool: words[POOL_COUNT] ?? 0,
 	};
 }
 
@@ -170,6 +179,7 @@ export function floorChecksum(
 		throw new Error("a snapshot was taken with harm still pending");
 	const highWater = storage.highWater[floor] ?? 0;
 	const freeCount = storage.freeCount[floor] ?? 0;
+	const pool = storage.sparse.counts[floor] ?? 0;
 	writeHeader(engine, floor, header, 0);
 	if (!withInbox) {
 		header[INBOX] = 0;
@@ -181,7 +191,7 @@ export function floorChecksum(
 	for (let i = 0; i < sections.length; i++) {
 		const section = sections[i] as Section;
 		const bytes =
-			sectionCount(engine, section, highWater, freeCount) * section.unit;
+			sectionCount(engine, section, highWater, freeCount, pool) * section.unit;
 		const start = (sectionStart(engine, section, floor) * section.unit) / WORD;
 		const whole = bytes >> 2;
 		sum.words(section.words, start, whole);
@@ -216,6 +226,7 @@ export function writeFloor(
 	const { storage, sections } = engine;
 	const highWater = storage.highWater[floor] ?? 0;
 	const freeCount = storage.freeCount[floor] ?? 0;
+	const pool = storage.sparse.counts[floor] ?? 0;
 	writeHeader(engine, floor, out, at);
 	const entries = out[at + INBOX] ?? 0;
 	sum?.reset();
@@ -225,7 +236,7 @@ export function writeFloor(
 		const section = sections[i] as Section;
 		const src = section.words;
 		const bytes =
-			sectionCount(engine, section, highWater, freeCount) * section.unit;
+			sectionCount(engine, section, highWater, freeCount, pool) * section.unit;
 		const start = (sectionStart(engine, section, floor) * section.unit) / WORD;
 		const whole = bytes >> 2;
 		out.set(src.subarray(start, start + whole), w);
@@ -256,11 +267,12 @@ export function saveFloor(
 ): Uint8Array {
 	if (engine.harms.count !== 0)
 		throw new Error("a snapshot was taken with harm still pending");
-	const { highWater, freeCount } = engine.storage;
+	const { highWater, freeCount, sparse } = engine.storage;
 	const words = imageWords(
 		engine,
 		highWater[floor] ?? 0,
 		freeCount[floor] ?? 0,
+		sparse.counts[floor] ?? 0,
 		engine.inbox.count(floor),
 	);
 	const reuse =
@@ -287,9 +299,10 @@ export function readFloor(
 		image.length / WORD,
 	);
 	const head = readHeader(words);
-	const { floor, highWater, freeCount } = head;
+	const { floor, highWater, freeCount, pool } = head;
 	const { storage, scheduler, sections } = engine;
-	clearRows(engine, floor, highWater);
+	clearRows(engine, floor, highWater, pool);
+	storage.sparse.counts[floor] = pool;
 	storage.counters[floor] = head.counter;
 	storage.highWater[floor] = highWater;
 	storage.freeCount[floor] = freeCount;
@@ -302,7 +315,7 @@ export function readFloor(
 	for (let i = 0; i < sections.length; i++) {
 		const section = sections[i] as Section;
 		const bytes =
-			sectionCount(engine, section, highWater, freeCount) * section.unit;
+			sectionCount(engine, section, highWater, freeCount, pool) * section.unit;
 		const start = (sectionStart(engine, section, floor) * section.unit) / WORD;
 		const whole = bytes >> 2;
 		section.words.set(words.subarray(w, w + whole), start);
@@ -321,6 +334,7 @@ export function readFloor(
 		entries,
 	);
 	storage.adoptIndex(floor, index);
+	storage.sparse.rebuild(floor, highWater);
 	// A floor mid-round resumes its round; any other has none open until it starts the next.
 	const now = engine.now[floor] ?? 0;
 	scheduler.rebuild(
@@ -333,9 +347,20 @@ export function readFloor(
 	engine.grid.invalidate();
 }
 
-// The section copy rewrites every row below the incoming high water; rows above it must go.
-function clearRows(engine: Engine, floor: number, highWater: number): void {
+// The section copy rewrites every row below the incoming high water and pool count; rows above
+// them must go.
+function clearRows(
+	engine: Engine,
+	floor: number,
+	highWater: number,
+	pool: number,
+): void {
 	const { storage } = engine;
+	const { sparse } = storage;
+	const base = floor * SPARSE_CAP;
+	const used = base + (sparse.counts[floor] ?? 0);
+	if (base + pool < used)
+		for (const column of sparse.columns) column.fill(0, base + pool, used);
 	const from = floor * CAP + highWater;
 	const to = floor * CAP + (storage.highWater[floor] ?? 0);
 	if (from >= to) return;

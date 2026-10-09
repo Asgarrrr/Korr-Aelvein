@@ -12,6 +12,7 @@ import {
 	FREE_COUNT,
 	HIGH_WATER,
 	imageChecksum,
+	POOL_COUNT,
 	SUM,
 	sectionCount,
 	TIME,
@@ -68,6 +69,7 @@ for (const section of engine.sections) {
 		section,
 		highWater,
 		header[FREE_COUNT] ?? 0,
+		header[POOL_COUNT] ?? 0,
 	);
 	w += Math.ceil((count * section.unit) / WORD);
 }

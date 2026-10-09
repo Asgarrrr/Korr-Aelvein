@@ -1,4 +1,6 @@
 export const CAP = 1 << 14;
+// Pool rows per floor, shared by every sparse component; a u16 rowOf caps it at 65535.
+export const SPARSE_CAP = CAP >> 3;
 // A species index is a byte, and 0 means a species spawned from a shape.
 export const MAX_SPECIES = 255;
 export const MAX_FLOORS = 64;

@@ -1,5 +1,6 @@
 import type { CellContracts, Contracts } from "../../contracts";
 import { checked } from "../audit/checked";
+import type { Slot } from "../ecs/ids";
 import { MaskBits } from "../ecs/mask";
 import { MaskQuery } from "../ecs/query";
 import type { Column, Columns, FieldKind, Schema } from "../ecs/schema";
@@ -21,6 +22,7 @@ import type {
 	EventRef,
 	ProposeFn,
 	Query,
+	SparseColumns,
 	SpeciesRef,
 	TargetKind,
 	TickFn,
@@ -56,12 +58,20 @@ export class ModuleBuilder implements Builder<Schema, Schema> {
 	}
 
 	write<N extends string>(name: N): Columns<Schema[N]> {
-		const { columns } = this.#owned(name);
-		if (!this.#audit) return columns as Columns<Schema[N]>;
-		const wrapped: Record<string, Column> = {};
-		for (const [field, column] of Object.entries(columns))
-			wrapped[field] = checked(column, `${name}.${field}`);
-		return Object.freeze(wrapped) as Columns<Schema[N]>;
+		const { columns, sparse } = this.#owned(name);
+		if (sparse) throw new Error(`${name} is sparse: use b.sparse`);
+		return this.#checked(name, columns) as Columns<Schema[N]>;
+	}
+
+	sparse<N extends string>(name: N): SparseColumns<Schema[N]> {
+		const { columns, sparse } = this.#owned(name);
+		if (!sparse)
+			throw new Error(`${this.#module.name} did not list ${name} as sparse`);
+		const pool = this.#engine.storage.sparse;
+		return Object.freeze({
+			row: (slot: Slot) => pool.row(slot),
+			columns: this.#checked(name, columns) as Columns<Schema[N]>,
+		});
 	}
 
 	cells<N extends string>(name: N): CellColumns<Schema[N]> {
@@ -115,6 +125,8 @@ export class ModuleBuilder implements Builder<Schema, Schema> {
 		}
 		const component = components.get(name);
 		if (!component) return undefined;
+		if (component.sparse)
+			throw new Error(`${name} is sparse and has no read view`);
 		return readView(component.columns) as ContractView<N>;
 	}
 
@@ -193,6 +205,17 @@ export class ModuleBuilder implements Builder<Schema, Schema> {
 		if (!columns || !Object.hasOwn(module.cells ?? {}, name))
 			throw new Error(`${module.name} does not own cells ${name}`);
 		return columns;
+	}
+
+	#checked(
+		name: string,
+		columns: Readonly<Record<string, Column>>,
+	): Readonly<Record<string, Column>> {
+		if (!this.#audit) return columns;
+		const wrapped: Record<string, Column> = {};
+		for (const [field, column] of Object.entries(columns))
+			wrapped[field] = checked(column, `${name}.${field}`);
+		return Object.freeze(wrapped);
 	}
 
 	#owned(name: string) {

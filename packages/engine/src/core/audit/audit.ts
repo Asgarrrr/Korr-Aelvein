@@ -1,4 +1,4 @@
-import { CAP } from "../config";
+import { CAP, SPARSE_CAP } from "../config";
 import type { Column } from "../ecs/schema";
 import { ALIVE } from "../ecs/storage";
 import { CORE, CORE_KEY, type Engine } from "../engine";
@@ -9,6 +9,7 @@ import {
 	FREE,
 	floorChecksum,
 	MASKS,
+	POOL,
 	ROWS,
 	type Section,
 	sectionCount,
@@ -33,6 +34,7 @@ interface Owned {
 	readonly name: string;
 	readonly word: number;
 	readonly bit: number;
+	readonly sparse: boolean;
 	readonly fields: readonly (readonly [string, Column])[];
 }
 
@@ -75,6 +77,7 @@ export class Audit {
 					owned.push({
 						name: component,
 						...entry.bit,
+						sparse: entry.sparse,
 						fields: Object.entries(columns),
 					});
 			}
@@ -92,7 +95,7 @@ export class Audit {
 		});
 		let words = 0;
 		for (const { section } of this.#targets)
-			words += this.#span(section, CAP, CAP);
+			words += this.#span(section, CAP, CAP, SPARSE_CAP);
 		this.#saved = new Int32Array(words);
 		this.#from = new Int32Array(this.#targets.length);
 		this.#count = new Int32Array(this.#targets.length);
@@ -143,6 +146,7 @@ export class Audit {
 				storage[SCALARS[i] as (typeof SCALARS)[number]][floor] ?? 0;
 		const used = storage.highWater[floor] ?? 0;
 		const freed = storage.freeCount[floor] ?? 0;
+		const pool = storage.sparse.counts[floor] ?? 0;
 		let at = 0;
 		for (let t = 0; t < this.#targets.length; t++) {
 			const { section, owner: holder } = this.#targets[t] as Target;
@@ -151,7 +155,7 @@ export class Audit {
 				continue;
 			}
 			const start = this.#start(section);
-			const n = this.#span(section, used, freed);
+			const n = this.#span(section, used, freed, pool);
 			this.#saved.set(section.words.subarray(start, start + n), at);
 			this.#from[t] = at;
 			this.#count[t] = n;
@@ -183,6 +187,7 @@ export class Audit {
 			}
 		}
 		this.#checkFree();
+		this.#checkPool(this.#floor);
 		this.#checkAbsent();
 	}
 
@@ -190,15 +195,19 @@ export class Audit {
 	#checkAbsent(): void {
 		const owned = this.#owned.get(this.#owner);
 		if (!owned) return;
-		const { masks, maskWords, highWater } = this.#engine.storage;
+		const { masks, maskWords, highWater, sparse } = this.#engine.storage;
 		const base = this.#floor * CAP;
 		const end = base + (highWater[this.#floor] ?? 0);
-		for (const { name, word, bit, fields } of owned)
+		const poolBase = this.#floor * SPARSE_CAP - 1;
+		for (const { name, word, bit, sparse: pooled, fields } of owned)
 			for (let s = base; s < end; s++) {
 				if (((masks[s * maskWords] ?? 0) & ALIVE) === 0) continue;
 				if (((masks[s * maskWords + word] ?? 0) & bit) !== 0) continue;
+				const held = sparse.rowOf[s] ?? 0;
+				if (pooled && held === 0) continue;
+				const row = pooled ? poolBase + held : s;
 				for (const [field, column] of fields)
-					if (column[s] !== 0)
+					if (column[row] !== 0)
 						throw new Error(
 							`audit: ${this.#name()} wrote ${name}.${field} at slot ${s}, a row without ${name}`,
 						);
@@ -232,12 +241,29 @@ export class Audit {
 		}
 	}
 
+	// Pool rows past the count belong to no entity: a release zeroes the row it vacates.
+	#checkPool(floor: number): void {
+		const { sparse } = this.#engine.storage;
+		const start = floor * SPARSE_CAP + (sparse.counts[floor] ?? 0);
+		const end = (floor + 1) * SPARSE_CAP;
+		for (const { section, name } of this.#targets) {
+			if (section.kind !== POOL) continue;
+			for (let row = start; row < end; row++)
+				if (section.array[row] !== 0)
+					throw new Error(
+						`audit: ${this.#name()} wrote ${name} at free pool row ${row}`,
+					);
+		}
+	}
+
 	// Rows past the high water hold no entity, so recycling and every column keep them zero.
 	#checkUnused(floor: number): void {
+		this.#checkPool(floor);
 		const storage = this.#engine.storage;
 		const used = storage.highWater[floor] ?? 0;
 		for (const { section, name } of this.#targets) {
 			if (section.kind === FREE || section.kind === CELLS) continue;
+			if (section.kind === POOL) continue;
 			const stride = section.kind === MASKS ? storage.maskWords : 1;
 			const array = section.array;
 			const end = (floor + 1) * CAP * stride;
@@ -268,7 +294,9 @@ export class Audit {
 				? `cell ${index}`
 				: section.kind === FREE
 					? `free entry ${index}`
-					: `slot ${this.#floor * CAP + row}`;
+					: section.kind === POOL
+						? `pool row ${this.#floor * SPARSE_CAP + index}`
+						: `slot ${this.#floor * CAP + row}`;
 		throw new Error(
 			`audit: ${this.#name()} wrote ${name} at ${where}, which it does not own`,
 		);
@@ -280,9 +308,10 @@ export class Audit {
 		);
 	}
 
-	#span(section: Section, used: number, freed: number): number {
+	#span(section: Section, used: number, freed: number, pool: number): number {
 		return Math.ceil(
-			(sectionCount(this.#engine, section, used, freed) * section.unit) / WORD,
+			(sectionCount(this.#engine, section, used, freed, pool) * section.unit) /
+				WORD,
 		);
 	}
 }

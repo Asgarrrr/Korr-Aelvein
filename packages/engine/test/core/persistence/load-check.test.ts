@@ -11,6 +11,7 @@ import {
 	FREE_COUNT,
 	HIGH_WATER,
 	imageChecksum,
+	POOL_COUNT,
 	SUM,
 	sectionCount,
 	WORD,
@@ -99,10 +100,11 @@ const sectionAt = (image: Uint8Array, array: unknown) => {
 	const words = new Int32Array(image.buffer, image.byteOffset, FLOOR_HEADER);
 	const highWater = words[HIGH_WATER] ?? 0;
 	const freeCount = words[FREE_COUNT] ?? 0;
+	const pool = words[POOL_COUNT] ?? 0;
 	let w = FLOOR_HEADER;
 	for (const section of engine.sections) {
 		if (section.array === array) return w;
-		const count = sectionCount(engine, section, highWater, freeCount);
+		const count = sectionCount(engine, section, highWater, freeCount, pool);
 		w += Math.ceil((count * section.unit) / WORD);
 	}
 	throw new Error("no such section");

@@ -56,6 +56,10 @@ export interface CompiledSpecies {
 	readonly mask: Int32Array;
 	readonly columns: readonly Column[];
 	readonly values: Int32Array;
+	// Holds a sparse component: its spawn takes a pool row and writes these there.
+	readonly sparse: boolean;
+	readonly sparseColumns: readonly Column[];
+	readonly sparseValues: Int32Array;
 	readonly ranges: readonly RangeDraw[];
 	// Who the species is in its errors: "species rat", "flora species".
 	readonly label: string;
@@ -144,6 +148,9 @@ export function compileSpecies(
 	const columns: Column[] = [];
 	const values: number[] = [];
 	const ranges: RangeDraw[] = [];
+	const sparseColumns: Column[] = [];
+	const sparseValues: number[] = [];
+	let sparse = false;
 	for (const componentName in species.components) {
 		checkKey(componentName, label);
 		// A species may name components of modules this world does not register.
@@ -151,15 +158,29 @@ export function compileSpecies(
 		if (!component) continue;
 		const { word, bit } = component.bit;
 		mask[word] = (mask[word] ?? 0) | bit;
+		if (component.sparse) {
+			if (species.actor)
+				throw speciesError(
+					label,
+					`${componentName} is sparse: no actor holds it`,
+				);
+			sparse = true;
+		}
 		const fields = species.components[componentName];
 		for (const field in fields) {
 			const value = fields[field];
 			if (typeof value === "object" && value !== null) {
+				if (component.sparse)
+					throw speciesError(
+						label,
+						`${componentName}.${field} is sparse: it takes no range`,
+					);
 				ranges.push(checkRange(component, componentName, field, value, label));
 				continue;
 			}
-			columns.push(checkField(component, componentName, field, value, label));
-			values.push(value ?? 0);
+			const column = checkField(component, componentName, field, value, label);
+			(component.sparse ? sparseColumns : columns).push(column);
+			(component.sparse ? sparseValues : values).push(value ?? 0);
 		}
 	}
 	// After the fields: a range on a core field has thrown, so these read integers.
@@ -178,6 +199,9 @@ export function compileSpecies(
 		mask,
 		columns,
 		values: Int32Array.from(values),
+		sparse,
+		sparseColumns,
+		sparseValues: Int32Array.from(sparseValues),
 		ranges,
 		label,
 	};

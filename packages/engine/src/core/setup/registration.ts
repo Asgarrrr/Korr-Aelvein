@@ -145,7 +145,13 @@ export function createEngine(
 		const config = frozenCopy(module.config);
 		configs.push(
 			canonical(
-				[module.name, module.schema, module.cells ?? {}, config],
+				[
+					module.name,
+					module.schema,
+					module.cells ?? {},
+					module.sparse ?? [],
+					config,
+				],
 				module.name,
 			),
 		);

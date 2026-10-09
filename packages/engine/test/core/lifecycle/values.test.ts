@@ -168,7 +168,7 @@ test("values for a component no registered module owns are ignored, as a shape's
 
 test("values reach the edges of their kind and no further", () => {
 	const edges: [string, string, string, number, number][] = [
-		["moss", "sprout", "period", 65535, 65536],
+		["cheese", "edible", "class", 255, 256],
 		["rat", "satiety", "value", 2 ** 31 - 1, 2 ** 31],
 		["cheese", "edible", "nutrition", -32768, -32769],
 	];
@@ -181,4 +181,12 @@ test("values reach the edges of their kind and no further", () => {
 			name,
 		).toThrow(new RegExp(`species ${name}: ${component}.${field}`));
 	}
+	const sprout = (period: number) => ({
+		actor: false,
+		components: { sprout: { period, left: 1 } },
+	});
+	const w = world();
+	const id = w.spawn(0, sprout(65535), 0, 0);
+	expect(w.peek("sprout", "period", id)).toBe(65535);
+	expect(() => w.spawn(0, sprout(65536), 1, 0)).toThrow(/sprout.period/);
 });

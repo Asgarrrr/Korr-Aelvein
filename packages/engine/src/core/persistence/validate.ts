@@ -4,6 +4,7 @@ import {
 	ID_FLOOR_STRIDE,
 	LOD_PERIODS,
 	MAX_TICK,
+	SPARSE_CAP,
 	TICKS_PER_TURN,
 } from "../config";
 import { ACTOR, ALIVE, indexInsert, knownBits, PLAYER } from "../ecs/storage";
@@ -40,6 +41,7 @@ import {
 	playersSeen,
 	type Rows,
 } from "./rows";
+import { checkPool } from "./sparse";
 
 export function checkVersion(version: number | undefined): void {
 	if (version !== FORMAT_VERSION)
@@ -80,12 +82,13 @@ export function checkFloor(
 	if (head.fingerprint !== (engine.fingerprint | 0))
 		throw new Error("image registry fingerprint does not match these modules");
 	if (head.floor !== floor) fail(`claims floor ${head.floor}`);
-	const { highWater, freeCount, counter, stage, period } = head;
+	const { highWater, freeCount, counter, stage, period, pool } = head;
 	const entries = head.inbox;
 	const now = head.time;
 	// Arrivals ignore popCap, so only CAP bounds the rows.
 	if (!(freeCount >= 0 && freeCount <= highWater && highWater <= CAP))
 		fail(`free count ${freeCount}, high water ${highWater}`);
+	if (!(pool >= 0 && pool <= SPARSE_CAP)) fail(`pool count ${pool}`);
 	if (!(counter >= 0 && counter < ID_FLOOR_STRIDE))
 		fail(`id counter ${counter}`);
 	const start = round * TICKS_PER_TURN;
@@ -112,7 +115,7 @@ export function checkFloor(
 	const emitted = head.emitted;
 	if (!(emitted >= 0 && emitted <= EVENT_CAP_PER_TURN))
 		fail(`${emitted} events this turn`);
-	const expected = imageWords(engine, highWater, freeCount, entries);
+	const expected = imageWords(engine, highWater, freeCount, pool, entries);
 	if (words.length !== expected)
 		fail(`${words.length} words, expected ${expected}`);
 	imageChecksum(engine.sum, words, sums);
@@ -124,7 +127,7 @@ export function checkFloor(
 	let w = FLOOR_HEADER;
 	for (let i = 0; i < sections.length; i++) {
 		const section = sections[i] as Section;
-		const count = sectionCount(engine, section, highWater, freeCount);
+		const count = sectionCount(engine, section, highWater, freeCount, pool);
 		const bytes = count * section.unit;
 		at.set(section.array, { at: image.byteOffset + w * WORD, count });
 		const tail = bytes & (WORD - 1);
@@ -171,6 +174,10 @@ export function checkFloor(
 		speciesCount: engine.speciesNames.length,
 		known: knownBits(storage.maskWords, engine.components.size),
 	};
+	const fieldView = (column: Section["array"]) =>
+		byUnit(bySection.get(column) as Section);
+	const pooled = checkPool(engine, rows, pool, fieldView, check === "full");
+	if (pooled !== undefined) fail(pooled);
 	if (check === "fast")
 		return indexRows(
 			rows,
@@ -243,18 +250,18 @@ export function checkFloor(
 		) ||
 		checkAbsent(
 			rows,
-			[...engine.components.values()].map(({ bit, columns }) => {
-				const views = Object.values(columns).map((column) =>
-					byUnit(bySection.get(column) as Section),
-				);
-				return {
-					word: bit.word,
-					bit: bit.bit,
-					bytes: views.filter((v) => v instanceof Int8Array),
-					shorts: views.filter((v) => v instanceof Int16Array),
-					words: views.filter((v) => v instanceof Int32Array),
-				};
-			}),
+			[...engine.components.values()]
+				.filter((c) => !c.sparse)
+				.map(({ bit, columns }) => {
+					const views = Object.values(columns).map(fieldView);
+					return {
+						word: bit.word,
+						bit: bit.bit,
+						bytes: views.filter((v) => v instanceof Int8Array),
+						shorts: views.filter((v) => v instanceof Int16Array),
+						words: views.filter((v) => v instanceof Int32Array),
+					};
+				}),
 		);
 	if (code !== OK) fail(describe(code));
 	const problem = inboxProblem(

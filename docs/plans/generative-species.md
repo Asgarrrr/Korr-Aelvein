@@ -1,347 +1,161 @@
-# Plan: generative species (v2, after advisor review and plan audit)
+# Plan: generative species (v3, replan against the vision)
 
 ## 1. Inputs
 
-- The user request: design an end-to-end structure for a generative
-  biological model of creatures. This is a replan.
-- The first plan (6 slices: catalogue, physiology, food web, reproduction,
-  depth, bosses), its audit and its council points
-  (`/tmp/korr-plan/generative-species-plan.json`). Its verified code facts
-  and the decisions not contradicted below are kept.
-- An `advisor` review, verified in code:
-  - Every gate of the first plan was a simulation gate. Player perception
-    had no criterion.
-  - The snapshot sends `[id, species, x, y]`
-    (`packages/protocol/src/index.ts`). The web maps glyphs by species name
-    (`apps/web/src/theme.ts`) and edibility by name
-    (`apps/web/src/input/keys.ts`). A generated name has no glyph.
-  - Role mixed two axes: trophic place and standing.
-  - Food classes are u8 bits (`diet.eats`, `edible.class`); fear cell
-    fields and `Builder.alarm` are u8-only (`core/module/api.ts`). One bit
-    per trophic level wastes the budget of 8 bits.
-  - A bite equal to the eater's `vitality.max` one-shots the 10-hp player
-    at every depth. Fear ignores size (`modules/fear/sense.ts`). A speed
-    gene breaks fear's `MARGIN` (`modules/fear/config.ts`).
-  - The simulation is invisible: the starter world runs with
-    `events: false` (`world/starter.ts`), the snapshot holds no events, and
-    the server sends floor 0 only (`apps/server/src/session.ts`).
-  - Breeding costs the parent nothing; only `popCap` bounds births
-    (`core/lifecycle/lifecycle.ts`). Herbivores can strip the player's
-    floor of forage.
-  - 5 niches x 16 strata x 3 + 16 bosses + 7 fixed = 263 species, above
-    `MAX_SPECIES` (255, `core/config.ts`).
-  - Saves die when the generator changes. Acceptable while nothing is
-    persisted.
-- Plan audit gaps of the first plan: no birth-time values path for mutants
-  and heredity; no answer for a mutant that gains a need its species lacks;
-  the criterion ran headless only, never with an idle player and far-floor
-  replay (P up to 64, `core/turns/round.ts`); no seeds or census in the
-  gate; breed ignored crowded neighbourhoods and partial litters.
+- Target: `docs/plans/vision.md`. Binding research and decisions:
+  `docs/plans/generative-species-research.md`.
+- v2 of this plan. Its S1 is built on `feat/generative-species`: the
+  Catalogue, the rat archetype, Expression rows on `size`, keyed draws,
+  `herbivore.0`, `Snapshot.looks`, glyph by stem and case by tier. v2's
+  later slices are replaced by the slices below.
+- The research's binding constraint is memory (§0): per-individual genes
+  must fit the unchanged 160 MB budget. The lever is a sparse storage kind
+  (`ecs-core.md` D1), so rare components stop costing a column per slot.
+- Audit gaps carried over from v2: density-dependent regulation, and the
+  breed recheck under LOD replay.
 
-## 2. User decisions
+## 2. Goal
 
-1. **Archetypes plus generated variation.** Hand-authored archetypes fill
-   each niche: body plan, behaviour set (which needs and components),
-   glyph and name stem. Rat and stoat are the first two. The world seed
-   picks archetypes per niche and draws a genome within each archetype's
-   bounds: per-world species variants. One Catalogue per world, built at
-   `createGame`, rebuilt from the saved seed by `loadGame`; the
-   Fingerprint refuses divergence. Each species spans about two strata,
-   so knowledge carries across floors. The archetype backbone carries
-   knowledge across runs. Prior art: NetHack (random appearances over
-   fixed item types), Caves of Qud (legendaries as variants of normal
-   creatures), Cogmind (static and procedural mix).
-2. **Heredity, then population evolution, are long-term goals.** Genome
-   Expression is data rows `{gene, component, field, min, max}` applied by
-   one pure function, so a later core birth path can apply it per
-   individual. Heredity is not built now; v1 must not block it.
-3. **Niches first**: producers, herbivores, predators, apex. Difficulty is
-   a gene Budget per niche that grows with depth (a Curve in config). One
-   boosted apex per stratum is a Boss, named and announced to the player.
-   Floor conditions pick which species appear and how many.
-4. **Mutants are individuals.** v1 is stronger; v2 gains a need its
-   species lacks. Reproduction is a need (module `reproduction`, action
-   `breed`) with a parametric mating system: parents 1, 2 or 3; sexes 0 to
-   3; conditions as a bitmask over a closed list of coded predicates (data
-   choosing coded rules, like `diet.eats`); litter; cooldown. The plan may
-   stage it, with a justification and a landing list.
-5. **Long-term targets the structure must not block**: groups (packs,
-   herds, coordinated hunts, group flight), actions prepared over several
-   turns (ambush, nests, gestation, migration), new bricks (genes, needs,
-   reproduction modes, generated producers, terrain and biomes, taming).
+A clean, high-performance structure that later bricks extend without
+rework:
+
+- Each individual carries a heritable u8 genome: stats, a verb bitmask
+  drawn from a per-archetype pool, and temperament genes that weigh needs
+  inside a band, never across bands.
+- Mutation is keyed at the breed push. A taxon column and a census-based
+  speciation label lineages.
+- Genes and taxa persist across birth, travel, save and the season jump.
+- The food web is legible: derived from `diet` and `edible` data and
+  printed with populations.
+- A new verb, archetype, social form or dungeon reaction is data or one
+  module folder.
 
 ## 3. Success criteria
 
-Functional:
-
-- A game saved and loaded plays on exactly as the unbroken run.
-- `loadGame` rebuilds the Catalogue from the saved seed.
-- A save loaded with a different species table is refused by the
-  Fingerprint.
-- The species count stays at or below `MAX_SPECIES`, checked by a test.
-- RSS <= 160 MB on `bench/reference.ts`. This budget is never raised.
 - `bun run verify` is green after every slice.
+- A game saved and loaded plays on exactly as the unbroken run, with genes,
+  verbs and taxa.
+- Memory gate: the deterministic allocated-bytes row of
+  `bench/reference.ts` sets the exit code (budget 137 MB, from S2). The
+  RSS row stays measured and printed, report-only (see flagged decision 1).
+- `bench/season.ts` runs from S3 on: time per round at P = 1/4/16/64,
+  memory, id budget, and the P-fidelity check (KS rows per metric, gated by
+  null, power and sanity calibration rows).
 
-Perceptual:
+## 4. Slices
 
-- **P1.** A generated creature on the starter floor renders with its stem
-  glyph. Its size tier shows by case (S1). Species are told apart by
-  colour (S4).
-- **P2.** Over seeds 1..8, `herbivore.0` differs in tier or hue for at
-  least two seeds.
-- **P3.** Threat contacts per 100 rounds, for a moving scripted player,
-  are higher at depth 40 than at depth 0 (S5).
-- **P4.** No stratum-0 predator bites for >= the player's 10 hp.
-- **P5.** Forage on the player's floor is never zero for more than 50
-  consecutive rounds.
-- **P6.** Herbivores never exceed 4x the count placed by populate within
-  400 rounds.
+Each slice: behaviour + data + seeded test, a failing test first,
+mutation checks named in the slice, `bun run verify` green.
 
-## 4. Decisions
+1. **S1 Sparse storage kind on flora's sprout.** `core/ecs/sparse.ts`
+   `SparsePool`: one pool per world, `SPARSE_CAP` (`CAP >> 3`) rows per
+   floor shared by every sparse component. A u16 core column `rowOf`
+   (local row + 1, 0 = none) is the only per-slot cost. Release
+   swap-removes the floor's last row into the freed one. Module surface:
+   `ModuleDef.sparse` and `Builder.sparse` returning `SparseColumns`.
+   Persistence: a `POOL_COUNT` header word and one POOL section per pool
+   column (`FORMAT_VERSION` 8), load checks in `persistence/sparse.ts`,
+   audit of free pool rows. Non-actors only: actors, ranges and spawn
+   values on sparse fields throw until S2. First, a pure move of
+   `ModuleBuilder` to `setup/builder.ts`.
+2. **S2 Sparse rows on travelling actors; allocated gate; read cost.**
+   Inbox entries carry pooled words. The core `link` moves into the pool.
+   Bench consumers `tracker` and `spring` turn sparse. A deterministic
+   allocated-bytes row per owner gates `bench/reference.ts` at 137 MB.
+   `bench/sparse.ts` prints ns per read for dense, view and pool paths.
+   Genes and temperament stay dense; `ecs-core.md` D1 records why.
+3. **S3 Early season bench.** `Engine.unwatchedPeriod`, a run parameter
+   used by `startRound` when no player exists. `bench/season.ts` with
+   time, memory, id-budget and fidelity modes. An integer two-sample KS
+   compares each P against P = 1. `content/catalogue/web.ts` derives the
+   food web. No World API change.
+4. **S4 Heritable genes and budding.** A `gene` field kind (u8) marks
+   heritable fields in any schema; `temperament.boldness` is the first.
+   `core/heredity/genome.ts` copies and mutates the parent genome at the
+   push of `WriteCtx.spawnKin`, with keyed draws and reflection at the
+   bounds. Module `reproduction`: `bud`, the `breed` behaviour under
+   hunger's fed state and local crowding (density regulation before
+   `popCap`). `breed` rechecks its conditions in execute, so a cached
+   intent replayed under LOD fails instead of breeding.
+5. **S5 Verb pools and expression at birth.** A species verb pool lists at
+   most `MAX_VERBS` (8) of its own components. Their mask bits are the verb
+   genome, flipped per bit at birth. Expression rows (gene field to derived
+   field) run at birth in `core/heredity/expression.ts`; module `physique`
+   owns the `size` gene. The Catalogue emits rows instead of baked values.
+6. **S6 Taxa and speciation.** A u16 core column `taxon`, carried and
+   saved. `core/taxa/table.ts` holds the records; `core/taxa/census.ts`
+   founds, joins and extinguishes taxa every `CENSUS_PERIOD` rounds from
+   gene means and per-bit verb frequencies, with a split streak. The table
+   is a world save section. Extinction is permanent.
 
-### D1. Catalogue
+Memory path (allocated bytes, reference world): about 142.3 MB today,
+about 128.5 MB after S2, then S4 +4.1 (bud), S5 +0.82 (physique), S6
++1.64 (taxon) +0.2 (table): about 135.3 MB against 137. One more dense u8
+gene fits; the next needs the CAP decision.
 
-One Catalogue per world: `catalogue(seed)` returns the species table and
-the Looks. `createGame` builds it from its seed. `loadGame` rebuilds it
-from the seed in the save header. The species enter the Fingerprint, so a
-save loaded with any other table is refused.
+## 5. Decisions kept from the research
 
-The Catalogue is not stored in the save. A change to the generator
-therefore breaks every save. No world is persisted yet, so this is
-accepted. The first persisted world stores the Catalogue and bumps
-`FORMAT_VERSION` (`docs/ideas.md`).
+- Temperament moves scores inside a band, never across: it changes a
+  threshold or a `band()` weight, never a raw score.
+- Heredity is core: only the core may copy fields across every module's
+  components at birth. Reproduction is a mechanic module.
+- The census writes labels only. It reads gene columns and masks and
+  decides nothing for a creature.
+- Floors act as islands for the census, scanned in index order and
+  independent of `floorOrder`.
+- Every draw is keyed by name: adding a gene shifts no other gene's draw.
 
-The core gains one load seam: `loadWorld` accepts `species` as a table or
-as a `(seed) => table` supplier. The supplier runs after the header is
-read and before the engine is built. The core still knows nothing of the
-Catalogue.
+## 6. Seams kept open (research §3), not built
 
-### D2. Archetypes
+The user excluded groups, territories, relations, bonds and the dungeon
+heart from this run. Their seams stay open:
 
-An Archetype is hand-authored per niche: a body (a full species with its
-components), a stem and gene bounds. The behaviour set is the components
-the body holds: a body without `wary` never flees. The glyph lives in the
-web theme, keyed by stem: the engine sends no glyph. Rat is the first
-herbivore archetype, stoat the first predator. Archetype choice per niche
-arrives with the second archetype of a niche; until then the niche table
-maps a niche to its only archetype.
+- No group state anywhere: no group column, slot or key.
+- The alarm byte keeps its bits untouched: the panic bit stays free.
+- Class bits are unchanged: `diet.eats` and `edible.class` stay 8 bits.
+- No core last-harmer record and no `ReadCtx` clock.
 
-### D3. Genome, Expression and keyed draws
+## 7. Deferred to the next run
 
-- A Gene is a named integer 0..`GENE_MAX` (255). A Genome maps genes to
-  values. S1 has one gene: `size`.
-- Expression is a list of rows `{gene, component, field, min, max}`. One
-  pure function, `express(genome, rows, body)`, returns a new species:
-  `value = min + floor(gene * (max - min) / GENE_MAX)`. `min > max`
-  expresses inversely. A row whose component the body lacks is skipped:
-  Expression never adds a component. A row on a field the body holds as a
-  Range throws. Later rows overwrite earlier ones.
-- Rows are config, the formula is code. Rows are typed against the game's
-  components, so a misspelled component or field fails the typecheck.
-- Each gene is drawn by name, never by position:
-  `draw(seed, hashName("catalogue"), PHASE.spawn, 0, SUBJECT.entity,
-  hashName(name), hashName(gene))`. Adding a gene or a species re-rolls no
-  other value. The S1 draw is uniform within the archetype bounds; S4
-  replaces it with the Budget split.
+- Predator and apex archetypes, and the hunter prey class (v2 D7).
+- Bestiary, per-taxon Looks, stale bestiary entries.
+- Voracity and curiosity genes: each costs 0.82 MB dense and waits for the
+  CAP decision.
+- The off-thread season-jump worker on the server.
+- Pair crossover (two-parent heredity).
+- Verb pool widening at speciation.
+- Save migration by gene name.
+- Points-form expression rows.
 
-### D4. Names
+## 8. Flagged decisions (pending user)
 
-A generated species is named `${niche}.${k}`, k its stratum. The name is
-a stable key for saves, tests and the species index. Display names grow
-from the stem later (epithets, `docs/ideas.md`).
+1. **RSS budget.** The reference world already reads 165-168 MB running
+   RSS against the 160 MB gate at baseline. The deterministic
+   allocated-bytes row becomes the exit-code gate. The RSS row stays
+   measured and printed, but report-only until the user decides.
+2. **Lifetime id exhaustion (D2).** An origin floor allows 33,554,431
+   births. `MAX_TICK` bounds a world to about 21.47M rounds. The taxa
+   allow 65,535 lifetime u16 labels. Deferred, and budgeted by a
+   `bench/season.ts` row. It must be decided before saves are frozen for
+   permanent worlds.
+3. **Season jump memory.** A save image is about 78 MB; RSS after a save
+   is about 210-220 MB. The world, the checkpoint and the worker together
+   exceed 160 MB. The server-side worker jump is deferred. Design note,
+   from research §4 (the jump is a pure function image, rounds -> image,
+   off the main thread; a failure rolls back to the input image):
+   - Ownership: the server session owns the checkpoint, which is the input
+     image. The engine keeps no copy.
+   - Transfer: the session transfers a copy of the image to the worker
+     and keeps the checkpoint. The worker returns a new image by transfer.
+   - Rollback and lifetime: the checkpoint lives until the result loads
+     and passes the full load check. A refused or failed jump drops the
+     result and reloads the checkpoint. A loaded result frees the
+     checkpoint.
+   Which of the three copies may coexist is the memory decision.
 
-### D5. Look
+Also flagged for later, with no decision needed in this run:
 
-The Look of a species is what the player sees: `{stem, tier}`, then
-`{stem, tier, hue}` in S4. `tier` counts the `tiers` thresholds at or
-below `vitality.max` (0 for a species without vitality). The web draws the
-stem's glyph, upper-cased when `tier > 0`. A fixed species' stem is its
-own name. The snapshot sends the Looks of exactly the species it lists.
-
-### D6. Niche and Rank
-
-Two axes, decided before the food web. Niche is the trophic place:
-producer, herbivore, predator, apex. Rank is the standing of a species or
-individual: normal, boss; later mutant, tamed. A boss is an apex with the
-boss Rank, not a fifth niche. Rank lands in N3 with bosses.
-
-### D7. Prey kinds
-
-Food classes are prey kinds within the 8 bits of `diet.eats` and
-`edible.class`: forage 1, meat 2, then hunter 4 in N3. Hunger matches
-class bits only (`modules/hunger/index.ts`), and fear flees any eater of
-its class. So no species eats its own class: herbivores are meat,
-predators eat meat and are hunter, apex eats hunter. No unintended
-cannibalism.
-
-### D8. Bites and counterplay
-
-Every gene states what the player can do about it:
-
-| Gene | Expresses | Player counterplay |
-|---|---|---|
-| size | hp, bite, nutrition | the tier is visible; stratum-0 bites stay below the player's 10 hp |
-| fecundity | litter, rest | starve breeders: `fed` is a breed condition |
-| budget | more points deeper | depth is chosen; Looks change with it |
-| speed | not built | blocked by fear `MARGIN`: one-turn actions only (`docs/ideas.md`) |
-
-A bite goes through `harm`: it wounds, it does not kill outright. Speed is
-the first fear-rule change any later gene needs.
-
-### D9. Reproduction staging
-
-Reproduction is a need: module `reproduction`, action `breed`. S3 builds
-budding: one parent, conditions as a bitmask over coded predicates (`fed`,
-`uncrowded`), litter, cooldown. `breed` picks free cells around the
-parent. A crowded neighbourhood gives a partial or empty litter, and the
-cooldown still applies. A core `WriteCtx.spawnKin(parent, x, y, cause)`
-spawns the parent's species.
-
-Budding comes first because it needs no kin perception and proves the
-need, the litter and the population bounds alone. Landing list:
-
-- S3: budding, `fed` and `uncrowded`, litter, cooldown.
-- After the v1 gate: pairs and sexes through a `ReadCtx.kin` view, then
-  more predicates (season, territory).
-- With multi-turn plans: gestation and nests.
-- Trios and sexes above 2: when a third archetype asks for them.
-
-### D10. Strata and Budget
-
-A stratum is `stratumFloors` (4) floors deep; 16 strata. Each generated
-niche gets one species per stratum. Each species spans about two strata,
-so neighbouring floors share species. The Budget is a Curve per niche over
-depth: the points a genome spends on its genes.
-
-Species count: 3 generated niches x 16 strata + 16 bosses + 7 fixed = 71,
-well under `MAX_SPECIES`. Producers stay hand-written. A test pins the
-count against the limit.
-
-### D11. Floors
-
-`world/populate` fills a floor by depth: which species, and how many. It
-keeps a safe radius around the start and arrival cells. It keeps a forage
-floor so herbivores cannot strip the player's floor (P5). It bounds
-herbivores (P6). The threat metric counts predator contacts with a moving
-scripted player per 100 rounds (P3).
-
-### D12. Mutants and heredity: the core path
-
-Today every individual of a species shares its expressed values, apart
-from Range draws. A mutant or an heir needs values per individual. The
-core change, built in N4:
-
-- `DeferredSpawns` carries a values payload, so a birth can set fields.
-- Expression runs per individual at birth: `express` moves to the core
-  lifecycle as one compiled step.
-- Drawn vitality passes the health check (`checkHealth`), as a species
-  does today. A Range on vitality stays refused: a drawn hp would escape
-  the check.
-- A per-entity genome column is saved, so heirs and loads keep it.
-
-A v2 mutant gains a need its species lacks. Expression never adds a
-component, so the species must hold the component already, inert, and the
-gene turns it on. N5 settles this.
-
-### D13. Remains and events
-
-Death becomes a core sequence: kill, drop, remains, remove. Remains are a
-carcass: food that persists, paired with bites through `harm`. The client
-receives `ate`, `died` and `born` events with their cause. This lands in
-N1, before the v1 gate, because the simulation is otherwise invisible.
-
-### D14. RSS, pins and review
-
-RSS stays <= 160 MB on `bench/reference.ts`; the budget is never raised.
-Every pinned hash is re-pinned only on purpose, named in the commit body.
-Every slice gets the `reviewer` agent and a Codex review
-(`codex review --uncommitted`). High-risk slices also get a red team.
-
-## 5. Target structure
-
-```
-content/catalogue/
-  types.ts           Archetype, GeneRange, Look, Gene
-  expression.ts      GENE_MAX, ExpressionRow, express()
-  genome.ts          drawGenome(): keyed draws, then the Budget split (S4)
-  config.ts          expression rows, tiers, budgets, hues
-  index.ts           catalogue(seed) -> {species, looks}
-  archetypes/        one file per archetype; index.ts maps niche -> archetype
-modules/reproduction/  breed, litter, cooldown, coded predicates (S3)
-modules/hunger/        bite through harm (S2)
-world/populate.ts      floor population by depth (S5)
-world/config.ts        counts, safe radius, forage floor (S5)
-core/world/world.ts    species table or (seed) => table supplier
-packages/protocol      Look; Snapshot.looks
-apps/server            session sends the looks of listed species
-apps/web               glyph by stem, case by tier, tint by hue
-```
-
-Flow: seed -> `catalogue(seed)` -> `createGame` -> populate -> snapshot
-with looks -> web glyph and tint. `loadGame` reads the seed from the save
-and calls `catalogue` again.
-
-## 6. Extension map
-
-- **Groups.** A `pack` module with a leader column. A membership contract
-  once fear reads it (group flight). Coordinated hunts are candidates
-  scored from the membership view, never a group-level decision.
-- **Multi-turn plans.** A module owns progress columns and proposes a
-  goal candidate with inertia. No core multi-turn intent. Ambush, nests,
-  gestation and migration follow this pattern.
-- **Core views later.** `ReadCtx.kin` (same-species neighbours) for pairs,
-  herds and packs; a `ReadCtx` clock for seasons and gestation.
-- **Heredity.** D12's core path, then a parent genome mixed at birth.
-  Population evolution follows from heredity and selection; no extra
-  system.
-- **New bricks.** A new gene is a `Gene` name plus expression rows. A new
-  archetype is one file under `archetypes/`. Archetype pick per niche lands
-  with the second archetype of a niche. Generated producers, terrain and
-  biomes, taming: new archetypes, modules or Ranks, never a parallel
-  decision system.
-
-## 7. Not built
-
-Heredity and population evolution; pairs, trios and sexes; gestation;
-groups; generated producers; a speed or metabolism gene; display-name
-epithets; the Catalogue stored in the save; taming; per-individual
-Expression before N4.
-
-## 8. Slices
-
-Each slice: behaviour + data + seeded test, about 150 lines of diff,
-`bun run verify` green, review per D14.
-
-This run:
-
-1. **S1 Walking skeleton.** This doc and the glossary. `content/catalogue`
-   with the rat archetype, Expression rows on `size`, keyed draws,
-   `catalogue(seed)` with `herbivore.0`. The core load supplier,
-   `createGame` / `loadGame` wiring, two `herbivore.0` on the starter
-   floor, `Snapshot.looks`, glyph by stem and case by tier. Tests: same
-   seed same Catalogue; `vitality.max` varies over seeds; save/load equals
-   an unbroken run; a different species table is refused by the Fingerprint.
-2. **S2 Predation.** Stoat archetype, bites through `harm`, size drives
-   bite and nutrition. P4 holds.
-3. **S3 Reproduction.** `WriteCtx.spawnKin`, module `reproduction` with
-   budding (D9), a crowded-neighbourhood test and partial litters.
-4. **S4 Strata.** One species per niche per stratum, the Budget split
-   replacing the uniform draw, hue in the Look, the species-count test.
-   P2 holds.
-5. **S5 Floor population.** Depth ranges, populate by floor conditions,
-   safe radius, forage floor and herbivore bound, the threat metric. P3,
-   P5 and P6 hold.
-
-Next run:
-
-1. **N1 Events and Remains.** The death sequence (D13) and events with
-   their cause in the snapshot.
-2. **N2 Dungeon on the server.** The session runs a populated dungeon and
-   sends the player's current floor.
-3. **N3 Apex, Rank, bosses and the v1 gate.** Prey kind hunter, Rank,
-   one announced boss per stratum. Gate: seeds 1..3, 11 floors, 1000
-   rounds, census per stratum excluding bosses, run headless and with an
-   idle player (far floors replay up to P=64).
-4. **N4 Mutants v1.** Stronger individuals through D12's per-individual
-   Expression, values payload and health check.
-5. **N5 Mutants v2.** An individual gains a need its species lacks.
+- `CAP` reduction as the memory lever after S6.
+- Permanent extinction until the dungeon heart refills niches.
+- The u16 taxa label budget (`TAXA_MAX` below 65,536); a split past it is
+  refused and counted, never thrown.

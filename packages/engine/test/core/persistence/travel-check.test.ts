@@ -20,6 +20,7 @@ import {
 	INBOX,
 	imageChecksum,
 	PERIOD,
+	POOL_COUNT,
 	STAGE,
 	SUM,
 	saveFloor,
@@ -112,6 +113,7 @@ for (const section of target.sections)
 			section,
 			words[HIGH_WATER] ?? 0,
 			words[FREE_COUNT] ?? 0,
+			words[POOL_COUNT] ?? 0,
 		) *
 			section.unit) /
 			WORD,

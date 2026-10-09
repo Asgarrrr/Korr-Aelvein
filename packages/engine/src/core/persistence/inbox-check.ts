@@ -52,10 +52,12 @@ export function inboxProblem(
 			if (((entries[at + ENTRY_HEAD + w] ?? 0) & ~(known[w] ?? 0)) !== 0)
 				return `${where} has unknown mask bits`;
 		const body = at + ENTRY_HEAD + words;
-		for (const [name, { bit, columns }] of components) {
+		for (const [name, { bit, columns, sparse }] of components) {
 			const has = ((entries[at + ENTRY_HEAD + bit.word] ?? 0) & bit.bit) !== 0;
 			if (has && name === "link") return `${where} is an actor with a link`;
-			if (has) continue;
+			if (has && sparse) return `${where} is an actor with sparse ${name}`;
+			// Pool columns never travel: the entry holds no value for them.
+			if (has || sparse) continue;
 			for (const column of Object.values(columns))
 				if (entries[body + (slotOf.get(column) ?? 0)] !== 0)
 					return `${where} keeps a value in ${name}, a component it does not have`;

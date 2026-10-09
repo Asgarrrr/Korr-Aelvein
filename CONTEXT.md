@@ -30,6 +30,13 @@ a second name anywhere.
 - **Column**: one typed array holding one field for every slot.
 - **Cell column**: one typed array holding one field for every cell of
   every floor.
+- **Sparse component**: a component a module lists in `sparse`. Its
+  fields live in the floor's pool rows, not in a column per slot. Only
+  non-actors hold one for now.
+- **Pool row**: the row of a sparse component's values for one entity, in
+  its floor's pool (`SparsePool`, `core/ecs/sparse.ts`). Resolve it with
+  `row(slot)` in each callback: an applied kill moves the floor's last
+  pool row into the freed one.
 - **Species**: which components an entity starts with, and their values.
   Content data, compiled once per world. Each entity saves its species as
   an index into the world's sorted species names; 0 means unnamed (spawned
