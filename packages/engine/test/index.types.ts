@@ -25,6 +25,8 @@ world.spawn(0, "dragon", 1, 1);
 world.spawn(0, "herbivore.0", 1, 1);
 // @ts-expect-error a generated name ends in its stratum number
 world.spawn(0, "herbivore.x", 1, 1);
+// @ts-expect-error only stratum 0 is generated
+world.spawn(0, "herbivore.1", 1, 1);
 // @ts-expect-error a species shape is for tests on the core World
 world.spawn(0, { actor: false, components: {} }, 1, 1);
 // @ts-expect-error spawnPlayer takes the game's species names only

@@ -86,3 +86,10 @@ test("a save loaded with another seed's catalogue is refused by the fingerprint"
 		loadWorld(bytes, { modules, species: catalogue(6).species }),
 	).toThrow(/fingerprint/);
 });
+
+test("a write through one catalogue never reaches the next", () => {
+	const before = catalogue(2).species.rat?.components.vitality?.max;
+	const vitality = catalogue(1).species.rat?.components.vitality;
+	expect(vitality && Reflect.set(vitality, "max", 99)).toBe(false);
+	expect(catalogue(2).species.rat?.components.vitality?.max).toBe(before);
+});

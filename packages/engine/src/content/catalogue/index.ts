@@ -1,4 +1,5 @@
 import { MAX_SEED } from "../../core/config";
+import { frozenCopy } from "../../core/setup/canonical";
 import { species as fixed } from "../species";
 import type { GameSpecies } from "../species/types";
 import { archetypes, type Niche } from "./archetypes";
@@ -7,7 +8,7 @@ import { express } from "./expression";
 import { drawGenome } from "./genome";
 import type { Look } from "./types";
 
-export type SpeciesName = keyof typeof fixed | `${Niche}.${number}`;
+export type SpeciesName = keyof typeof fixed | `${Niche}.0`;
 
 export interface Catalogue {
 	readonly species: Readonly<Record<string, GameSpecies>>;
@@ -29,7 +30,7 @@ export function catalogue(seed: number): Catalogue {
 	const add = (name: string, stem: string, entry: GameSpecies) => {
 		if (Object.hasOwn(species, name))
 			throw new Error(`species ${name} is defined twice`);
-		species[name] = entry;
+		species[name] = frozenCopy(entry);
 		looks[name] = lookOf(stem, entry);
 	};
 	for (const [name, entry] of Object.entries(fixed)) add(name, name, entry);

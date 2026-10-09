@@ -76,7 +76,7 @@ Functional:
 
 - A game saved and loaded plays on exactly as the unbroken run.
 - `loadGame` rebuilds the Catalogue from the saved seed.
-- A save loaded with another seed's Catalogue is refused by the
+- A save loaded with a different species table is refused by the
   Fingerprint.
 - The species count stays at or below `MAX_SPECIES`, checked by a test.
 - RSS <= 160 MB on `bench/reference.ts`. This budget is never raised.
@@ -320,7 +320,7 @@ This run:
    `createGame` / `loadGame` wiring, two `herbivore.0` on the starter
    floor, `Snapshot.looks`, glyph by stem and case by tier. Tests: same
    seed same Catalogue; `vitality.max` varies over seeds; save/load equals
-   an unbroken run; another seed's table is refused by the Fingerprint.
+   an unbroken run; a different species table is refused by the Fingerprint.
 2. **S2 Predation.** Stoat archetype, bites through `harm`, size drives
    bite and nutrition. P4 holds.
 3. **S3 Reproduction.** `WriteCtx.spawnKin`, module `reproduction` with
