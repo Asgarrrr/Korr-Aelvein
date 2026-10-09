@@ -57,9 +57,9 @@ row fits, that is a design question: propose a new row before coding.
 | Design plans | `docs/plans/` |
 | Domain glossary: one name per concept | `CONTEXT.md` |
 | Repository tooling | `scripts/` |
-| Rust port of the engine, during the port | `crates/engine/` |
-| Rust server, during the port | `crates/server/` |
-| Rust tooling: toolchain pin, workspace lints | `rust-toolchain.toml`, root `Cargo.toml` |
+| Rust port of the engine, during the port | `apps/server-rs/crates/engine/` |
+| Rust server, during the port | `apps/server-rs/crates/server/` |
+| Rust tooling: toolchain pin, workspace lints | `apps/server-rs/` root files |
 
 - One file = one subject. Past ~400 lines, or when a second subject
   appears, split into a folder by subject: `combat/{damage,status}.ts`,
@@ -105,7 +105,7 @@ the code around it: every needless comment breeds more.
 - dev: `bun run dev` — server on :3000, web on Vite's port, `/ws` proxied
 - lint fix: `bun run lint:fix`
 - Rust: `verify` also runs `cargo test`, `clippy -D warnings` and
-  `fmt --check` through turbo (`experimentalCargoWorkspaces`). Rules:
+  `fmt --check`, as scripts of `apps/server-rs/package.json`. Rules:
   `.claude/rules/rust.md`.
 - New worktree or clone: run `bun install` first. Without it every check
   fails (exit 127) and the git hooks are not enabled.

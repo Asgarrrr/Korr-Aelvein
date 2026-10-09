@@ -1,0 +1,10 @@
+{
+	"name": "@korr/server-rs",
+	"private": true,
+	"scripts": {
+		"build": "cargo build --workspace --locked",
+		"test": "cargo test --workspace --locked",
+		"lint": "cargo clippy --workspace --all-targets --locked -- -D warnings",
+		"format": "cargo fmt --all --check"
+	}
+}

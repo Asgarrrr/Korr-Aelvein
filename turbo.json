@@ -1,10 +1,6 @@
 {
 	"$schema": "https://turborepo.dev/schema.json",
 	"agentGuidance": false,
-	"futureFlags": {
-		"experimentalCargoWorkspaces": true,
-		"experimentalTaskCommand": true
-	},
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],
@@ -16,20 +12,7 @@
 			"cache": false,
 			"persistent": true
 		},
-		"korr-rust#lint": {
-			"command": [
-				"cargo",
-				"clippy",
-				"--workspace",
-				"--all-targets",
-				"--locked",
-				"--",
-				"-D",
-				"warnings"
-			]
-		},
-		"korr-rust#format": {
-			"command": ["cargo", "fmt", "--all", "--check"]
-		}
+		"lint": {},
+		"format": {}
 	}
 }

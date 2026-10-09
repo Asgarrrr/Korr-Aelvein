@@ -1,12 +1,13 @@
 ---
-paths: ["crates/**", "Cargo.toml", "rust-toolchain.toml"]
+paths: ["apps/server-rs/**"]
 ---
 
 # Rust guide
 
 Read with `CLAUDE.md`. Lints are the floor, not the goal: the workspace
-lints live in the root `Cargo.toml`, and the engine's determinism bans in
-`crates/engine/clippy.toml`. This file holds what a lint cannot check.
+lints live in `apps/server-rs/Cargo.toml`, and the engine's determinism
+bans in `crates/engine/clippy.toml`. This file holds what a lint cannot
+check. Paths below are relative to `apps/server-rs/`.
 
 ## Lints
 

@@ -21,6 +21,9 @@
         "@types/bun": "^1.4.2",
       },
     },
+    "apps/server-rs": {
+      "name": "@korr/server-rs",
+    },
     "apps/web": {
       "name": "@korr/web",
       "dependencies": {
@@ -70,6 +73,8 @@
     "@korr/protocol": ["@korr/protocol@workspace:packages/protocol"],
 
     "@korr/server": ["@korr/server@workspace:apps/server"],
+
+    "@korr/server-rs": ["@korr/server-rs@workspace:apps/server-rs"],
 
     "@korr/web": ["@korr/web@workspace:apps/web"],
 
