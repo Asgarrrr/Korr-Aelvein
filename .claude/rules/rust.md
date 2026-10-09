@@ -21,6 +21,8 @@ check. Paths below are relative to `apps/server-rs/`.
 - Ids and indices are newtypes (`struct EntityId(u32)`), never bare
   integers that two meanings share.
 - Make invalid states unrepresentable: an enum over a struct of options.
+- No `bool` parameters. A two-variant enum names the choice at the call
+  site.
 - Static dispatch in hot paths: generics or an enum. `dyn Trait` only at a
   registration seam that runs once.
 - `pub(crate)` by default. `pub` only on what another crate imports.
@@ -36,9 +38,26 @@ check. Paths below are relative to `apps/server-rs/`.
 
 - A broken engine invariant is a bug: panic with a message that names the
   invariant.
-- A recoverable failure returns `Result` with a crate-level error enum.
+- A recoverable failure returns `Result`. The engine returns a typed error
+  enum derived with `thiserror`. The server binary propagates with
+  `anyhow` and adds `.context(...)` at each boundary.
 - No `unwrap`. `expect("...")` only where an invariant guarantees the
   value, and the message states that invariant.
+
+## Server
+
+- A round is CPU-bound work. Never run it inside an async task or an axum
+  handler: it stalls every connection on that worker.
+- One dedicated thread owns the `World`. Async tasks talk to it through
+  channels: commands in, snapshots out.
+- No blocking call (`std::thread::sleep`, blocking I/O) inside `async`
+  code.
+
+## Dependencies
+
+- Every dependency, internal or external, is declared once in
+  `[workspace.dependencies]` with its version and features. A crate
+  writes `name.workspace = true`.
 
 ## Integers
 

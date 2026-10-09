@@ -7,6 +7,9 @@ edition = "2024"
 rust-version = "1.96"
 publish = false
 
+[workspace.dependencies]
+korr-engine = { path = "crates/engine" }
+
 [workspace.lints.rust]
 unsafe_code = "forbid"
 unreachable_pub = "warn"
