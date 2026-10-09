@@ -1,0 +1,10 @@
+disallowed-types = [
+  { path = "std::collections::HashMap", reason = "iteration order is random per process; use BTreeMap or an indexed Vec" },
+  { path = "std::collections::HashSet", reason = "iteration order is random per process; use BTreeSet or a bitset" },
+  { path = "std::time::Instant", reason = "the engine never reads the wall clock" },
+  { path = "std::time::SystemTime", reason = "the engine never reads the wall clock" },
+]
+disallowed-methods = [
+  { path = "std::thread::spawn", reason = "the host owns threads; the engine stays a pure function of seed and inputs" },
+  { path = "std::env::var", reason = "the engine reads no environment; pass values through config" },
+]
