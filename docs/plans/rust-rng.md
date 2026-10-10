@@ -12,9 +12,11 @@ evidence; a partial Codex report (usage limit reached before its answer).
   change: `crates/engine` → `crates/sim/engine`, `crates/server` →
   `crates/host/server`, the engine `clippy.toml` → `crates/sim/clippy.toml`.
   `members` lists paths by depth (cargo#11405).
-- **Mixer.** Moremur (Evensen), own code, two multiplies. On counter
-  inputs it passes PractRand to 2^33 and beyond where Mix13 (SplitMix64's
-  finalizer) fails at 2^19 and Murmur3 at 2^17. No `rapidhash`: its
+- **Mixer.** NASAM (Evensen), own code, two multiplies plus one
+  rotate-xor. Moremur came first and failed PractRand (Gap-16) at 2^40
+  bytes on 2^32 sequential indices of one subject. NASAM passes
+  RRC-64-42-TF2-0.94 to 1 PB per its author; Mix13 (SplitMix64's
+  finalizer) fails PractRand at 2^19 on counters. No `rapidhash`: its
   folded multiply discards an input when the other is zero, and zero is a
   common field value. No Philox: a block cipher costs too much per word.
 - **Shape.** A `Stream` hashes the stable prefix once per callback:
@@ -23,12 +25,12 @@ evidence; a partial Codex report (usage limit reached before its answer).
   the subject, then the index, one finalizer each. One fold of
   `prefix ^ (subject, index)` would let two streams whose prefixes differ in
   low bits share draws at shifted indices. The extra finalizer costs about
-  one Moremur per draw; `core` can cache the subject step when it draws
+  one mixer per draw; `core` can cache the subject step when it draws
   several times for one subject.
 - **Bounded draw.** Multiply-high on 64 bits: `(x * bound) >> 64` in u128,
   `bound: NonZeroU32`. Bias is below 2^-32 per outcome, so no rejection
   and no extra draw.
-- **Module key.** `const fn` FNV-1a-64 of the module name, then Moremur.
+- **Module key.** `const fn` FNV-1a-64 of the module name, then NASAM.
   The registry will panic on two equal keys.
 - **Phase.** An enum with no `Core` variant: no core draw exists yet. Each
   variant maps to a literal tag, so reordering or inserting one shifts no
@@ -73,7 +75,7 @@ In `crates/sim/random/tests/`, all under 1 s:
   subjects, indices and times: chi-square under `df + 6 * sqrt(2 * df)`.
 - Known-answer vectors for `draw` and for `below`: they catch a mistyped
   constant or a changed reduction the statistics miss.
-- Mutation check before done: swap Moremur for one xor-shift; the
+- Mutation check before done: swap the mixer for one xor-shift; the
   avalanche and chi-square tests must fail.
 
 ## 4. Out of this step
@@ -82,5 +84,3 @@ In `crates/sim/random/tests/`, all under 1 s:
   a turn bench.
 - An offline PractRand run per field stream (one field counts, the others
   fixed): in `host/tools/sim-cli`, before the `core` API freezes.
-- A stronger mixer than Moremur (NASAM) if PractRand shows a weakness on
-  small sequential subjects and indices.

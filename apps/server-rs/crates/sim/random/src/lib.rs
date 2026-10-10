@@ -36,18 +36,19 @@ pub struct DrawIndex(pub u32);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Stream(u64);
 
-// Evensen's Moremur: SplitMix64's shape with constants tuned on counter inputs.
-const fn moremur(mut x: u64) -> u64 {
-    x ^= x >> 27;
-    x = x.wrapping_mul(0x3c79_ac49_2ba7_b653);
-    x ^= x >> 33;
-    x = x.wrapping_mul(0x1c69_b3f7_4ac4_ae35);
-    x ^ (x >> 27)
+// Evensen's NASAM. Moremur failed PractRand at 2^40 bytes on one subject's
+// sequential indices; NASAM passes far stronger batteries.
+const fn nasam(mut x: u64) -> u64 {
+    x ^= x.rotate_right(25) ^ x.rotate_right(47);
+    x = x.wrapping_mul(0x9e6c_63d0_676a_9a99);
+    x ^= (x >> 23) ^ (x >> 51);
+    x = x.wrapping_mul(0x9e6d_62d0_6f6a_9a9b);
+    x ^ (x >> 23) ^ (x >> 51)
 }
 
-// The added constant keeps an all-zero state from staying zero.
+// The added constant keeps NASAM's fixed point at zero off the zero state.
 const fn absorb(h: u64, v: u64) -> u64 {
-    moremur((h ^ v).wrapping_add(GOLDEN))
+    nasam((h ^ v).wrapping_add(GOLDEN))
 }
 
 impl ModuleKey {
@@ -62,7 +63,7 @@ impl ModuleKey {
             h = (h ^ bytes[i] as u64).wrapping_mul(FNV_PRIME);
             i += 1;
         }
-        Self(moremur(h))
+        Self(nasam(h))
     }
 }
 

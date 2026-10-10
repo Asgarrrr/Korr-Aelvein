@@ -157,29 +157,29 @@ fn bounded_draws_are_uniform() {
 // Catches a mistyped constant or a platform difference the statistics miss.
 #[test]
 fn known_answers() {
-    assert_eq!(tick(0, 0, 0, 0), 0xdd9e_bbfe_228d_a77f);
-    assert_eq!(tick(1, 10, 5, 3), 0xd063_fc36_08a7_296b);
+    assert_eq!(tick(0, 0, 0, 0), 0x2378_9c18_b186_929d);
+    assert_eq!(tick(1, 10, 5, 3), 0x982a_4cad_68ae_3f38);
     assert_eq!(
         draw(42, "fear", Phase::Action, 7, Subject::Cell(1023), 9),
-        0x4348_7fc7_3898_f4d9
+        0x9b70_1654_a95d_c11e
     );
     assert_eq!(
         draw(3, "wander", Phase::Propose, 2, Subject::Entity(8), 1),
-        0x0e3f_3c1d_07dd_5009
+        0x81fd_6e3d_d2ec_2107
     );
     let last = Subject::Entity((1 << 63) - 1);
     assert_eq!(
         draw(u64::MAX, "flora", Phase::Spawn, u64::MAX, last, u32::MAX),
-        0x83ec_afd6_28e9_f31b
+        0x0b66_efa9_9640_cda3
     );
     let stream = Stream::new(Seed(1), ModuleKey::of("hunger"), Phase::Tick, 10);
     let below = |bound, n| {
         let bound = NonZeroU32::new(bound).expect("test bounds are nonzero");
         stream.below(Subject::Entity(5), DrawIndex(n), bound)
     };
-    assert_eq!([below(7, 0), below(7, 1), below(7, 2)], [5, 5, 1]);
+    assert_eq!([below(7, 0), below(7, 1), below(7, 2)], [5, 3, 2]);
     assert_eq!(
         [below(1000, 0), below(1000, 1), below(1000, 2)],
-        [834, 822, 222]
+        [791, 526, 403]
     );
 }
