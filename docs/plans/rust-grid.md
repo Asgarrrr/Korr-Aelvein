@@ -88,8 +88,9 @@ Invariants:
   action fails, the game goes on. Height difference is computed in `i16`:
   an `i8` subtraction overflows.
 - Rebuilding occupancy on load returns an error on bad input: two actors on
-  one cell, a position off the shape, on the ring or on a non-walkable
-  cell. Untrusted bytes never panic.
+  one cell, a position off the shape or on the ring. A non-walkable cell is
+  accepted: `set_material` may raise a wall under an entity, and every
+  reachable grid must reload. Untrusted bytes never panic.
 - Linking an actor onto a cell another actor holds, or unlinking an entity
   that is not linked, breaks an invariant: panic naming it.
 

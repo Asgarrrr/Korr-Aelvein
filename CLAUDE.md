@@ -59,7 +59,7 @@ row fits, that is a design question: propose a new row before coding.
 | Repository tooling | `scripts/` |
 | Rust simulation crates, during the rewrite (layout: `docs/plans/rust-structure.md`) | `apps/server-rs/crates/sim/<crate>/` |
 | Rust entity storage: ids, handles, columns, floor images, travellers (imports no workspace crate) | `apps/server-rs/crates/sim/ecs/` |
-| Rust ECS benchmarks against hecs and bevy_ecs (cargo bench, not part of verify) | `apps/server-rs/crates/host/tools/ecs-bench/` |
+| Rust storage benchmarks: korr-ecs against hecs and bevy_ecs, korr-grid occupancy (cargo bench, not part of verify) | `apps/server-rs/crates/host/tools/ecs-bench/` |
 | Rust server, during the rewrite | `apps/server-rs/crates/host/server/` |
 | Rust tooling: toolchain pin, workspace lints | `apps/server-rs/` root files |
 
