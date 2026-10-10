@@ -75,14 +75,24 @@ impl Grid {
         self.terrain.set_height(at, h);
     }
 
+    /// One load, without reading the link: the blocking test.
+    #[must_use]
+    #[inline]
+    pub fn holds_actor(&self, at: CellIdx) -> bool {
+        self.shape.check(at);
+        self.occupancy.holds_actor(at)
+    }
+
     #[must_use]
     #[inline]
     pub fn actor_at(&self, at: CellIdx) -> Option<Handle> {
+        self.shape.check(at);
         self.occupancy.actor_at(at)
     }
 
     /// The things linked at `at`, in ascending `EntityId` order.
     pub fn things(&self, at: CellIdx) -> impl Iterator<Item = Handle> + '_ {
+        self.shape.check(at);
         self.occupancy.things(at)
     }
 
@@ -141,6 +151,6 @@ impl Grid {
     }
 
     fn check_interior(&self, at: Interior) {
-        assert!(self.shape.holds(at), "cell outside this floor's interior");
+        self.shape.check_interior(at);
     }
 }
