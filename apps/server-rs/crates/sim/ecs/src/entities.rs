@@ -30,6 +30,14 @@ pub(crate) struct Entities {
 /// Only `admit` builds one, so `arrive` never skips the counter check.
 pub(crate) struct Arrival {
     id: EntityId,
+    slot: u32,
+}
+
+impl Arrival {
+    #[inline]
+    pub(crate) const fn slot(&self) -> u32 {
+        self.slot
+    }
 }
 
 impl Entities {
@@ -56,7 +64,10 @@ impl Entities {
 
     pub(crate) fn admit(&self, id: EntityId) -> Result<Arrival, ImageError> {
         self.check_id(id)?;
-        Ok(Arrival { id })
+        Ok(Arrival {
+            id,
+            slot: self.next_slot(),
+        })
     }
 
     #[expect(
@@ -64,7 +75,9 @@ impl Entities {
         reason = "taking the arrival keeps one admission from allocating twice"
     )]
     pub(crate) fn arrive(&mut self, arrival: Arrival) -> Handle {
-        self.alloc(arrival.id)
+        let h = self.alloc(arrival.id);
+        assert_eq!(h.slot, arrival.slot, "arrival admitted for another slot");
+        h
     }
 
     fn check_id(&self, id: EntityId) -> Result<(), ImageError> {
@@ -74,9 +87,17 @@ impl Entities {
         Ok(())
     }
 
+    fn next_slot(&self) -> u32 {
+        match self.free.last() {
+            Some(&slot) => slot,
+            None => u32::try_from(self.metas.len()).expect("slot space exhausted on this floor"),
+        }
+    }
+
     fn alloc(&mut self, id: EntityId) -> Handle {
         self.alive += 1;
-        if let Some(slot) = self.free.pop() {
+        let slot = self.next_slot();
+        if self.free.pop().is_some() {
             let meta = &mut self.metas[slot as usize];
             assert!(meta.id.is_none(), "free list held a live slot");
             meta.id = Some(id);
@@ -85,7 +106,6 @@ impl Entities {
                 generation: meta.generation,
             };
         }
-        let slot = u32::try_from(self.metas.len()).expect("slot space exhausted on this floor");
         self.metas.push(Meta {
             generation: 0,
             id: Some(id),

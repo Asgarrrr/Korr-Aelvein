@@ -1,14 +1,14 @@
 //! Travellers: entities in flight between floors. The byte layout and the
 //! order of the checks are in `docs/plans/rust-structure.md`, section 7.
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use crate::codec::{Reader, Writer};
+use crate::column::ErasedColumn;
 use crate::error::ImageError;
 use crate::id::{EntityId, Handle};
 use crate::store::Store;
-
-const VALIDATED: &str = "traveller row validated before insert";
 
 /// An entity off every floor: its id and its row, encoded per column.
 #[derive(Debug, PartialEq, Eq)]
@@ -77,9 +77,6 @@ impl Store {
     /// # Errors
     /// When the id is beyond this floor's counter or the row does not
     /// match the schema.
-    ///
-    /// # Panics
-    /// When a `Component::read` is not pure: the row passed validation.
     #[expect(
         clippy::cast_possible_truncation,
         reason = "register caps the component count at u32"
@@ -95,17 +92,24 @@ impl Store {
         if count != self.columns.len() as u32 {
             return Err(ImageError::Schema { index: count });
         }
-        for column in &self.columns {
-            column.check_row(&mut r)?;
+        let slot = arrival.slot();
+        if let Err(error) = attach_columns(&mut self.columns, slot, r) {
+            for column in &mut self.columns {
+                column.clear_slot(slot);
+            }
+            return Err(error);
         }
-        r.finish()?;
-
-        let h = self.entities.arrive(arrival);
-        let mut r = Reader::new(&t.row);
-        r.read_u32().expect(VALIDATED);
-        for column in &mut self.columns {
-            column.attach_row(h.slot, &mut r).expect(VALIDATED);
-        }
-        Ok(h)
+        Ok(self.entities.arrive(arrival))
     }
+}
+
+fn attach_columns(
+    columns: &mut [Box<dyn ErasedColumn>],
+    slot: u32,
+    mut r: Reader<'_>,
+) -> Result<(), ImageError> {
+    for column in columns {
+        column.attach_row(slot, &mut r)?;
+    }
+    r.finish()
 }

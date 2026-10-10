@@ -26,8 +26,6 @@ pub(crate) trait ErasedColumn: Any + Send {
     /// Writes the presence byte and the value, and removes the value.
     fn detach_row(&mut self, slot: u32, w: &mut Writer);
 
-    fn check_row(&self, r: &mut Reader<'_>) -> Result<(), ImageError>;
-
     fn attach_row(&mut self, slot: u32, r: &mut Reader<'_>) -> Result<(), ImageError>;
 }
 
@@ -164,10 +162,6 @@ impl<T: Component> ErasedColumn for Column<T> {
                 value.write(w);
             }
         }
-    }
-
-    fn check_row(&self, r: &mut Reader<'_>) -> Result<(), ImageError> {
-        Self::read_row(r).map(drop)
     }
 
     fn attach_row(&mut self, slot: u32, r: &mut Reader<'_>) -> Result<(), ImageError> {

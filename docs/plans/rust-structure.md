@@ -346,9 +346,8 @@ row length u32, then the row:
 ```
 
 `Traveller::read` checks only the id bits (`Corrupt("entity id")`) and
-the length. `attach` is all or nothing: it validates the whole row before
-it changes anything, so on `Err` the store is unchanged. It checks, in
-this order:
+the length. `attach` is all or nothing: on `Err` the store is unchanged.
+It checks, in this order:
 
 1. An id from this floor whose counter is not below `next_counter`:
    `Corrupt("id beyond the floor counter")`.
@@ -357,13 +356,27 @@ this order:
 4. Errors from `T::read`, propagated; the values are dropped.
 5. Bytes left over: `Trailing`.
 
-Only then does it allocate the slot and read the row a second time to
-insert it. The second read cannot fail because `Component::read` is pure.
+Checks 1 and 2 run before any column changes. Checks 3 to 5 run during
+one decode pass: each value is read once and inserted into the slot that
+`arrive` will allocate. On an error in that pass, `attach` calls
+`clear_slot` on every column, then returns the error. The rollback is
+exact: that slot holds no value before `attach`, because `detach` and
+`despawn` clear every column. Each insert pushes to the dense end, and
+removing the last dense index pops it without a swap, so the dense and
+owner order come back unchanged. `sparse` can stay longer; it is never
+saved. No path panics on a row that `Component::read` rejects.
 
 `Entities` owns admission. `Entities::admit` runs check 1 and returns an
-`Arrival`, which only it can build; `Entities::arrive` takes that
-`Arrival` and allocates the slot. `Entities::spawn` is the only issuer of
-new ids on a floor.
+`Arrival`, which only it can build. The `Arrival` carries the slot that
+`Entities::arrive` will allocate, so the columns are filled before the
+entity is alive. `admit` and the allocator pick the slot through one
+function, and `attach` consumes the `Arrival` before any other allocation.
+`Entities::spawn` is the only issuer of new ids on a floor.
+
+The one-pass `attach` measured `travel/ours` at 61.7 µs per 1,000
+crossings, against 65.6 µs for the two-pass `attach` that validated the
+row and then read it again: -5.9%, criterion `--baseline before`, same
+machine.
 
 World invariant, documented and not checked, since a check costs O(n): an
 `EntityId` is alive on at most one floor, and a detach always precedes its
@@ -422,8 +435,8 @@ Fairness notes:
   `QueryState`s are built once in `populate`, so queries do not pay for
   state creation.
 - ours pays serialization in `travel`: `detach` encodes the row and `attach`
-  checks it, then reads it again. hecs moves the row between worlds without
-  encoding it. A traveller in flight is the form the inbox saves.
+  decodes it once. hecs moves the row between worlds without encoding it.
+  A traveller in flight is the form the inbox saves.
 - hecs and bevy are archetype stores. Their `query` and `bulk` read a
   contiguous table per archetype; the benchmark has two archetypes, with and
   without `Vel`, so they never see the cost of many component sets.
