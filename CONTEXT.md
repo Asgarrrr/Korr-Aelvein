@@ -22,12 +22,19 @@ a second name anywhere.
 
 - **Entity**: anything on a floor: a creature, an item, stairs.
 - **EntityId**: an entity's name for life, `originFloor * 2^25 + counter`.
-  Never reused, kept across floors.
+  Never reused, kept across floors. In Rust (korr-ecs): a `u64`,
+  `origin floor << 47 | counter`, bit 63 always 0.
+- **Handle**: a slot and its generation, valid only on the floor store that
+  returned it. A stale handle reads nothing; never saved or sent.
+- **Schema**: the ordered list of registered components, shared by every
+  floor of a world.
 - **Slot**: an index into the columns. Valid only inside the current core
   callback; never stored.
 - **Row**: the values at one slot across all columns.
 - **Component**: a named group of fields a module owns, such as `satiety`.
 - **Column**: one typed array holding one field for every slot.
+  In Rust (korr-ecs): one component's values on one floor, stored as a
+  sparse set.
 - **Cell column**: one typed array holding one field for every cell of
   every floor.
 - **Species**: which components an entity starts with, and their values.
@@ -78,12 +85,15 @@ a second name anywhere.
 ## Travel and persistence
 
 - **Stairs**: an entity whose `link` names a destination floor and cell.
+- **Traveller**: an entity in flight between floors, its EntityId plus its
+  encoded row. In Rust (korr-ecs): made by `detach`, consumed by `attach`.
 - **Inbox**: entities on their way to a floor, sorted by (time, id) and
   saved with that floor.
 - **Floor membership**: an entity being on a floor: its slot, grid link,
   schedule entry and player count. Changed only by `attach` and `detach`.
 - **Image**: one floor's saved bytes: header, sections, inbox entries,
-  checksum.
+  checksum. The Rust floor image also keeps the slot table, free stack and
+  dense order.
 - **Save**: the world header plus every floor image.
 - **Fingerprint**: a hash of the core schema, each module's name, schema,
   cells and config in registry order, and the species. A save only loads
