@@ -1,15 +1,11 @@
-use korr_core::{Floor, LoadError, Mechanics, Pos, Ruleset, Seed, TICKS_PER_ROUND, World};
-use korr_ecs::{FloorId, Handle, ImageError, SchemaBuilder, checksum};
+use korr_core::{Floor, LoadError, Pos, Ruleset, Seed, TICKS_PER_ROUND, World};
+use korr_ecs::{FloorId, Handle, ImageError, checksum};
 use korr_engine::Registry;
-use korr_scenarios::{Pace, floor};
+use korr_scenarios::{Pace, floor, game, run};
 
 const SEED: Seed = Seed(7);
 /// Re-pin on every intended change to the image format or to behaviour.
 const PINNED: u64 = 0x74de_a463_5b75_44e9;
-
-fn ruleset(mechanics: &impl Mechanics) -> Ruleset {
-    Ruleset::new(SchemaBuilder::default(), mechanics)
-}
 
 /// 40 actors, two per row. The fast even id starts at x = 3: blocked by the
 /// wall from tick 570, its clock stays off the round boundary. The slow odd
@@ -25,17 +21,11 @@ fn populated(ruleset: &Ruleset) -> (Floor, Vec<Handle>) {
     (f, actors)
 }
 
-fn run(world: &mut World, ruleset: &Ruleset, rounds: u64) {
-    for _ in 0..rounds {
-        world.run_round(ruleset, &Pace);
-    }
-}
-
 fn uninterrupted_hash(rounds: u64) -> u64 {
-    let ruleset = ruleset(&Pace);
-    let mut world = World::new(SEED, vec![populated(&ruleset).0]);
-    run(&mut world, &ruleset, rounds);
-    world.hash(&ruleset)
+    let game = game(Pace, SEED);
+    let mut world = World::new(vec![populated(game.ruleset()).0]);
+    run(&game, &mut world, rounds);
+    game.hash(&world)
 }
 
 #[test]
@@ -49,13 +39,10 @@ const PINNED_WANDER: u64 = 0x9419_ab3a_d669_63c9;
 
 #[test]
 fn wander_world_hash_pins_the_draws() {
-    let registry = Registry::default();
-    let ruleset = ruleset(&registry);
-    let mut world = World::new(SEED, vec![populated(&ruleset).0]);
-    for _ in 0..20 {
-        world.run_round(&ruleset, &registry);
-    }
-    assert_eq!(world.hash(&ruleset), PINNED_WANDER);
+    let game = game(Registry::default(), SEED);
+    let mut world = World::new(vec![populated(game.ruleset()).0]);
+    run(&game, &mut world, 20);
+    assert_eq!(game.hash(&world), PINNED_WANDER);
 }
 
 /// Positions alone, outside any image: survives a change to the image format.
@@ -64,13 +51,10 @@ const PINNED_DRAWS: u64 = 0xe258_a413_e4ea_1633;
 
 #[test]
 fn wander_positions_pin_the_draws() {
-    let registry = Registry::default();
-    let ruleset = ruleset(&registry);
-    let (f, actors) = populated(&ruleset);
-    let mut world = World::new(SEED, vec![f]);
-    for _ in 0..20 {
-        world.run_round(&ruleset, &registry);
-    }
+    let game = game(Registry::default(), SEED);
+    let (f, actors) = populated(game.ruleset());
+    let mut world = World::new(vec![f]);
+    run(&game, &mut world, 20);
     let floor = world.floor(FloorId(0));
     let bytes: Vec<u8> = actors
         .iter()
@@ -83,42 +67,47 @@ fn wander_positions_pin_the_draws() {
 #[test]
 fn save_reload_replay_matches_the_uninterrupted_run() {
     let saved: Vec<Vec<u8>> = {
-        let ruleset = ruleset(&Pace);
-        let mut world = World::new(SEED, vec![populated(&ruleset).0]);
-        run(&mut world, &ruleset, 20);
-        world.floors().iter().map(|f| f.save(&ruleset)).collect()
+        let game = game(Pace, SEED);
+        let mut world = World::new(vec![populated(game.ruleset()).0]);
+        run(&game, &mut world, 20);
+        world
+            .floors()
+            .iter()
+            .map(|f| f.save(game.ruleset()))
+            .collect()
     };
-    let ruleset = ruleset(&Pace);
+    let game = game(Pace, SEED);
     let floors = saved
         .iter()
-        .map(|bytes| Floor::load(&ruleset, bytes).expect("own save loads"))
+        .map(|bytes| Floor::load(game.ruleset(), bytes).expect("own save loads"))
         .collect();
-    let mut world = World::new(SEED, floors);
-    run(&mut world, &ruleset, 30);
-    assert_eq!(world.hash(&ruleset), uninterrupted_hash(50));
+    let mut world = World::new(floors);
+    run(&game, &mut world, 30);
+    assert_eq!(game.hash(&world), uninterrupted_hash(50));
 }
 
 #[test]
 fn a_changed_ruleset_refuses_the_save() {
-    let saving = ruleset(&Registry::default());
-    let bytes = populated(&saving).0.save(&saving);
-    let running = ruleset(&Registry { wander: None });
+    let saving = game(Registry::default(), SEED);
+    let bytes = populated(saving.ruleset()).0.save(saving.ruleset());
+    let running = game(Registry { wander: None }, SEED);
     assert!(matches!(
-        Floor::load(&running, &bytes),
+        Floor::load(running.ruleset(), &bytes),
         Err(LoadError::Ruleset { .. })
     ));
 }
 
 #[test]
 fn forged_round_is_corrupt_not_a_panic() {
-    let ruleset = ruleset(&Pace);
-    let mut bytes = populated(&ruleset).0.save(&ruleset);
+    let game = game(Pace, SEED);
+    let ruleset = game.ruleset();
+    let mut bytes = populated(ruleset).0.save(ruleset);
     bytes[..8].copy_from_slice(&u64::MAX.to_le_bytes());
     let body = bytes.len() - 8;
     let sum = checksum(&bytes[..body]);
     bytes[body..].copy_from_slice(&sum.to_le_bytes());
     assert_eq!(
-        Floor::load(&ruleset, &bytes).err(),
+        Floor::load(ruleset, &bytes).err(),
         Some(LoadError::Image(ImageError::Corrupt("round")))
     );
 }
@@ -162,10 +151,11 @@ fn corrupt(what: &'static str) -> LoadError {
 
 #[test]
 fn placed_actor_without_a_clock_is_corrupt() {
-    let ruleset = ruleset(&Pace);
-    let mut f = floor(&ruleset, 0, 8, 4);
-    f.spawn_actor(&ruleset, Pos { x: 1, y: 1 });
-    let forged = forge_store(&f.save(&ruleset), |store| {
+    let game = game(Pace, SEED);
+    let ruleset = game.ruleset();
+    let mut f = floor(ruleset, 0, 8, 4);
+    f.spawn_actor(ruleset, Pos { x: 1, y: 1 });
+    let forged = forge_store(&f.save(ruleset), |store| {
         let count_at = clock_count_at(store);
         assert_eq!(store[count_at..count_at + 4], 1u32.to_le_bytes());
         // The count, then one row: owner slot (4 bytes) and tick (8 bytes).
@@ -173,40 +163,42 @@ fn placed_actor_without_a_clock_is_corrupt() {
         store.drain(count_at + 4..count_at + 16);
     });
     assert_eq!(
-        Floor::load(&ruleset, &forged).err(),
+        Floor::load(ruleset, &forged).err(),
         Some(corrupt("placed actor without a clock"))
     );
 }
 
 #[test]
 fn clock_of_a_thing_is_corrupt() {
-    let ruleset = ruleset(&Pace);
-    let mut f = floor(&ruleset, 0, 8, 4);
-    f.spawn_actor(&ruleset, Pos { x: 1, y: 1 });
+    let game = game(Pace, SEED);
+    let ruleset = game.ruleset();
+    let mut f = floor(ruleset, 0, 8, 4);
+    f.spawn_actor(ruleset, Pos { x: 1, y: 1 });
     f.spawn_thing(Pos { x: 2, y: 1 });
-    let forged = forge_store(&f.save(&ruleset), |store| {
+    let forged = forge_store(&f.save(ruleset), |store| {
         let owner_at = clock_count_at(store) + 4;
         assert_eq!(store[owner_at..owner_at + 4], 0u32.to_le_bytes());
         store[owner_at..owner_at + 4].copy_from_slice(&1u32.to_le_bytes());
     });
     assert_eq!(
-        Floor::load(&ruleset, &forged).err(),
+        Floor::load(ruleset, &forged).err(),
         Some(corrupt("clock of an unplaced actor"))
     );
 }
 
 /// The load result of a floor at round 1 whose only actor has `tick` as clock.
 fn load_with_clock(tick: u64) -> Option<LoadError> {
-    let ruleset = ruleset(&Pace);
-    let mut f = floor(&ruleset, 0, 8, 4);
-    f.spawn_actor(&ruleset, Pos { x: 1, y: 1 });
-    let mut world = World::new(SEED, vec![f]);
-    run(&mut world, &ruleset, 1);
-    let forged = forge_store(&world.floors()[0].save(&ruleset), |store| {
+    let game = game(Pace, SEED);
+    let ruleset = game.ruleset();
+    let mut f = floor(ruleset, 0, 8, 4);
+    f.spawn_actor(ruleset, Pos { x: 1, y: 1 });
+    let mut world = World::new(vec![f]);
+    run(&game, &mut world, 1);
+    let forged = forge_store(&world.floors()[0].save(ruleset), |store| {
         let tick_at = clock_count_at(store) + 8;
         store[tick_at..tick_at + 8].copy_from_slice(&tick.to_le_bytes());
     });
-    Floor::load(&ruleset, &forged).err()
+    Floor::load(ruleset, &forged).err()
 }
 
 #[test]

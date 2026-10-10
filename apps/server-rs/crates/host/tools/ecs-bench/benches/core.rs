@@ -2,10 +2,9 @@
 //! things. The budget is about 200 ns per entity.
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
-use korr_core::{Mechanics, Pos, Ruleset, Seed, World};
-use korr_ecs::SchemaBuilder;
+use korr_core::{Game, Mechanics, Pos, Seed, World};
 use korr_engine::Registry;
-use korr_scenarios::{Shy, floor};
+use korr_scenarios::{Shy, floor, game};
 
 const SIDE: u16 = 128;
 const INSIDE: u32 = 126;
@@ -22,32 +21,32 @@ fn spread(k: u32, n: u32) -> Pos {
     }
 }
 
-fn world(mechanics: &impl Mechanics) -> (World, Ruleset) {
-    let ruleset = Ruleset::new(SchemaBuilder::default(), mechanics);
-    let mut f = floor(&ruleset, 0, SIDE, SIDE);
+fn world<M: Mechanics>(mechanics: M) -> (World, Game<M>) {
+    let game = game(mechanics, Seed(1));
+    let mut f = floor(game.ruleset(), 0, SIDE, SIDE);
     for k in 0..ACTORS {
-        f.spawn_actor(&ruleset, spread(k, ACTORS));
+        f.spawn_actor(game.ruleset(), spread(k, ACTORS));
     }
     for k in 0..THINGS {
         f.spawn_thing(spread(k, THINGS));
     }
-    (World::new(Seed(1), vec![f]), ruleset)
+    (World::new(vec![f]), game)
 }
 
 fn round(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
     name: &str,
-    mechanics: &impl Mechanics,
+    mechanics: impl Mechanics,
 ) {
-    let (mut world, ruleset) = world(mechanics);
-    group.bench_function(name, |b| b.iter(|| world.run_round(&ruleset, mechanics)));
+    let (mut world, game) = world(mechanics);
+    group.bench_function(name, |b| b.iter(|| game.run_round(&mut world)));
 }
 
 fn core(c: &mut Criterion) {
     let mut group = c.benchmark_group("round_8k_2k");
     group.throughput(Throughput::Elements(u64::from(ACTORS + THINGS)));
-    round(&mut group, "wander", &Registry::default());
-    round(&mut group, "perceiving", &Shy);
+    round(&mut group, "wander", Registry::default());
+    round(&mut group, "perceiving", Shy);
     group.finish();
 }
 

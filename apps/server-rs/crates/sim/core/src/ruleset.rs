@@ -20,7 +20,7 @@ impl Ruleset {
     /// # Panics
     /// When two actions share an `ActionKey`.
     #[must_use]
-    pub fn new(mut schema: SchemaBuilder, mechanics: &impl Mechanics) -> Self {
+    pub(crate) fn new(mut schema: SchemaBuilder, mechanics: &impl Mechanics) -> Self {
         let intent = schema.register::<Intent>("core.intent");
         let clock = schema.register::<Tick>("core.clock");
         let schema = schema.build();

@@ -1,6 +1,6 @@
-use korr_core::{ActionDesc, Band, Dir, Pos, Ruleset, Seed, Target, Tick, World};
-use korr_ecs::{FloorId, SchemaBuilder};
-use korr_scenarios::{Act, Answer, Scripted, floor};
+use korr_core::{ActionDesc, Band, Dir, Pos, Seed, Target, Tick, World};
+use korr_ecs::FloorId;
+use korr_scenarios::{Act, Answer, Scripted, floor, game};
 
 static X: ActionDesc = ActionDesc::new("fake", "x");
 static Y: ActionDesc = ActionDesc::new("fake", "y");
@@ -21,14 +21,11 @@ fn act(desc: &'static ActionDesc, weight: u16, answer: Answer) -> Act {
 }
 
 fn run(acts: Vec<Act>, rounds: u64) -> Pos {
-    let script = Scripted(acts);
-    let ruleset = Ruleset::new(SchemaBuilder::default(), &script);
-    let mut f = floor(&ruleset, 0, 9, 9);
-    let actor = f.spawn_actor(&ruleset, START);
-    let mut world = World::new(Seed(1), vec![f]);
-    for _ in 0..rounds {
-        world.run_round(&ruleset, &script);
-    }
+    let game = game(Scripted(acts), Seed(1));
+    let mut f = floor(game.ruleset(), 0, 9, 9);
+    let actor = f.spawn_actor(game.ruleset(), START);
+    let mut world = World::new(vec![f]);
+    korr_scenarios::run(&game, &mut world, rounds);
     world
         .floor(FloorId(0))
         .pos(actor)
@@ -117,5 +114,5 @@ fn inertia_keeps_the_current_intent_on_a_tie() {
 #[should_panic(expected = "action key collision")]
 fn colliding_action_keys_panic_at_build() {
     let acts = vec![act(&SAME_A, 1, Answer::Fail), act(&SAME_B, 1, Answer::Fail)];
-    let _ = Ruleset::new(SchemaBuilder::default(), &Scripted(acts));
+    let _ = game(Scripted(acts), Seed(1));
 }

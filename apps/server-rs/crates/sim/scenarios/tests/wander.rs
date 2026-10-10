@@ -1,8 +1,8 @@
-use korr_core::{Floor, Mechanics, Pos, Ruleset, Seed, World, WorldError};
-use korr_ecs::{FloorId, Handle, SchemaBuilder};
+use korr_core::{Floor, Pos, Ruleset, Seed, World, WorldError};
+use korr_ecs::{FloorId, Handle};
 use korr_engine::Registry;
 use korr_grid::Material;
-use korr_scenarios::{Pace, floor};
+use korr_scenarios::{Pace, floor, game, run};
 
 const FLOOR: FloorId = FloorId(0);
 
@@ -21,32 +21,21 @@ fn positions(world: &World, actors: &[Handle]) -> Vec<Pos> {
         .collect()
 }
 
-fn ruleset(mechanics: &impl Mechanics) -> Ruleset {
-    Ruleset::new(SchemaBuilder::default(), mechanics)
-}
-
-fn run(world: &mut World, ruleset: &Ruleset, mechanics: &impl Mechanics, rounds: u64) {
-    for _ in 0..rounds {
-        world.run_round(ruleset, mechanics);
-    }
-}
-
 fn in_block(p: Pos) -> bool {
     (6..10).contains(&p.x) && (6..10).contains(&p.y)
 }
 
 #[test]
 fn wanderers_spread_and_never_share_a_cell() {
-    let registry = Registry::default();
-    let ruleset = ruleset(&registry);
-    let mut f = floor(&ruleset, 0, 16, 16);
+    let game = game(Registry::default(), Seed(1));
+    let mut f = floor(game.ruleset(), 0, 16, 16);
     let block: Vec<Pos> = (6..10)
         .flat_map(|y| (6..10).map(move |x| Pos { x, y }))
         .collect();
-    let wanderers = spawn_all(&mut f, &ruleset, &block);
-    let mut world = World::new(Seed(1), vec![f]);
+    let wanderers = spawn_all(&mut f, game.ruleset(), &block);
+    let mut world = World::new(vec![f]);
     for _ in 0..40 {
-        world.run_round(&ruleset, &registry);
+        game.run_round(&mut world);
         let cells = positions(&world, &wanderers);
         for (i, a) in cells.iter().enumerate() {
             assert!(!cells[i + 1..].contains(a), "two wanderers share {a:?}");
@@ -62,9 +51,8 @@ fn wanderers_spread_and_never_share_a_cell() {
 #[test]
 fn walled_in_wanderer_still_ends_the_round() {
     let centre = Pos { x: 2, y: 2 };
-    let registry = Registry::default();
-    let ruleset = ruleset(&registry);
-    let mut f = floor(&ruleset, 0, 5, 5);
+    let game = game(Registry::default(), Seed(1));
+    let mut f = floor(game.ruleset(), 0, 5, 5);
     for y in 1..=3 {
         for x in 1..=3 {
             let p = Pos { x, y };
@@ -73,36 +61,39 @@ fn walled_in_wanderer_still_ends_the_round() {
             }
         }
     }
-    let wanderer = f.spawn_actor(&ruleset, centre);
-    let mut world = World::new(Seed(1), vec![f]);
-    run(&mut world, &ruleset, &registry, 10);
+    let wanderer = f.spawn_actor(game.ruleset(), centre);
+    let mut world = World::new(vec![f]);
+    run(&game, &mut world, 10);
     assert_eq!(world.floor(FLOOR).round(), 10);
     assert_eq!(world.floor(FLOOR).pos(wanderer), Some(centre));
 }
 
 #[test]
 fn wander_disabled_creatures_idle() {
-    let registry = Registry { wander: None };
-    let ruleset = ruleset(&registry);
-    let mut f = floor(&ruleset, 0, 6, 4);
+    let game = game(Registry { wander: None }, Seed(1));
+    let mut f = floor(game.ruleset(), 0, 6, 4);
     let cells: Vec<Pos> = (1..=2)
         .flat_map(|y| (1..=4).map(move |x| Pos { x, y }))
         .collect();
-    let actors = spawn_all(&mut f, &ruleset, &cells);
-    let mut world = World::new(Seed(1), vec![f]);
-    run(&mut world, &ruleset, &registry, 10);
+    let actors = spawn_all(&mut f, game.ruleset(), &cells);
+    let mut world = World::new(vec![f]);
+    run(&game, &mut world, 10);
     assert_eq!(positions(&world, &actors), cells);
     assert_eq!(world.floor(FLOOR).round(), 10);
 }
 
 #[test]
 fn cheap_actions_take_several_turns_per_round() {
-    let ruleset = ruleset(&Pace);
-    let mut f = floor(&ruleset, 0, 12, 4);
+    let game = game(Pace, Seed(1));
+    let mut f = floor(game.ruleset(), 0, 12, 4);
     // Spawn order sets the ids: the first actor's id is even, so it pays 30.
-    let actors = spawn_all(&mut f, &ruleset, &[Pos { x: 1, y: 1 }, Pos { x: 1, y: 2 }]);
-    let mut world = World::new(Seed(1), vec![f]);
-    run(&mut world, &ruleset, &Pace, 1);
+    let actors = spawn_all(
+        &mut f,
+        game.ruleset(),
+        &[Pos { x: 1, y: 1 }, Pos { x: 1, y: 2 }],
+    );
+    let mut world = World::new(vec![f]);
+    run(&game, &mut world, 1);
     assert_eq!(
         positions(&world, &actors),
         [Pos { x: 5, y: 1 }, Pos { x: 2, y: 2 }]
@@ -111,10 +102,13 @@ fn cheap_actions_take_several_turns_per_round() {
 
 #[test]
 fn duplicate_floor_ids_are_refused() {
-    let ruleset = ruleset(&Pace);
-    let floors = vec![floor(&ruleset, 0, 5, 5), floor(&ruleset, 0, 5, 5)];
+    let game = game(Pace, Seed(1));
+    let floors = vec![
+        floor(game.ruleset(), 0, 5, 5),
+        floor(game.ruleset(), 0, 5, 5),
+    ];
     assert_eq!(
-        World::try_new(Seed(1), floors).err(),
+        World::try_new(floors).err(),
         Some(WorldError::DuplicateFloor(FLOOR))
     );
 }

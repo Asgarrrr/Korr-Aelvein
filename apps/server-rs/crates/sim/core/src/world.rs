@@ -10,7 +10,6 @@ use crate::ruleset::Ruleset;
 
 #[derive(Debug)]
 pub struct World {
-    seed: Seed,
     floors: Vec<Floor>,
 }
 
@@ -18,8 +17,8 @@ impl World {
     /// # Panics
     /// When [`World::try_new`] refuses the floors.
     #[must_use]
-    pub fn new(seed: Seed, floors: Vec<Floor>) -> Self {
-        Self::try_new(seed, floors).unwrap_or_else(|e| panic!("{e}"))
+    pub fn new(floors: Vec<Floor>) -> Self {
+        Self::try_new(floors).unwrap_or_else(|e| panic!("{e}"))
     }
 
     /// Checks what no single floor image can: floors loaded one by one may
@@ -30,7 +29,7 @@ impl World {
     /// entity ids and draws would collide. [`WorldError::Rounds`] when two
     /// floors are at different rounds. [`WorldError::DuplicateEntity`] when an
     /// id is alive or waiting on two floors.
-    pub fn try_new(seed: Seed, floors: Vec<Floor>) -> Result<Self, WorldError> {
+    pub fn try_new(floors: Vec<Floor>) -> Result<Self, WorldError> {
         for (i, a) in floors.iter().enumerate() {
             if floors[i + 1..].iter().any(|b| b.id() == a.id()) {
                 return Err(WorldError::DuplicateFloor(a.id()));
@@ -44,7 +43,7 @@ impl World {
         if let Some(pair) = ids.windows(2).find(|pair| pair[0] == pair[1]) {
             return Err(WorldError::DuplicateEntity(pair[0]));
         }
-        Ok(Self { seed, floors })
+        Ok(Self { floors })
     }
 
     /// Every floor runs its actors, then the barrier: every floor sends, each
@@ -54,9 +53,9 @@ impl World {
     ///
     /// # Panics
     /// When an actor departs to a floor outside this world.
-    pub fn run_round(&mut self, ruleset: &Ruleset, mechanics: &impl Mechanics) {
+    pub(crate) fn run_round(&mut self, seed: Seed, ruleset: &Ruleset, mechanics: &impl Mechanics) {
         for floor in &mut self.floors {
-            floor.run_actors(self.seed, ruleset, mechanics);
+            floor.run_actors(seed, ruleset, mechanics);
         }
         let mut flights = Vec::new();
         for floor in &mut self.floors {
@@ -86,7 +85,7 @@ impl World {
 
     /// The checksum of every floor image, concatenated in ascending `FloorId`.
     #[must_use]
-    pub fn hash(&self, ruleset: &Ruleset) -> u64 {
+    pub(crate) fn hash(&self, ruleset: &Ruleset) -> u64 {
         let mut floors: Vec<&Floor> = self.floors.iter().collect();
         floors.sort_unstable_by_key(|floor| floor.id());
         let images: Vec<u8> = floors

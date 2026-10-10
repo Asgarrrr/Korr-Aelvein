@@ -137,6 +137,8 @@ a second name anywhere.
 - **Game**: the registry plus the species table: what the server runs.
   Code: `game` (`packages/engine/src/game.ts`). `createGame` / `loadGame`
   build a World running the Game.
+  In Rust (korr-core): `Game`, the ruleset, the mechanics and the seed,
+  bound at build.
 
 ## Server and client
 

@@ -5,11 +5,11 @@
 use std::cell::RefCell;
 
 use korr_core::{
-    ActionDesc, Candidates, CommitCtx, Mechanics, Pos, PrepCtx, Prepared, Ruleset, Seed, Seen,
-    Senses, Target, World,
+    ActionDesc, Candidates, CommitCtx, Mechanics, Pos, PrepCtx, Prepared, Seed, Seen, Senses,
+    Target, World,
 };
-use korr_ecs::{EntityId, FloorId, SchemaBuilder};
-use korr_scenarios::{Shy, floor};
+use korr_ecs::{EntityId, FloorId};
+use korr_scenarios::{Shy, floor, game};
 
 /// Proposes nothing and records what each actor is shown, in turn order.
 #[derive(Debug)]
@@ -54,12 +54,14 @@ const BEYOND_SIGHT: Pos = Pos { x: 9, y: 9 };
     reason = "a test observer, not engine state: it only records what propose is shown"
 )]
 fn shown_in_a_round(perceives: bool) -> Vec<(Pos, Vec<Seen>)> {
-    let watcher = Watcher {
-        perceives,
-        shown: RefCell::default(),
-    };
-    let ruleset = Ruleset::new(SchemaBuilder::default(), &watcher);
-    let mut f = floor(&ruleset, 0, 11, 11);
+    let game = game(
+        Watcher {
+            perceives,
+            shown: RefCell::default(),
+        },
+        Seed(1),
+    );
+    let mut f = floor(game.ruleset(), 0, 11, 11);
     for at in [
         Pos { x: 5, y: 8 },
         BEYOND_SIGHT,
@@ -67,11 +69,11 @@ fn shown_in_a_round(perceives: bool) -> Vec<(Pos, Vec<Seen>)> {
         CENTRE,
         Pos { x: 4, y: 4 },
     ] {
-        f.spawn_actor(&ruleset, at);
+        f.spawn_actor(game.ruleset(), at);
     }
-    let mut world = World::new(Seed(1), vec![f]);
-    world.run_round(&ruleset, &watcher);
-    watcher.shown.into_inner()
+    let mut world = World::new(vec![f]);
+    game.run_round(&mut world);
+    game.mechanics().shown.take()
 }
 
 fn seen_by(shown: &[(Pos, Vec<Seen>)], at: Pos) -> &[Seen] {
@@ -106,17 +108,18 @@ fn non_perceiving_mechanics_are_shown_nobody() {
 
 #[test]
 fn sight_bounds_perception() {
-    let ruleset = Ruleset::new(SchemaBuilder::default(), &Shy);
-    let mut f = floor(&ruleset, 0, 30, 7);
+    let game = game(Shy, Seed(1));
+    let ruleset = game.ruleset();
+    let mut f = floor(ruleset, 0, 30, 7);
     let at = |x| Pos { x, y: 3 };
     // Pairs a sight apart see each other; pairs one cell farther do not.
-    let lone = f.spawn_actor(&ruleset, at(3));
-    let p1 = f.spawn_actor(&ruleset, at(12));
-    let _p2 = f.spawn_actor(&ruleset, at(15));
-    let q1 = f.spawn_actor(&ruleset, at(22));
-    let q2 = f.spawn_actor(&ruleset, at(26));
-    let mut world = World::new(Seed(1), vec![f]);
-    world.run_round(&ruleset, &Shy);
+    let lone = f.spawn_actor(ruleset, at(3));
+    let p1 = f.spawn_actor(ruleset, at(12));
+    let _p2 = f.spawn_actor(ruleset, at(15));
+    let q1 = f.spawn_actor(ruleset, at(22));
+    let q2 = f.spawn_actor(ruleset, at(26));
+    let mut world = World::new(vec![f]);
+    game.run_round(&mut world);
     let f = world.floor(FloorId(0));
     assert_eq!(f.pos(lone), Some(at(3)));
     assert_eq!(f.pos(q1), Some(at(22)));

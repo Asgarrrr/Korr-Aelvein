@@ -11,10 +11,10 @@ mod shy;
 use alloc::vec::Vec;
 
 use korr_core::{
-    ActionDesc, Band, Candidate, Candidates, CommitCtx, Cost, Dir, Floor, Mechanics, PrepCtx,
-    Prepared, Ruleset, Senses, Target,
+    ActionDesc, Band, Candidate, Candidates, CommitCtx, Cost, Dir, Floor, Game, Mechanics, PrepCtx,
+    Prepared, Ruleset, Seed, Senses, Target, World,
 };
-use korr_ecs::FloorId;
+use korr_ecs::{FloorId, SchemaBuilder};
 use korr_grid::Shape;
 
 pub use leave::{LEAVE, Leave};
@@ -27,6 +27,21 @@ pub use shy::{STARTLE, Shy};
 pub fn floor(ruleset: &Ruleset, id: u16, width: u16, height: u16) -> Floor {
     let shape = Shape::new(width, height).expect("scenario shapes fit the bounds");
     Floor::new(ruleset, FloorId(id), shape)
+}
+
+/// # Panics
+/// When two actions share an `ActionKey`.
+#[must_use]
+pub fn game<M: Mechanics>(mechanics: M, seed: Seed) -> Game<M> {
+    Game::new(SchemaBuilder::default(), mechanics, seed)
+}
+
+/// # Panics
+/// When an actor departs to a floor outside `world`.
+pub fn run<M: Mechanics>(game: &Game<M>, world: &mut World, rounds: u64) {
+    for _ in 0..rounds {
+        game.run_round(world);
+    }
 }
 
 static STEP: ActionDesc = ActionDesc::new("pace", "step");
