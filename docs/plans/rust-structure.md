@@ -403,6 +403,28 @@ Both stay under 10% of the 120 ns cached-turn budget. `bulk_sparse` touches
 ~1,400 packed `u32`s that the compiler probably vectorizes, so read it as a
 ratio, not a rate.
 
+Against the TS engine storage (`bun bench/presence.ts` in
+`packages/engine`), same population and machine, Bun 1.4.3. The TS
+`SparsePool` holds 2,048 rows per floor for all sparse components, and
+~87% of these entities hold at least one, so the TS side uses its dense
+typed-array columns, mask bits and `MaskQuery`. `CAP` is 16,384 slots per
+floor, so the TS population spans two floors of 10,000. Median of 50
+batches of 20 ms after warmup, storage only, not a whole-engine figure:
+
+| Workload | Rust ours | TS | Winner |
+|---|---|---|---|
+| `churn` | 130 µs | 174 µs | Rust 1.3x |
+| `actor_turn`, checked (Rust handle, TS `slotOf` by id) | 10.2 µs | 5.24 µs | TS 2.0x |
+| `actor_turn`, TS by slot, no liveness check | — | 2.35 µs | — |
+| `bulk_full` | 0.56 µs | 11.8 µs scan, 18.3 µs `MaskQuery` | Rust ~21x |
+| `bulk_sparse` | 0.043 µs | 8.07 µs | Rust ~190x |
+| `query_sparse` | 0.71 µs | 7.60 µs | Rust 10.7x |
+
+The TS store scans every slot up to its high-water mark and tests a mask
+word; the Rust store walks only present rows. Rust loses random access
+because each `get` finds its column again (bounds check, `dyn Any`
+downcast) before the liveness check and the sparse lookup.
+
 Open points from the results:
 
 - `query`: the two-key join is 3.5x slower than hecs and 2.2x slower than
