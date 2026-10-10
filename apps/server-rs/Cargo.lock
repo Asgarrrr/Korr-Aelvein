@@ -728,7 +728,6 @@ dependencies = [
  "korr-ecs",
  "korr-engine",
  "korr-grid",
- "korr-wander",
 ]
 
 [[package]]

@@ -1,4 +1,4 @@
-use korr_core::{Floor, Mechanics, Pos, Ruleset, Seed, World};
+use korr_core::{Floor, Mechanics, Pos, Ruleset, Seed, World, WorldError};
 use korr_ecs::{FloorId, Handle, SchemaBuilder};
 use korr_engine::Registry;
 use korr_grid::Material;
@@ -110,11 +110,11 @@ fn cheap_actions_take_several_turns_per_round() {
 }
 
 #[test]
-#[should_panic(expected = "duplicate floor id")]
 fn duplicate_floor_ids_are_refused() {
     let ruleset = ruleset(&Pace);
-    let _ = World::new(
-        Seed(1),
-        vec![floor(&ruleset, 0, 5, 5), floor(&ruleset, 0, 5, 5)],
+    let floors = vec![floor(&ruleset, 0, 5, 5), floor(&ruleset, 0, 5, 5)];
+    assert_eq!(
+        World::try_new(Seed(1), floors).err(),
+        Some(WorldError::DuplicateFloor(FLOOR))
     );
 }

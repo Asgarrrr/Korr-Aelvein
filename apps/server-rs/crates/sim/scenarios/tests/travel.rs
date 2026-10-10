@@ -2,7 +2,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use korr_core::{
     ActionDesc, Band, Candidate, Candidates, CommitCtx, Dir, Floor, LoadError, Mechanics, Pos,
-    PrepCtx, Prepared, Ruleset, Seed, Senses, TICKS_PER_ROUND, Target, Tick, World,
+    PrepCtx, Prepared, Ruleset, Seed, Senses, TICKS_PER_ROUND, Target, Tick, World, WorldError,
 };
 use korr_ecs::{EntityId, FloorId, Handle, ImageError, SchemaBuilder, checksum};
 use korr_scenarios::{Act, Answer, Leave, Scripted, floor};
@@ -188,6 +188,56 @@ fn equal_ticks_break_on_entity_id_not_slot() {
     let a = world.floor(A);
     assert_eq!(a.pos(older), Some(Pos { x: 2, y: 2 }));
     assert_eq!(a.pos(newer), Some(Pos { x: 4, y: 2 }));
+}
+
+#[test]
+fn floors_at_different_rounds_are_refused() {
+    let ruleset = ruleset(&TO_C);
+    let mut world = World::new(SEED, vec![floor(&ruleset, A.0, 5, 5)]);
+    run(&mut world, &ruleset, &TO_C, 1);
+    let mut floors = reload(&ruleset, &world);
+    floors.push(floor(&ruleset, C.0, 5, 5));
+    assert_eq!(World::try_new(SEED, floors).err(), Some(WorldError::Rounds));
+}
+
+/// Floors A and C after one round from one start: A's actor stays home, then
+/// leaves for C, where it lands or, when C is full, waits. Both end at round 1.
+fn histories(c_full: bool) -> [Vec<Floor>; 2] {
+    [Tick(u64::MAX), Tick(0)].map(|from| {
+        let mechanics = Keyed {
+            actor: EntityId::new(A, 0),
+            from,
+            leave: TO_C,
+            rest: Scripted(Vec::new()),
+        };
+        let ruleset = ruleset(&mechanics);
+        let mut a = floor(&ruleset, A.0, 5, 5);
+        a.spawn_actor(&ruleset, Pos { x: 1, y: 1 });
+        let mut c = floor(&ruleset, C.0, 5, 5);
+        if c_full {
+            for y in 1..=3 {
+                for x in 1..=3 {
+                    c.spawn_actor(&ruleset, Pos { x, y });
+                }
+            }
+        }
+        let mut world = World::new(SEED, vec![a, c]);
+        run(&mut world, &ruleset, &mechanics, 1);
+        reload(&ruleset, &world)
+    })
+}
+
+#[test]
+fn an_entity_alive_on_two_floors_is_refused() {
+    for c_full in [false, true] {
+        let [mut stayed, mut left] = histories(c_full);
+        assert_eq!(left[1].inbox_len(), usize::from(c_full));
+        let floors = vec![stayed.remove(0), left.remove(1)];
+        assert_eq!(
+            World::try_new(SEED, floors).err(),
+            Some(WorldError::DuplicateEntity(EntityId::new(A, 0)))
+        );
+    }
 }
 
 #[test]

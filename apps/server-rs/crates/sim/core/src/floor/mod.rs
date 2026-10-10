@@ -5,7 +5,7 @@ mod turn;
 
 use alloc::vec::Vec;
 
-use korr_ecs::{FloorId, Handle, Store};
+use korr_ecs::{EntityId, FloorId, Handle, Store};
 use korr_grid::{Grid, Interior, Layer, Material, Pos, Shape};
 
 use crate::decision::Candidates;
@@ -99,6 +99,12 @@ impl Floor {
     #[must_use]
     pub fn inbox_len(&self) -> usize {
         self.inbox.flights().len()
+    }
+
+    /// Every entity alive here, then every traveller waiting in the inbox.
+    pub(crate) fn ids(&self) -> impl Iterator<Item = EntityId> + '_ {
+        let alive = self.store.handles().filter_map(|h| self.store.id(h));
+        alive.chain(self.inbox.flights().iter().map(|f| f.traveller.id()))
     }
 
     /// At the barrier, this round's departures leave, each with its destination.

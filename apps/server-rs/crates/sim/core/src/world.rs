@@ -1,8 +1,9 @@
 use alloc::vec::Vec;
 
-use korr_ecs::{FloorId, checksum};
+use korr_ecs::{EntityId, FloorId, checksum};
 use korr_random::Seed;
 
+use crate::error::WorldError;
 use crate::floor::Floor;
 use crate::mechanics::Mechanics;
 use crate::ruleset::Ruleset;
@@ -15,19 +16,35 @@ pub struct World {
 
 impl World {
     /// # Panics
-    /// When two floors share a `FloorId`: their entity ids and draws would
-    /// collide. When two floors are at different rounds.
+    /// When [`World::try_new`] refuses the floors.
     #[must_use]
     pub fn new(seed: Seed, floors: Vec<Floor>) -> Self {
+        Self::try_new(seed, floors).unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    /// Checks what no single floor image can: floors loaded one by one may
+    /// come from different histories.
+    ///
+    /// # Errors
+    /// [`WorldError::DuplicateFloor`] when two floors share a `FloorId`: their
+    /// entity ids and draws would collide. [`WorldError::Rounds`] when two
+    /// floors are at different rounds. [`WorldError::DuplicateEntity`] when an
+    /// id is alive or waiting on two floors.
+    pub fn try_new(seed: Seed, floors: Vec<Floor>) -> Result<Self, WorldError> {
         for (i, a) in floors.iter().enumerate() {
-            assert!(
-                floors[i + 1..].iter().all(|b| b.id() != a.id()),
-                "duplicate floor id {:?}",
-                a.id()
-            );
-            assert!(a.round() == floors[0].round(), "floors at different rounds");
+            if floors[i + 1..].iter().any(|b| b.id() == a.id()) {
+                return Err(WorldError::DuplicateFloor(a.id()));
+            }
+            if a.round() != floors[0].round() {
+                return Err(WorldError::Rounds);
+            }
         }
-        Self { seed, floors }
+        let mut ids: Vec<EntityId> = floors.iter().flat_map(Floor::ids).collect();
+        ids.sort_unstable();
+        if let Some(pair) = ids.windows(2).find(|pair| pair[0] == pair[1]) {
+            return Err(WorldError::DuplicateEntity(pair[0]));
+        }
+        Ok(Self { seed, floors })
     }
 
     /// Every floor runs its actors, then the barrier: every floor sends, each

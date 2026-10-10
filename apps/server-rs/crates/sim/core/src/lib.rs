@@ -20,7 +20,7 @@ pub use action::{ActionDesc, ActionKey, Prepared, Target};
 pub use config::{IDLE, INERTIA, MAX_INSTEAD, SIGHT, TICKS_PER_ROUND};
 pub use ctx::{CommitCtx, PrepCtx};
 pub use decision::{Band, Candidate, Candidates, Intent};
-pub use error::LoadError;
+pub use error::{LoadError, WorldError};
 pub use floor::Floor;
 pub use korr_grid::{Dir, Pos, StepError};
 pub use korr_random::{DrawIndex, Seed};
