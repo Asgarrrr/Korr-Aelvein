@@ -2,18 +2,31 @@
 #![no_std]
 #![deny(clippy::float_arithmetic)]
 
+extern crate alloc;
+
+mod leave;
+mod scripted;
+mod shy;
+
+use alloc::vec::Vec;
+
 use korr_core::{
-    ActionDesc, Candidates, CommitCtx, Cost, Dir, Floor, Mechanics, PrepCtx, Prepared,
+    ActionDesc, Band, Candidate, Candidates, CommitCtx, Cost, Dir, Floor, Mechanics, PrepCtx,
+    Prepared, Ruleset, Senses, Target,
 };
-use korr_ecs::{FloorId, SchemaBuilder};
+use korr_ecs::FloorId;
 use korr_grid::Shape;
+
+pub use leave::{LEAVE, Leave};
+pub use scripted::{Act, Answer, Scripted};
+pub use shy::{STARTLE, Shy};
 
 /// # Panics
 /// When a side is outside the bounds of `Shape::new`.
 #[must_use]
-pub fn floor(id: u16, width: u16, height: u16) -> Floor {
+pub fn floor(ruleset: &Ruleset, id: u16, width: u16, height: u16) -> Floor {
     let shape = Shape::new(width, height).expect("scenario shapes fit the bounds");
-    Floor::new(&SchemaBuilder::default().build(), FloorId(id), shape)
+    Floor::new(ruleset, FloorId(id), shape)
 }
 
 static STEP: ActionDesc = ActionDesc::new("pace", "step");
@@ -23,11 +36,24 @@ static STEP: ActionDesc = ActionDesc::new("pace", "step");
 pub struct Pace;
 
 impl Mechanics for Pace {
-    fn propose(&self, out: &mut Candidates) {
+    fn actions(&self, out: &mut Vec<&'static ActionDesc>) {
         out.push(&STEP);
     }
 
-    fn prepare(&self, _: &'static ActionDesc, ctx: &PrepCtx<'_>) -> Prepared {
+    fn perceives(&self) -> bool {
+        false
+    }
+
+    fn propose(&self, _: &Senses<'_>, out: &mut Candidates) {
+        out.push(Candidate {
+            action: &STEP,
+            band: Band::Routine,
+            weight: 0,
+            target: Target::None,
+        });
+    }
+
+    fn prepare(&self, _: &'static ActionDesc, _: Target, ctx: &PrepCtx<'_>) -> Prepared {
         match ctx.check_step(Dir::East) {
             Ok(_) if ctx.actor().to_bits() % 2 == 0 => Prepared::Go {
                 cost: Cost::new(30),
@@ -39,7 +65,7 @@ impl Mechanics for Pace {
         }
     }
 
-    fn commit(&self, _: &'static ActionDesc, ctx: &mut CommitCtx<'_>) {
+    fn commit(&self, _: &'static ActionDesc, _: Target, ctx: &mut CommitCtx<'_>) {
         ctx.step(Dir::East);
     }
 }

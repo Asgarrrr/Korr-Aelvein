@@ -4,9 +4,7 @@
 use std::hint::black_box;
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
-use korr_ecs::{
-    Component, ComponentKey, FloorId, Handle, ImageError, Reader, SchemaBuilder, Store, Writer,
-};
+use korr_ecs::{Component, FloorId, Handle, ImageError, Own, Reader, SchemaBuilder, Store, Writer};
 use korr_ecs_bench::picks;
 
 const N: u32 = 20_000;
@@ -53,7 +51,7 @@ trait Backend {
 
 struct Ours {
     store: Store,
-    keys: Vec<ComponentKey<Field>>,
+    keys: Vec<Own<Field>>,
     index: Vec<Handle>,
 }
 
@@ -62,7 +60,7 @@ impl Ours {
         let h = self.store.spawn();
         for (key, value) in self.keys.iter().zip(values) {
             if let Some(v) = value {
-                self.store.insert(*key, h, *v);
+                self.store.insert(key, h, *v);
             }
         }
         h
@@ -93,7 +91,7 @@ impl Backend for Ours {
     fn churn(&mut self, picks: &[u32]) {
         for &p in picks {
             let h = self.index[p as usize];
-            let values = core::array::from_fn(|c| self.store.get(self.keys[c], h).copied());
+            let values = core::array::from_fn(|c| self.store.get(self.keys[c].read(), h).copied());
             self.store.despawn(h);
             self.index[p as usize] = self.spawn(&values);
         }
@@ -104,19 +102,25 @@ impl Backend for Ours {
         for &p in picks {
             let h = self.index[p as usize];
             sum = sum.wrapping_add(u64::from(
-                self.store.get(self.keys[0], h).expect("always present").0,
+                self.store
+                    .get(self.keys[0].read(), h)
+                    .expect("always present")
+                    .0,
             ));
             for key in &self.keys[ALWAYS..ALWAYS + 4] {
-                sum = sum.wrapping_add(u64::from(self.store.get(*key, h).map_or(0, |f| f.0)));
+                sum = sum.wrapping_add(u64::from(self.store.get(key.read(), h).map_or(0, |f| f.0)));
             }
-            let need = self.store.get_mut(self.keys[1], h).expect("always present");
+            let need = self
+                .store
+                .get_mut(&self.keys[1], h)
+                .expect("always present");
             need.0 = need.0.saturating_sub(1);
         }
         sum
     }
 
     fn bulk(&mut self, column: usize) {
-        for f in self.store.values_mut(self.keys[column]) {
+        for f in self.store.values_mut(&self.keys[column]) {
             f.0 = f.0.saturating_sub(1);
         }
     }
@@ -124,7 +128,7 @@ impl Backend for Ours {
     fn query(&mut self) -> u64 {
         let mut sum = 0_u64;
         self.store
-            .join_mut(self.keys[ALWAYS], self.keys[ALWAYS + 1], |_, a, b| {
+            .join_mut(&self.keys[ALWAYS], &self.keys[ALWAYS + 1], |_, a, b| {
                 b.0 = b.0.wrapping_add(a.0);
                 sum = sum.wrapping_add(u64::from(b.0));
             });
@@ -260,7 +264,7 @@ fn assert_backends_agree(picks: &[u32]) {
     }
     for i in 0..N as usize {
         assert_eq!(
-            o.store.get(o.keys[1], o.index[i]).copied(),
+            o.store.get(o.keys[1].read(), o.index[i]).copied(),
             d.columns[1][d.at(d.index[i])]
         );
     }

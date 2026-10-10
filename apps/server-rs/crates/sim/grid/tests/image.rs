@@ -1,11 +1,16 @@
 use std::num::NonZeroU32;
 
 use korr_ecs::{FloorId, Handle, ImageError, Reader, SchemaBuilder, Store, Writer};
-use korr_grid::{Dir, Grid, Layer, MAX_STEP, Material, Pos, Shape, StepError};
+use korr_grid::{Dir, Grid, MAX_STEP, Material, Pos, Shape, StepError};
 use korr_random::{DrawIndex, ModuleKey, Phase, Seed, Stream, Subject};
 
 /// 256 interior cells: one per `i8` height.
 const SIDE: u16 = 18;
+const ACTOR: u8 = 0;
+const THING: u8 = 1;
+
+/// A placement record as the image holds it: slot, layer byte, position.
+type Record = (u32, u8, Pos);
 
 fn store() -> Store {
     Store::new(&SchemaBuilder::default().build(), FloorId(0))
@@ -21,12 +26,29 @@ fn bytes(grid: &Grid) -> Vec<u8> {
     w.into_bytes()
 }
 
-fn read(
-    bytes: &[u8],
-    store: &Store,
-    placed: impl IntoIterator<Item = (Handle, Pos, Layer)>,
-) -> Result<Grid, ImageError> {
-    Grid::read(&mut Reader::new(bytes), store, placed)
+fn read(bytes: &[u8], store: &Store) -> Result<Grid, ImageError> {
+    Grid::read(&mut Reader::new(bytes), store)
+}
+
+/// The image of `terrain`, an unlinked grid, with `records` in place of its empty list.
+fn forged(terrain: &Grid, records: &[Record]) -> Vec<u8> {
+    let mut image = bytes(terrain);
+    let count = image.split_off(image.len() - 4);
+    assert_eq!(count, [0; 4], "an unlinked grid writes no record");
+    let mut w = Writer::new();
+    w.write_u32(u32::try_from(records.len()).expect("a test writes few records"));
+    for &(slot, layer, p) in records {
+        w.write_u32(slot);
+        w.write_u8(layer);
+        w.write_i16(p.x);
+        w.write_i16(p.y);
+    }
+    image.extend(w.into_bytes());
+    image
+}
+
+fn slot(h: Handle) -> u32 {
+    h.slot().get()
 }
 
 fn seeded() -> Grid {
@@ -79,7 +101,7 @@ fn cliff() -> Grid {
 #[test]
 fn write_read_write_is_byte_equal() {
     let image = bytes(&seeded());
-    let reloaded = read(&image, &store(), []).expect("own image reads");
+    let reloaded = read(&image, &store()).expect("own image reads");
     assert_eq!(bytes(&reloaded), image);
 }
 
@@ -89,10 +111,7 @@ fn every_strict_prefix_is_truncated() {
     let store = store();
     for n in 0..image.len() {
         assert!(
-            matches!(
-                read(&image[..n], &store, []),
-                Err(ImageError::Truncated { .. })
-            ),
+            matches!(read(&image[..n], &store), Err(ImageError::Truncated { .. })),
             "{n}"
         );
     }
@@ -102,7 +121,7 @@ fn every_strict_prefix_is_truncated() {
 fn huge_shape_without_layers_is_truncated() {
     let image = header(32_767, 32_767);
     assert!(matches!(
-        read(&image, &store(), []),
+        read(&image, &store()),
         Err(ImageError::Truncated { .. })
     ));
 }
@@ -112,7 +131,7 @@ fn bad_side_is_corrupt() {
     let mut image = header(2, 3);
     image.extend_from_slice(&[1, 0]);
     assert_eq!(
-        read(&image, &store(), []).err(),
+        read(&image, &store()).err(),
         Some(ImageError::Corrupt("floor shape"))
     );
 }
@@ -122,28 +141,32 @@ fn unknown_material_is_corrupt() {
     let mut image = header(3, 3);
     image.extend_from_slice(&[2, 0]);
     assert_eq!(
-        read(&image, &store(), []).err(),
+        read(&image, &store()).err(),
         Some(ImageError::Corrupt("material"))
     );
 }
 
 #[test]
 fn position_on_the_ring_is_corrupt() {
-    let image = bytes(&cliff());
+    let terrain = cliff();
     let mut store = store();
     let h = store.spawn();
-    for layer in [Layer::Actor, Layer::Thing] {
+    for layer in [ACTOR, THING] {
         assert_eq!(
-            read(&image, &store, [(h, Pos { x: 0, y: 1 }, layer)]).err(),
+            read(
+                &forged(&terrain, &[(slot(h), layer, Pos { x: 0, y: 1 })]),
+                &store
+            )
+            .err(),
             Some(ImageError::Corrupt("position off the floor")),
-            "{layer:?}"
+            "{layer}"
         );
     }
 }
 
 #[test]
 fn rebuild_rejects_position_off_shape() {
-    let image = bytes(&cliff());
+    let terrain = cliff();
     let mut store = store();
     let h = store.spawn();
     for p in [
@@ -152,7 +175,7 @@ fn rebuild_rejects_position_off_shape() {
         Pos { x: 99, y: 99 },
     ] {
         assert_eq!(
-            read(&image, &store, [(h, p, Layer::Actor)]).err(),
+            read(&forged(&terrain, &[(slot(h), ACTOR, p)]), &store).err(),
             Some(ImageError::Corrupt("position off the floor")),
             "{p:?}"
         );
@@ -161,52 +184,43 @@ fn rebuild_rejects_position_off_shape() {
 
 #[test]
 fn rebuild_accepts_actor_and_thing_on_wall() {
-    let image = bytes(&cliff());
     let mut store = store();
     let (a, t) = (store.spawn(), store.spawn());
     let wall = Pos { x: 2, y: 1 };
-    assert!(
-        read(
-            &image,
-            &store,
-            [(a, wall, Layer::Actor), (t, wall, Layer::Thing)]
-        )
-        .is_ok()
-    );
+    let image = forged(&cliff(), &[(slot(a), ACTOR, wall), (slot(t), THING, wall)]);
+    assert!(read(&image, &store).is_ok());
 }
 
 #[test]
 fn two_actors_on_one_cell_is_corrupt() {
-    let image = bytes(&cliff());
     let mut store = store();
     let a = store.spawn();
     let b = store.spawn();
     let at = Pos { x: 1, y: 1 };
+    let image = forged(&cliff(), &[(slot(a), ACTOR, at), (slot(b), ACTOR, at)]);
     assert_eq!(
-        read(
-            &image,
-            &store,
-            [(a, at, Layer::Actor), (b, at, Layer::Actor)]
-        )
-        .err(),
+        read(&image, &store).err(),
         Some(ImageError::Corrupt("two actors on one cell"))
     );
 }
 
 #[test]
 fn rebuild_orders_things_by_id() {
-    let image = bytes(&cliff());
     let mut store = store();
-    let handles: Vec<Handle> = (0..4).map(|_| store.spawn()).collect();
+    let old: Vec<Handle> = (0..4).map(|_| store.spawn()).collect();
+    store.despawn(old[0]);
+    store.despawn(old[1]);
+    let recycled = [store.spawn(), store.spawn()];
+    let mut by_slot: Vec<Handle> = recycled.iter().chain(&old[2..]).copied().collect();
+    by_slot.sort_unstable_by_key(|&h| slot(h));
+    let mut by_id = by_slot.clone();
+    by_id.sort_unstable_by_key(|&h| store.id(h));
+    assert_ne!(by_slot, by_id, "recycled slots must hold the newest ids");
     let at = Pos { x: 1, y: 1 };
-    let grid = read(
-        &image,
-        &store,
-        handles.iter().rev().map(|&h| (h, at, Layer::Thing)),
-    )
-    .expect("things on ground rebuild");
+    let records: Vec<Record> = by_slot.iter().map(|&h| (slot(h), THING, at)).collect();
+    let grid = read(&forged(&cliff(), &records), &store).expect("things on ground rebuild");
     let cell = grid.shape().idx(at).expect("inside").cell();
-    assert_eq!(grid.things(cell).collect::<Vec<_>>(), handles);
+    assert_eq!(grid.things(cell).collect::<Vec<_>>(), by_id);
 }
 
 #[test]
@@ -216,8 +230,7 @@ fn rebuilt_grid_steps_like_the_original() {
     let start = Pos { x: 1, y: 1 };
     let mut original = cliff();
     original.link_actor(&store, h, original.shape().idx(start).expect("inside"));
-    let mut rebuilt =
-        read(&bytes(&original), &store, [(h, start, Layer::Actor)]).expect("own image rebuilds");
+    let mut rebuilt = read(&bytes(&original), &store).expect("own image rebuilds");
     for (dir, expected) in [
         (Dir::East, Err(StepError::Blocked)),
         (Dir::South, Err(StepError::TooSteep)),
@@ -226,4 +239,80 @@ fn rebuilt_grid_steps_like_the_original() {
         assert_eq!(original.step(h, dir), expected, "{dir:?}");
         assert_eq!(rebuilt.step(h, dir), expected, "{dir:?}");
     }
+}
+
+#[test]
+fn placement_records_round_trip_byte_equal() {
+    let mut store = store();
+    let mut original = seeded();
+    let shape = original.shape();
+    let handles: Vec<Handle> = (0..12).map(|_| store.spawn()).collect();
+    for (i, &h) in (0u16..).zip(&handles) {
+        let at = shape.idx(pos(1 + i % 4, 1 + i / 4)).expect("inside");
+        if i % 3 == 0 {
+            original.link_thing(&store, h, at);
+        } else {
+            original.link_actor(&store, h, at);
+        }
+    }
+    let shared = shape.idx(pos(1, 1)).expect("inside");
+    let extra = store.spawn();
+    original.link_thing(&store, extra, shared);
+    let image = bytes(&original);
+    let reloaded = read(&image, &store).expect("own image reads");
+    assert_eq!(bytes(&reloaded), image);
+    for y in 1..SIDE - 1 {
+        for x in 1..SIDE - 1 {
+            let cell = shape.idx(pos(x, y)).expect("inside").cell();
+            assert_eq!(reloaded.actor_at(cell), original.actor_at(cell), "{x},{y}");
+            assert!(reloaded.things(cell).eq(original.things(cell)), "{x},{y}");
+        }
+    }
+}
+
+#[test]
+fn placement_of_a_dead_slot_is_corrupt() {
+    let mut store = store();
+    let dead = store.spawn();
+    let live = store.spawn();
+    store.despawn(dead);
+    let at = Pos { x: 1, y: 1 };
+    for s in [slot(dead), slot(live) + 1] {
+        assert_eq!(
+            read(&forged(&cliff(), &[(s, THING, at)]), &store).err(),
+            Some(ImageError::Corrupt("placement of a dead slot")),
+            "{s}"
+        );
+    }
+}
+
+#[test]
+fn repeated_slot_is_corrupt() {
+    let mut store = store();
+    let (a, b) = (store.spawn(), store.spawn());
+    let (p, q) = (Pos { x: 1, y: 1 }, Pos { x: 2, y: 2 });
+    for records in [
+        [(slot(a), ACTOR, p), (slot(a), THING, q)],
+        [(slot(b), ACTOR, p), (slot(a), ACTOR, q)],
+    ] {
+        assert_eq!(
+            read(&forged(&cliff(), &records), &store).err(),
+            Some(ImageError::Corrupt("placement order")),
+            "{records:?}"
+        );
+    }
+}
+
+#[test]
+fn unknown_layer_is_corrupt() {
+    let mut store = store();
+    let h = store.spawn();
+    assert_eq!(
+        read(
+            &forged(&cliff(), &[(slot(h), 2, Pos { x: 1, y: 1 })]),
+            &store
+        )
+        .err(),
+        Some(ImageError::Corrupt("layer"))
+    );
 }

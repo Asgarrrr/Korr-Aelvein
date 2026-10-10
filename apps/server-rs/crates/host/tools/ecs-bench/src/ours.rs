@@ -1,13 +1,13 @@
-use korr_ecs::{ComponentKey, FloorId, Handle, SchemaBuilder, Store};
+use korr_ecs::{FloorId, Handle, Own, SchemaBuilder, Store};
 
 use crate::{Backend, Hunger, Pos, Vel, digest, seed_row};
 
 #[derive(Debug)]
 pub struct Ours {
     stores: [Store; 2],
-    pos: ComponentKey<Pos>,
-    vel: ComponentKey<Vel>,
-    hunger: ComponentKey<Hunger>,
+    pos: Own<Pos>,
+    vel: Own<Vel>,
+    hunger: Own<Hunger>,
     index: Vec<(u8, Handle)>,
 }
 
@@ -15,10 +15,10 @@ impl Ours {
     fn spawn(&mut self, floor: u8, row: (Pos, Hunger, Option<Vel>)) -> Handle {
         let store = &mut self.stores[usize::from(floor)];
         let h = store.spawn();
-        store.insert(self.pos, h, row.0);
-        store.insert(self.hunger, h, row.1);
+        store.insert(&self.pos, h, row.0);
+        store.insert(&self.hunger, h, row.1);
         if let Some(vel) = row.2 {
-            store.insert(self.vel, h, vel);
+            store.insert(&self.vel, h, vel);
         }
         h
     }
@@ -54,11 +54,13 @@ impl Backend for Ours {
         for &p in picks {
             let (floor, h) = self.index[p as usize];
             let store = &mut self.stores[usize::from(floor)];
-            let pos = *store.get(self.pos, h).expect("alive entity has a position");
+            let pos = *store
+                .get(self.pos.read(), h)
+                .expect("alive entity has a position");
             let hunger = *store
-                .get(self.hunger, h)
+                .get(self.hunger.read(), h)
                 .expect("alive entity has a hunger");
-            let vel = store.get(self.vel, h).copied();
+            let vel = store.get(self.vel.read(), h).copied();
             store.despawn(h);
             self.index[p as usize].1 =
                 self.spawn(floor, (pos, Hunger(hunger.0.saturating_add(1)), vel));
@@ -71,11 +73,11 @@ impl Backend for Ours {
             let (floor, h) = self.index[p as usize];
             let store = &mut self.stores[usize::from(floor)];
             let x = store
-                .get(self.pos, h)
+                .get(self.pos.read(), h)
                 .expect("alive entity has a position")
                 .x;
             let hunger = store
-                .get_mut(self.hunger, h)
+                .get_mut(&self.hunger, h)
                 .expect("alive entity has a hunger");
             sum = sum
                 .wrapping_add(u64::from(x.cast_unsigned()))
@@ -87,7 +89,7 @@ impl Backend for Ours {
 
     fn bulk(&mut self) {
         for store in &mut self.stores {
-            for hunger in store.values_mut(self.hunger) {
+            for hunger in store.values_mut(&self.hunger) {
                 hunger.0 = hunger.0.saturating_sub(1);
             }
         }
@@ -95,7 +97,7 @@ impl Backend for Ours {
 
     fn query(&mut self) {
         for store in &mut self.stores {
-            store.join_mut(self.vel, self.pos, |_, vel, pos| {
+            store.join_mut(&self.vel, &self.pos, |_, vel, pos| {
                 pos.x = pos.x.wrapping_add(vel.dx);
                 pos.y = pos.y.wrapping_add(vel.dy);
             });
@@ -121,11 +123,13 @@ impl Backend for Ours {
     fn checksum(&self) -> u64 {
         (0..).zip(&self.index).fold(0_u64, |sum, (i, &(floor, h))| {
             let store = &self.stores[usize::from(floor)];
-            let pos = *store.get(self.pos, h).expect("alive entity has a position");
+            let pos = *store
+                .get(self.pos.read(), h)
+                .expect("alive entity has a position");
             let hunger = *store
-                .get(self.hunger, h)
+                .get(self.hunger.read(), h)
                 .expect("alive entity has a hunger");
-            let vel = store.get(self.vel, h).copied();
+            let vel = store.get(self.vel.read(), h).copied();
             sum.wrapping_add(digest(i, floor, pos, hunger, vel))
         })
     }

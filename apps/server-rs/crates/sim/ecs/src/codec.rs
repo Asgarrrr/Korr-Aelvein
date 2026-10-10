@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 
 use crate::error::ImageError;
 
-const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+pub(crate) const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 const FNV_PRIME: u64 = 0x100_0000_01b3;
 
 /// A value stored in a column. `read` is a pure function of the bytes and
@@ -167,7 +167,11 @@ impl<'a> Reader<'a> {
 /// FNV-1a 64.
 #[must_use]
 pub fn checksum(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(FNV_OFFSET, |hash, &byte| {
+    absorb(FNV_OFFSET, bytes)
+}
+
+pub(crate) fn absorb(hash: u64, bytes: &[u8]) -> u64 {
+    bytes.iter().fold(hash, |hash, &byte| {
         (hash ^ u64::from(byte)).wrapping_mul(FNV_PRIME)
     })
 }

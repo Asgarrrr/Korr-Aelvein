@@ -673,6 +673,7 @@ dependencies = [
  "korr-ecs",
  "korr-grid",
  "korr-random",
+ "thiserror",
 ]
 
 [[package]]
@@ -690,9 +691,12 @@ dependencies = [
  "bevy_ecs",
  "criterion",
  "hecs",
+ "korr-core",
  "korr-ecs",
+ "korr-engine",
  "korr-grid",
  "korr-random",
+ "korr-scenarios",
 ]
 
 [[package]]

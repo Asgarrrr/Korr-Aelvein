@@ -1,11 +1,18 @@
+mod image;
+mod inbox;
 mod schedule;
 mod turn;
 
-use korr_ecs::{FloorId, Handle, Schema, Store};
+use alloc::vec::Vec;
+
+use korr_ecs::{FloorId, Handle, Store};
 use korr_grid::{Grid, Interior, Layer, Material, Pos, Shape};
 
 use crate::decision::Candidates;
+use crate::floor::inbox::{Flight, Inbox};
 use crate::floor::schedule::Schedule;
+use crate::ruleset::Ruleset;
+use crate::senses::Seen;
 use crate::time::Tick;
 
 #[derive(Debug)]
@@ -14,19 +21,27 @@ pub struct Floor {
     grid: Grid,
     schedule: Schedule,
     round: u64,
+    /// Actors that departed this round, in departure order; empty at the barrier.
+    departures: Vec<(Handle, FloorId, Pos)>,
+    pub(crate) inbox: Inbox,
     /// Scratch of one turn, cleared before every proposal.
     candidates: Candidates,
+    /// Scratch of one turn, cleared before every scan.
+    seen: Vec<Seen>,
 }
 
 impl Floor {
     #[must_use]
-    pub fn new(schema: &Schema, id: FloorId, shape: Shape) -> Self {
+    pub fn new(ruleset: &Ruleset, id: FloorId, shape: Shape) -> Self {
         Self {
-            store: Store::new(schema, id),
+            store: Store::new(&ruleset.schema, id),
             grid: Grid::new(shape),
             schedule: Schedule::default(),
             round: 0,
+            departures: Vec::new(),
+            inbox: Inbox::default(),
             candidates: Candidates::default(),
+            seen: Vec::new(),
         }
     }
 
@@ -41,7 +56,7 @@ impl Floor {
     ///
     /// # Panics
     /// When `at` is not an interior cell of this floor, or cannot take an actor.
-    pub fn spawn_actor(&mut self, at: Pos) -> Handle {
+    pub fn spawn_actor(&mut self, ruleset: &Ruleset, at: Pos) -> Handle {
         let at = self.interior(at);
         assert!(
             self.grid.can_place(at, Layer::Actor),
@@ -50,7 +65,18 @@ impl Floor {
         let h = self.store.spawn();
         self.grid.link_actor(&self.store, h, at);
         let id = self.store.id(h).expect("a spawned handle is alive");
-        self.schedule.push(Tick::start_of(self.round), id, h);
+        let now = Tick::start_of(self.round);
+        self.store.insert(&ruleset.clock, h, now);
+        self.schedule.push(now, id, h);
+        h
+    }
+
+    /// # Panics
+    /// When `at` is not an interior cell of this floor.
+    pub fn spawn_thing(&mut self, at: Pos) -> Handle {
+        let at = self.interior(at);
+        let h = self.store.spawn();
+        self.grid.link_thing(&self.store, h, at);
         h
     }
 
@@ -69,7 +95,32 @@ impl Floor {
         self.round
     }
 
-    /// Phase 4.
+    /// Travellers waiting for a free cell on this floor.
+    #[must_use]
+    pub fn inbox_len(&self) -> usize {
+        self.inbox.flights().len()
+    }
+
+    /// At the barrier, this round's departures leave, each with its destination.
+    pub(crate) fn send(&mut self) -> Vec<(FloorId, Flight)> {
+        let round = self.round;
+        self.departures
+            .drain(..)
+            .map(|(h, to, at)| {
+                self.grid.unlink(h);
+                let traveller = self.store.detach(h);
+                (
+                    to,
+                    Flight {
+                        traveller,
+                        at,
+                        round,
+                    },
+                )
+            })
+            .collect()
+    }
+
     pub(crate) fn end_round(&mut self) {
         self.round += 1;
     }

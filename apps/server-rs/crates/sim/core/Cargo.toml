@@ -9,6 +9,7 @@ publish.workspace = true
 korr-ecs.workspace = true
 korr-grid.workspace = true
 korr-random.workspace = true
+thiserror.workspace = true
 
 [lints]
 workspace = true

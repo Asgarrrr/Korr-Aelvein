@@ -25,7 +25,8 @@ struct Link {
     prev: u32,
 }
 
-/// A derived index of who stands where.
+/// Who stands where. The links are the placement records, the source of
+/// position saved in the floor image; the cell indexes derive from them.
 #[derive(Debug)]
 pub(crate) struct Occupancy {
     /// Per padded cell, the actor's slot or `EMPTY`: one 4-byte load for the blocking test.
@@ -139,6 +140,19 @@ impl Occupancy {
             self.point_forward(cell, link.prev, link.next);
             self.point_back(link.next, link.prev);
         }
+    }
+
+    /// One placement record per link, in ascending slot.
+    pub(crate) fn records(&self) -> impl Iterator<Item = (u32, Layer, Interior)> + '_ {
+        (0..).zip(&self.links).filter_map(|(slot, link)| {
+            let cell = link.as_ref()?.cell;
+            let layer = if self.actor[cell.cell().index()] == slot {
+                Layer::Actor
+            } else {
+                Layer::Thing
+            };
+            Some((slot, layer, cell))
+        })
     }
 
     #[inline]

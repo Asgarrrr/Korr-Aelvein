@@ -27,6 +27,8 @@ pub(crate) trait ErasedColumn: Any + Send {
     fn detach_row(&mut self, slot: u32, w: &mut Writer);
 
     fn attach_row(&mut self, slot: u32, r: &mut Reader<'_>) -> Result<(), ImageError>;
+
+    fn check_row(&self, r: &mut Reader<'_>) -> Result<(), ImageError>;
 }
 
 #[inline]
@@ -169,5 +171,9 @@ impl<T: Component> ErasedColumn for Column<T> {
             self.insert(slot, value);
         }
         Ok(())
+    }
+
+    fn check_row(&self, r: &mut Reader<'_>) -> Result<(), ImageError> {
+        Self::read_row(r).map(drop)
     }
 }

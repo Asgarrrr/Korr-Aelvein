@@ -3,7 +3,7 @@ const MIN_SIDE: u16 = 3;
 /// Every position of the shape fits `i16`.
 const MAX_SIDE: u16 = i16::MAX.unsigned_abs();
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Pos {
     pub x: i16,
     pub y: i16,

@@ -1,5 +1,7 @@
 use core::num::NonZeroU32;
 
+use korr_ecs::{Component, ImageError, Reader, Writer};
+
 use crate::config::TICKS_PER_ROUND;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -16,6 +18,16 @@ impl Tick {
                 .checked_add(u64::from(c.0.get()))
                 .expect("clock overflow"),
         )
+    }
+}
+
+impl Component for Tick {
+    fn write(&self, w: &mut Writer) {
+        w.write_u64(self.0);
+    }
+
+    fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> {
+        r.read_u64().map(Self)
     }
 }
 

@@ -21,19 +21,19 @@ fn reseal(bytes: &mut [u8]) {
     bytes[body..].copy_from_slice(&sum.to_le_bytes());
 }
 
-fn exercise(store: &mut Store, keys: Keys) {
+fn exercise(store: &mut Store, keys: &Keys) {
     for i in 0..100 {
         let kept = store.spawn();
         let gone = store.spawn();
-        store.insert(keys.pos, kept, Pos { x: i, y: -i });
-        store.insert(keys.hunger, gone, Hunger(7));
+        store.insert(&keys.pos, kept, Pos { x: i, y: -i });
+        store.insert(&keys.hunger, gone, Hunger(7));
         store.despawn(gone);
     }
-    let holders: Vec<Handle> = store.iter(keys.pos).map(|(h, _)| h).collect();
+    let holders: Vec<Handle> = store.iter(keys.pos.read()).map(|(h, _)| h).collect();
     for h in holders {
         store.despawn(h);
     }
-    let holders: Vec<Handle> = store.iter(keys.hunger).map(|(h, _)| h).collect();
+    let holders: Vec<Handle> = store.iter(keys.hunger.read()).map(|(h, _)| h).collect();
     for h in holders {
         store.despawn(h);
     }
@@ -106,7 +106,7 @@ fn resealed_flips_never_panic() {
             reseal(&mut bytes);
             if let Ok(mut store) = Store::load(&schema, &bytes) {
                 assert_eq!(store.save(), bytes, "{index} ^ {mask:#x}");
-                exercise(&mut store, keys);
+                exercise(&mut store, &keys);
             }
         }
     }

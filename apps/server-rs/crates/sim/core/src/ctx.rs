@@ -1,6 +1,7 @@
+use alloc::vec::Vec;
 use core::num::NonZeroU32;
 
-use korr_ecs::{EntityId, Handle};
+use korr_ecs::{EntityId, FloorId, Handle};
 use korr_grid::{Dir, Grid, Pos, StepError};
 use korr_random::{DrawIndex, Phase, Seed, Stream, Subject};
 
@@ -22,8 +23,8 @@ impl Draws {
         }
     }
 
-    fn below(self, draw: u32, bound: NonZeroU32) -> u32 {
-        self.stream.below(self.actor, DrawIndex(draw), bound)
+    fn below(self, draw: DrawIndex, bound: NonZeroU32) -> u32 {
+        self.stream.below(self.actor, draw, bound)
     }
 }
 
@@ -32,13 +33,25 @@ pub struct PrepCtx<'a> {
     pub(crate) grid: &'a Grid,
     pub(crate) actor: Handle,
     pub(crate) id: EntityId,
+    pub(crate) floor: FloorId,
     pub(crate) draws: Draws,
+    pub(crate) now: Tick,
 }
 
 impl PrepCtx<'_> {
     #[must_use]
     pub fn actor(&self) -> EntityId {
         self.id
+    }
+
+    #[must_use]
+    pub fn now(&self) -> Tick {
+        self.now
+    }
+
+    #[must_use]
+    pub fn floor(&self) -> FloorId {
+        self.floor
     }
 
     /// # Errors
@@ -48,8 +61,8 @@ impl PrepCtx<'_> {
     }
 
     #[must_use]
-    pub fn below(&self, draw: u32, bound: NonZeroU32) -> u32 {
-        self.draws.below(draw, bound)
+    pub fn below(&self, draw: impl Into<DrawIndex>, bound: NonZeroU32) -> u32 {
+        self.draws.below(draw.into(), bound)
     }
 }
 
@@ -58,6 +71,7 @@ pub struct CommitCtx<'a> {
     pub(crate) grid: &'a mut Grid,
     pub(crate) actor: Handle,
     pub(crate) draws: Draws,
+    pub(crate) departures: &'a mut Vec<(Handle, FloorId, Pos)>,
 }
 
 impl CommitCtx<'_> {
@@ -69,8 +83,20 @@ impl CommitCtx<'_> {
             .expect("commit of a step its prepare refused")
     }
 
+    /// The actor leaves at the barrier for the free cell nearest `at` on floor `to`.
+    ///
+    /// # Panics
+    /// When the actor already departed this turn.
+    pub fn depart(&mut self, to: FloorId, at: Pos) {
+        assert!(
+            self.departures.last().map(|d| d.0) != Some(self.actor),
+            "one departure per turn"
+        );
+        self.departures.push((self.actor, to, at));
+    }
+
     #[must_use]
-    pub fn below(&self, draw: u32, bound: NonZeroU32) -> u32 {
-        self.draws.below(draw, bound)
+    pub fn below(&self, draw: impl Into<DrawIndex>, bound: NonZeroU32) -> u32 {
+        self.draws.below(draw.into(), bound)
     }
 }

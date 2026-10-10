@@ -158,6 +158,15 @@ impl Entities {
         }
     }
 
+    pub(crate) fn handles(&self) -> impl Iterator<Item = Handle> + '_ {
+        (0..).zip(&self.metas).filter_map(|(slot, meta)| {
+            meta.id.map(|_| Handle {
+                slot,
+                generation: meta.generation,
+            })
+        })
+    }
+
     #[inline]
     pub(crate) fn len(&self) -> usize {
         self.alive

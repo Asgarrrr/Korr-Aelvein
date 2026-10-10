@@ -6,13 +6,14 @@ use crate::codec::Component;
 use crate::column::{Column, ErasedColumn, FOREIGN_KEY, typed, typed_mut};
 use crate::entities::Entities;
 use crate::id::{EntityId, FloorId, Handle};
-use crate::schema::{ComponentKey, Schema};
+use crate::schema::{Own, Read, Schema};
 
 /// The entities and component columns of one floor.
 pub struct Store {
     pub(crate) entities: Entities,
     pub(crate) columns: Vec<Box<dyn ErasedColumn>>,
     pub(crate) names: Vec<&'static str>,
+    prefixes: Vec<u64>,
 }
 
 impl Store {
@@ -26,6 +27,7 @@ impl Store {
                 .map(|info| (info.new_column)())
                 .collect(),
             names: schema.components.iter().map(|info| info.name).collect(),
+            prefixes: schema.components.iter().map(|info| info.prefix).collect(),
         }
     }
 
@@ -61,6 +63,19 @@ impl Store {
         self.entities.id(h)
     }
 
+    /// `None` for a dead slot or one past the table.
+    #[must_use]
+    pub fn handle_at(&self, slot: u32) -> Option<Handle> {
+        self.entities
+            .is_slot_alive(slot)
+            .then(|| self.entities.handle_at(slot))
+    }
+
+    /// Every live entity, in ascending slot.
+    pub fn handles(&self) -> impl Iterator<Item = Handle> + '_ {
+        self.entities.handles()
+    }
+
     #[must_use]
     #[inline]
     pub fn len(&self) -> usize {
@@ -77,7 +92,7 @@ impl Store {
     ///
     /// # Panics
     /// When `h` is dead, or `key` comes from another schema.
-    pub fn insert<T: Component>(&mut self, key: ComponentKey<T>, h: Handle, value: T) -> Option<T> {
+    pub fn insert<T: Component>(&mut self, key: &Own<T>, h: Handle, value: T) -> Option<T> {
         assert!(self.is_alive(h), "insert on a dead handle");
         self.column_mut(key).insert(h.slot, value)
     }
@@ -85,7 +100,7 @@ impl Store {
     /// # Panics
     /// When `key` comes from another schema.
     #[must_use]
-    pub fn get<T: Component>(&self, key: ComponentKey<T>, h: Handle) -> Option<&T> {
+    pub fn get<T: Component>(&self, key: Read<T>, h: Handle) -> Option<&T> {
         let column = self.column(key);
         if !self.is_alive(h) {
             return None;
@@ -95,7 +110,7 @@ impl Store {
 
     /// # Panics
     /// When `key` comes from another schema.
-    pub fn get_mut<T: Component>(&mut self, key: ComponentKey<T>, h: Handle) -> Option<&mut T> {
+    pub fn get_mut<T: Component>(&mut self, key: &Own<T>, h: Handle) -> Option<&mut T> {
         let alive = self.is_alive(h);
         let column = self.column_mut(key);
         if !alive {
@@ -108,7 +123,7 @@ impl Store {
     ///
     /// # Panics
     /// When `h` is dead, or `key` comes from another schema.
-    pub fn remove<T: Component>(&mut self, key: ComponentKey<T>, h: Handle) -> Option<T> {
+    pub fn remove<T: Component>(&mut self, key: &Own<T>, h: Handle) -> Option<T> {
         assert!(self.is_alive(h), "remove on a dead handle");
         self.column_mut(key).remove(h.slot)
     }
@@ -118,7 +133,7 @@ impl Store {
     /// # Panics
     /// When `key` comes from another schema.
     #[must_use]
-    pub fn values<T: Component>(&self, key: ComponentKey<T>) -> &[T] {
+    pub fn values<T: Component>(&self, key: Read<T>) -> &[T] {
         self.column(key).values()
     }
 
@@ -127,7 +142,7 @@ impl Store {
     ///
     /// # Panics
     /// When `key` comes from another schema.
-    pub fn values_mut<T: Component>(&mut self, key: ComponentKey<T>) -> &mut [T] {
+    pub fn values_mut<T: Component>(&mut self, key: &Own<T>) -> &mut [T] {
         self.column_mut(key).values_mut()
     }
 
@@ -135,10 +150,7 @@ impl Store {
     ///
     /// # Panics
     /// When `key` comes from another schema.
-    pub fn iter<T: Component>(
-        &self,
-        key: ComponentKey<T>,
-    ) -> impl Iterator<Item = (Handle, &T)> + '_ {
+    pub fn iter<T: Component>(&self, key: Read<T>) -> impl Iterator<Item = (Handle, &T)> + '_ {
         let column = self.column(key);
         column
             .owners()
@@ -147,12 +159,24 @@ impl Store {
             .map(|(&slot, value)| (self.entities.handle_at(slot), value))
     }
 
-    pub(crate) fn column<T: Component>(&self, key: ComponentKey<T>) -> &Column<T> {
-        typed(&**self.columns.get(key.id.0 as usize).expect(FOREIGN_KEY))
+    pub(crate) fn column<T: Component>(&self, key: Read<T>) -> &Column<T> {
+        typed(&*self.columns[self.index(key)])
     }
 
-    fn column_mut<T: Component>(&mut self, key: ComponentKey<T>) -> &mut Column<T> {
-        typed_mut(&mut **self.columns.get_mut(key.id.0 as usize).expect(FOREIGN_KEY))
+    fn column_mut<T: Component>(&mut self, key: &Own<T>) -> &mut Column<T> {
+        let index = self.index(key.read());
+        typed_mut(&mut *self.columns[index])
+    }
+
+    /// The prefix check runs before any downcast: a key of another schema
+    /// may name a column of the same type.
+    pub(crate) fn index<T>(&self, key: Read<T>) -> usize {
+        let index = key.id.0 as usize;
+        assert!(
+            self.prefixes.get(index) == Some(&key.prefix),
+            "{FOREIGN_KEY}"
+        );
+        index
     }
 }
 

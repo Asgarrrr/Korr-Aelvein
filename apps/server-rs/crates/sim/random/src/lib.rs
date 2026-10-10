@@ -50,19 +50,32 @@ const fn absorb(h: u64, v: u64) -> u64 {
     nasam((h ^ v).wrapping_add(GOLDEN))
 }
 
-impl ModuleKey {
-    /// The name is part of every draw's hash: renaming a module changes its draws.
-    #[must_use]
-    pub const fn of(name: &str) -> Self {
-        let bytes = name.as_bytes();
-        let mut h = FNV_OFFSET;
+/// FNV-1a over the parts joined by `/`, then NASAM.
+#[must_use]
+pub const fn name_hash(parts: &[&str]) -> u64 {
+    let mut h = FNV_OFFSET;
+    let mut p = 0;
+    // A const fn allows neither `for` nor `u64::from`.
+    while p < parts.len() {
+        if p > 0 {
+            h = (h ^ b'/' as u64).wrapping_mul(FNV_PRIME);
+        }
+        let bytes = parts[p].as_bytes();
         let mut i = 0;
-        // A const fn allows neither `for` nor `u64::from`.
         while i < bytes.len() {
             h = (h ^ bytes[i] as u64).wrapping_mul(FNV_PRIME);
             i += 1;
         }
-        Self(nasam(h))
+        p += 1;
+    }
+    nasam(h)
+}
+
+impl ModuleKey {
+    /// The name is part of every draw's hash: renaming a module changes its draws.
+    #[must_use]
+    pub const fn of(name: &str) -> Self {
+        Self(name_hash(&[name]))
     }
 }
 

@@ -26,8 +26,8 @@ fn detach_attach_preserves_id_and_components() {
     let mut destination = Store::new(&schema, FloorId(1));
     let stays = source.spawn();
     let h = source.spawn();
-    source.insert(keys.pos, h, AT);
-    source.insert(keys.hunger, h, Hunger(9));
+    source.insert(&keys.pos, h, AT);
+    source.insert(&keys.hunger, h, Hunger(9));
     let id = source.id(h).expect("spawned");
 
     let traveller = source.detach(h);
@@ -35,16 +35,16 @@ fn detach_attach_preserves_id_and_components() {
     assert!(!source.is_alive(h));
     assert!(source.is_alive(stays));
     assert_eq!(source.len(), 1);
-    assert!(source.values(keys.pos).is_empty());
-    assert!(source.values(keys.hunger).is_empty());
+    assert!(source.values(keys.pos.read()).is_empty());
+    assert!(source.values(keys.hunger.read()).is_empty());
 
     let h2 = destination
         .attach(traveller)
         .expect("a detached row attaches");
     assert_eq!(destination.id(h2), Some(id));
     assert_eq!(id.origin(), FloorId(0));
-    assert_eq!(destination.get(keys.pos, h2), Some(&AT));
-    assert_eq!(destination.get(keys.hunger, h2), Some(&Hunger(9)));
+    assert_eq!(destination.get(keys.pos.read(), h2), Some(&AT));
+    assert_eq!(destination.get(keys.hunger.read(), h2), Some(&Hunger(9)));
 
     let native = destination.spawn();
     assert_eq!(destination.id(native), Some(EntityId::new(FloorId(1), 0)));
@@ -59,7 +59,7 @@ fn absent_components_stay_absent() {
     let mut destination = Store::new(&schema, FloorId(1));
     let bare = source.spawn();
     let placed = source.spawn();
-    source.insert(keys.pos, placed, AT);
+    source.insert(&keys.pos, placed, AT);
 
     let bare = destination
         .attach(source.detach(bare))
@@ -67,11 +67,11 @@ fn absent_components_stay_absent() {
     let placed = destination
         .attach(source.detach(placed))
         .expect("a partial row attaches");
-    assert_eq!(destination.get(keys.pos, bare), None);
-    assert_eq!(destination.get(keys.hunger, bare), None);
-    assert_eq!(destination.get(keys.pos, placed), Some(&AT));
-    assert_eq!(destination.get(keys.hunger, placed), None);
-    assert!(destination.values(keys.hunger).is_empty());
+    assert_eq!(destination.get(keys.pos.read(), bare), None);
+    assert_eq!(destination.get(keys.hunger.read(), bare), None);
+    assert_eq!(destination.get(keys.pos.read(), placed), Some(&AT));
+    assert_eq!(destination.get(keys.hunger.read(), placed), None);
+    assert!(destination.values(keys.hunger.read()).is_empty());
 }
 
 #[test]
@@ -80,14 +80,14 @@ fn round_trip_to_origin() {
     let mut origin = Store::new(&schema, FloorId(0));
     let mut away = Store::new(&schema, FloorId(1));
     let h = origin.spawn();
-    origin.insert(keys.hunger, h, Hunger(4));
+    origin.insert(&keys.hunger, h, Hunger(4));
     let id = origin.id(h).expect("spawned");
 
     let there = away.attach(origin.detach(h)).expect("attaches away");
     let back = origin.attach(away.detach(there)).expect("attaches home");
     assert!(away.is_empty());
     assert_eq!(origin.id(back), Some(id));
-    assert_eq!(origin.get(keys.hunger, back), Some(&Hunger(4)));
+    assert_eq!(origin.get(keys.hunger.read(), back), Some(&Hunger(4)));
     let next = origin.spawn();
     assert_eq!(origin.id(next), Some(EntityId::new(FloorId(0), 1)));
 }
@@ -98,15 +98,15 @@ fn traveller_survives_encoding() {
     let mut source = Store::new(&schema, FloorId(0));
     let mut destination = Store::new(&schema, FloorId(1));
     let h = source.spawn();
-    source.insert(keys.pos, h, AT);
-    source.insert(keys.hunger, h, Hunger(9));
+    source.insert(&keys.pos, h, AT);
+    source.insert(&keys.hunger, h, Hunger(9));
 
     let traveller = source.detach(h);
     let decoded = decode(&encode(&traveller));
     assert_eq!(decoded, traveller);
     let h2 = destination.attach(decoded).expect("a decoded row attaches");
-    assert_eq!(destination.get(keys.pos, h2), Some(&AT));
-    assert_eq!(destination.get(keys.hunger, h2), Some(&Hunger(9)));
+    assert_eq!(destination.get(keys.pos.read(), h2), Some(&AT));
+    assert_eq!(destination.get(keys.hunger.read(), h2), Some(&Hunger(9)));
 }
 
 #[test]
@@ -120,9 +120,9 @@ fn attach_rejects_foreign_schema_and_leaves_store_unchanged() {
     let mut thin = Store::new(&narrow, FloorId(1));
     for _ in 0..3 {
         let h = wide.spawn();
-        wide.insert(keys.pos, h, AT);
+        wide.insert(&keys.pos, h, AT);
         let h = thin.spawn();
-        thin.insert(pos_only, h, AT);
+        thin.insert(&pos_only, h, AT);
     }
     let leaving = wide.spawn();
     let from_wide = wide.detach(leaving);
@@ -169,7 +169,7 @@ fn attach_rejects_a_bad_later_column_and_leaves_store_unchanged() {
     let (schema, keys) = schema();
     let mut store = Store::new(&schema, FloorId(1));
     let h = store.spawn();
-    store.insert(keys.pos, h, AT);
+    store.insert(&keys.pos, h, AT);
     let foreign = EntityId::new(FloorId(0), 7);
 
     for (hunger_column, error) in [

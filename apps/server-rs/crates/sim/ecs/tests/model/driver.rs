@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::num::NonZeroU32;
 
 use korr_ecs::{
-    Component, ComponentKey, EntityId, FloorId, Handle, ImageError, Reader, Schema, SchemaBuilder,
+    Component, EntityId, FloorId, Handle, ImageError, Own, Read, Reader, Schema, SchemaBuilder,
     Store, Traveller, Writer,
 };
 use korr_random::{DrawIndex, ModuleKey, Phase, Seed, Stream, Subject};
@@ -46,10 +46,10 @@ impl Component for Hunger {
 
 type Row = (Option<Pos>, Option<Hunger>);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub(crate) struct Keys {
-    pub(crate) pos: ComponentKey<Pos>,
-    pub(crate) hunger: ComponentKey<Hunger>,
+    pub(crate) pos: Own<Pos>,
+    pub(crate) hunger: Own<Hunger>,
 }
 
 pub(crate) fn schema() -> (Schema, Keys) {
@@ -184,7 +184,7 @@ impl World {
             .get_mut(&id)
             .expect("alive entities are modelled")
             .1;
-        let (pos, hunger) = (self.keys.pos, self.keys.hunger);
+        let Keys { pos, hunger } = &self.keys;
         match op {
             50..65 => {
                 let value = Pos {
@@ -229,8 +229,8 @@ impl World {
                 .filter(|(floor, _)| *floor == store.floor())
                 .count();
             assert_eq!(store.len(), modelled, "step {step}: len of {store:?}");
-            self.check_column(store, self.keys.pos, "pos", |row| row.0);
-            self.check_column(store, self.keys.hunger, "hunger", |row| row.1);
+            self.check_column(store, self.keys.pos.read(), "pos", |row| row.0);
+            self.check_column(store, self.keys.hunger.read(), "hunger", |row| row.1);
         }
         for &(floor, h, id) in &self.alive {
             let store = &self.stores[floor];
@@ -242,12 +242,12 @@ impl World {
             );
             assert_eq!(store.id(h), Some(id), "step {step}: id");
             assert_eq!(
-                store.get(self.keys.pos, h),
+                store.get(self.keys.pos.read(), h),
                 pos.as_ref(),
                 "step {step}: pos of {id:?}"
             );
             assert_eq!(
-                store.get(self.keys.hunger, h),
+                store.get(self.keys.hunger.read(), h),
                 hunger.as_ref(),
                 "step {step}: hunger of {id:?}"
             );
@@ -255,15 +255,15 @@ impl World {
         for &(floor, h) in &self.stale {
             let store = &self.stores[floor];
             assert!(!store.is_alive(h), "step {step}: stale handle alive");
-            assert_eq!(store.get(self.keys.pos, h), None, "step {step}");
-            assert_eq!(store.get(self.keys.hunger, h), None, "step {step}");
+            assert_eq!(store.get(self.keys.pos.read(), h), None, "step {step}");
+            assert_eq!(store.get(self.keys.hunger.read(), h), None, "step {step}");
         }
     }
 
     fn check_column<T: Component + Copy + Ord + Debug>(
         &self,
         store: &Store,
-        key: ComponentKey<T>,
+        key: Read<T>,
         name: &str,
         project: fn(&Row) -> Option<T>,
     ) {

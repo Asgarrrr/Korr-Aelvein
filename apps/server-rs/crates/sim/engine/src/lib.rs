@@ -2,7 +2,11 @@
 #![no_std]
 #![deny(clippy::float_arithmetic)]
 
-use korr_core::{ActionDesc, Candidates, CommitCtx, Mechanics, PrepCtx, Prepared};
+extern crate alloc;
+
+use alloc::vec::Vec;
+
+use korr_core::{ActionDesc, Candidates, CommitCtx, Mechanics, PrepCtx, Prepared, Senses, Target};
 use korr_wander::Wander;
 
 /// One field per mechanic, in run order. `None` disables it.
@@ -29,17 +33,27 @@ impl Registry {
 }
 
 impl Mechanics for Registry {
-    fn propose(&self, out: &mut Candidates) {
-        if let Some(wander) = &self.wander {
-            wander.propose(out);
+    fn actions(&self, out: &mut Vec<&'static ActionDesc>) {
+        if self.wander.is_some() {
+            out.push(&korr_wander::ROAM);
         }
     }
 
-    fn prepare(&self, action: &'static ActionDesc, ctx: &PrepCtx<'_>) -> Prepared {
-        self.wander(action).prepare(ctx)
+    fn perceives(&self) -> bool {
+        false
     }
 
-    fn commit(&self, action: &'static ActionDesc, ctx: &mut CommitCtx<'_>) {
-        self.wander(action).commit(ctx);
+    fn propose(&self, senses: &Senses<'_>, out: &mut Candidates) {
+        if let Some(wander) = &self.wander {
+            wander.propose(senses, out);
+        }
+    }
+
+    fn prepare(&self, action: &'static ActionDesc, target: Target, ctx: &PrepCtx<'_>) -> Prepared {
+        self.wander(action).prepare(target, ctx)
+    }
+
+    fn commit(&self, action: &'static ActionDesc, target: Target, ctx: &mut CommitCtx<'_>) {
+        self.wander(action).commit(target, ctx);
     }
 }

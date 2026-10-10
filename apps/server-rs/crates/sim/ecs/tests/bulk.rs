@@ -29,16 +29,16 @@ fn decay_kills_each_entity_on_its_turn() {
         let id = store.id(h).expect("a spawned handle is alive");
         let drawn = stream.below(Subject::Entity(id.to_bits()), DrawIndex(0), range) + 1;
         let start = u16::try_from(drawn).expect("at most 100");
-        store.insert(hunger, h, Hunger(start));
+        store.insert(&hunger, h, Hunger(start));
         initial.insert(id, start);
     }
 
     for turn in 1..=100 {
-        for h in store.values_mut(hunger) {
+        for h in store.values_mut(&hunger) {
             h.0 = h.0.saturating_sub(1);
         }
         let starved: Vec<Handle> = store
-            .iter(hunger)
+            .iter(hunger.read())
             .filter(|(_, value)| value.0 == 0)
             .map(|(h, _)| h)
             .collect();
@@ -48,7 +48,7 @@ fn decay_kills_each_entity_on_its_turn() {
 
         let survivors = initial.values().filter(|&&start| start > turn).count();
         assert_eq!(store.len(), survivors, "turn {turn}");
-        for (h, value) in store.iter(hunger) {
+        for (h, value) in store.iter(hunger.read()) {
             let id = store.id(h).expect("iter yields live handles");
             assert_eq!(value.0, initial[&id] - turn, "turn {turn}: {id:?}");
         }

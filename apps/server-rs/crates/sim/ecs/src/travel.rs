@@ -6,6 +6,7 @@ use alloc::vec::Vec;
 
 use crate::codec::{Reader, Writer};
 use crate::column::ErasedColumn;
+use crate::entities::Arrival;
 use crate::error::ImageError;
 use crate::id::{EntityId, Handle};
 use crate::store::Store;
@@ -78,20 +79,11 @@ impl Store {
     /// When the id is beyond this floor's counter or the row does not
     /// match the schema.
     #[expect(
-        clippy::cast_possible_truncation,
-        reason = "register caps the component count at u32"
-    )]
-    #[expect(
         clippy::needless_pass_by_value,
         reason = "taking the traveller keeps one value from attaching twice"
     )]
     pub fn attach(&mut self, t: Traveller) -> Result<Handle, ImageError> {
-        let arrival = self.entities.admit(t.id)?;
-        let mut r = Reader::new(&t.row);
-        let count = r.read_u32()?;
-        if count != self.columns.len() as u32 {
-            return Err(ImageError::Schema { index: count });
-        }
+        let (arrival, r) = self.open(&t)?;
         let slot = arrival.slot();
         if let Err(error) = attach_columns(&mut self.columns, slot, r) {
             for column in &mut self.columns {
@@ -100,6 +92,33 @@ impl Store {
             return Err(error);
         }
         Ok(self.entities.arrive(arrival))
+    }
+
+    /// Runs the checks of [`Store::attach`] and writes nothing: on the same
+    /// store, it is `Ok` exactly when `attach` would be.
+    ///
+    /// # Errors
+    /// The error `attach` would return.
+    pub fn check_arrival(&self, t: &Traveller) -> Result<(), ImageError> {
+        let (_, mut r) = self.open(t)?;
+        for column in &self.columns {
+            column.check_row(&mut r)?;
+        }
+        r.finish()
+    }
+
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "register caps the component count at u32"
+    )]
+    fn open<'t>(&self, t: &'t Traveller) -> Result<(Arrival, Reader<'t>), ImageError> {
+        let arrival = self.entities.admit(t.id)?;
+        let mut r = Reader::new(&t.row);
+        let count = r.read_u32()?;
+        if count != self.columns.len() as u32 {
+            return Err(ImageError::Schema { index: count });
+        }
+        Ok((arrival, r))
     }
 }
 

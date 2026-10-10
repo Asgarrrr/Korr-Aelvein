@@ -10,7 +10,7 @@ use crate::terrain::{Material, Terrain};
 pub struct Grid {
     shape: Shape,
     pub(crate) terrain: Terrain,
-    occupancy: Occupancy,
+    pub(crate) occupancy: Occupancy,
 }
 
 impl Grid {

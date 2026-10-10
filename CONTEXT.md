@@ -58,6 +58,9 @@ a second name anywhere.
 - **Thing**: an entity linked to a cell that is not an actor: an item, a
   plant, a corpse, stairs. Many share a cell, in ascending EntityId order; a
   thing never blocks a step.
+- **Placement record**: the grid's record of one placed entity: its slot,
+  Layer and cell. In Rust (korr-grid), the source of position: saved in
+  the floor image, and the cell indexes are rebuilt from the records.
 
 ## Decisions
 
@@ -79,6 +82,10 @@ a second name anywhere.
   food, flee this threat). It reaches `core.step` through `instead`.
 - **Intent**: the cached (action key, target) of an actor's last decision.
   A matching candidate gets inertia; a FAIL clears it.
+- **Senses**: the actor-wide snapshot the core builds once per turn, before
+  any proposal: the other actors within `SIGHT` of the actor, in
+  Neighbourhood order. Every proposer reads the same facts, whatever the
+  registry order. A floor whose mechanics read no perception skips the scan.
 - **Period (P)**: how often an actor re-decides. Set per floor by distance
   to the nearest player; between decisions the actor repeats its intent.
 - **Alarm**: a u8 cell field a module sets only on the turn an eater first
@@ -107,6 +114,9 @@ a second name anywhere.
 - **Fingerprint**: a hash of the core schema, each module's name, schema,
   cells and config in registry order, and the species. A save only loads
   into a world with the same fingerprint.
+- **Ruleset**: what every floor of a Rust world shares: the schema, the
+  core's component keys and a fingerprint of the schema and the action
+  keys. A floor image loads only under a ruleset with the same fingerprint.
 - **Traffic**: a per-floor running hash of the departures that leave or
   head for the floor. A single floor restores only when its traffic matches.
 - **Fast / full check**: the two load tiers. Fast is for the server's own
