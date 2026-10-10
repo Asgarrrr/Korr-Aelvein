@@ -57,8 +57,8 @@ row fits, that is a design question: propose a new row before coding.
 | Design plans | `docs/plans/` |
 | Domain glossary: one name per concept | `CONTEXT.md` |
 | Repository tooling | `scripts/` |
-| Rust port of the engine, during the port | `apps/server-rs/crates/engine/` |
-| Rust server, during the port | `apps/server-rs/crates/server/` |
+| Rust simulation crates, during the rewrite (layout: `docs/plans/rust-structure.md`) | `apps/server-rs/crates/sim/<crate>/` |
+| Rust server, during the rewrite | `apps/server-rs/crates/host/server/` |
 | Rust tooling: toolchain pin, workspace lints | `apps/server-rs/` root files |
 
 - One file = one subject. Past ~400 lines, or when a second subject

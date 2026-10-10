@@ -1,5 +1,9 @@
 [workspace]
-members = ["crates/*"]
+members = [
+  "crates/sim/engine",
+  "crates/sim/random",
+  "crates/host/server",
+]
 resolver = "3"
 
 [workspace.package]
@@ -8,7 +12,8 @@ rust-version = "1.96"
 publish = false
 
 [workspace.dependencies]
-korr-engine = { path = "crates/engine" }
+korr-engine = { path = "crates/sim/engine" }
+korr-random = { path = "crates/sim/random" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
