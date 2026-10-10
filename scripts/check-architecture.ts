@@ -35,14 +35,27 @@ const errors: string[] = [];
 const report = (file: string, message: string) =>
 	errors.push(`${relative(ROOT, file)}: ${message}`);
 
-const walk = (dir: string): string[] =>
+const walk = (dir: string, pattern = /\.tsx?$/): string[] =>
 	existsSync(dir)
 		? readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
 				const path = join(dir, entry.name);
-				if (entry.isDirectory()) return walk(path);
-				return /\.tsx?$/.test(entry.name) ? [path] : [];
+				if (entry.isDirectory())
+					return entry.name === "target" ? [] : walk(path, pattern);
+				return pattern.test(entry.name) ? [path] : [];
 			})
 		: [];
+
+const lineCount = (source: string) =>
+	source.split("\n").length - (source.endsWith("\n") ? 1 : 0);
+
+const checkSize = (file: string, source: string) => {
+	const lines = lineCount(source);
+	if (lines > MAX_LINES)
+		report(
+			file,
+			`${lines} lines (max ${MAX_LINES}): split it into a folder by subject`,
+		);
+};
 
 // The bundler accepts extensionless and directory specifiers, so the rules must compare what it loads.
 const resolveImport = (file: string, spec: string) => {
@@ -107,13 +120,7 @@ for (const dir of workspaces) {
 		walk(join(dir, sub)),
 	)) {
 		const source = readFileSync(file, "utf8");
-
-		const lines = source.split("\n").length - (source.endsWith("\n") ? 1 : 0);
-		if (lines > MAX_LINES)
-			report(
-				file,
-				`${lines} lines (max ${MAX_LINES}): split it into a folder by subject`,
-			);
+		checkSize(file, source);
 
 		for (const spec of importsOf(source)) {
 			if (!spec.startsWith(".")) continue;
@@ -129,6 +136,43 @@ for (const dir of workspaces) {
 			for (const what of new Set(forbiddenIn(source)))
 				report(file, `${what} is forbidden in modules/`);
 	}
+}
+
+// Rules from docs/plans/rust-structure.md §4 that cargo cannot express.
+const RUST = join(ROOT, "apps/server-rs");
+const SIM = join(RUST, "crates/sim");
+// Anchored to a line start so a comment or a `#[deny]` on one item never counts.
+const DENY_FLOATS = /^#!\[deny\([^\]]*\bclippy::float_arithmetic\b[^\]]*\)\]/m;
+
+for (const file of walk(RUST, /\.rs$/))
+	checkSize(file, readFileSync(file, "utf8"));
+
+// Clippy reads only the nearest clippy.toml and never merges files.
+const clippyConfigs = walk(SIM, /^clippy\.toml$/);
+if (clippyConfigs.length !== 1 || clippyConfigs[0] !== join(SIM, "clippy.toml"))
+	report(
+		SIM,
+		`expected exactly one clippy.toml, at its root; found ${clippyConfigs.map((file) => relative(ROOT, file)).join(", ") || "none"}`,
+	);
+for (const config of [
+	join(ROOT, ".cargo/config.toml"),
+	join(RUST, ".cargo/config.toml"),
+])
+	if (
+		existsSync(config) &&
+		readFileSync(config, "utf8").includes("CLIPPY_CONF_DIR")
+	)
+		report(config, "CLIPPY_CONF_DIR overrides the sim clippy.toml");
+
+// A crate cannot add lints on top of `lints.workspace = true` (cargo#13157).
+for (const crate of readdirSync(SIM, { withFileTypes: true })) {
+	const lib = join(SIM, crate.name, "src/lib.rs");
+	if (
+		crate.isDirectory() &&
+		existsSync(lib) &&
+		!DENY_FLOATS.test(readFileSync(lib, "utf8"))
+	)
+		report(lib, "missing #![deny(clippy::float_arithmetic)]");
 }
 
 // A known violation must still be reported, or an edit to this script could disable the rule unnoticed.
@@ -165,6 +209,13 @@ if (errors.length - ecsBefore !== 1)
 		"the core/ecs -> rest of core rule did not fire exactly once",
 	);
 else errors.length = ecsBefore;
+
+if (
+	!DENY_FLOATS.test("#![no_std]\n#![deny(clippy::float_arithmetic)]\n") ||
+	DENY_FLOATS.test("// #![deny(clippy::float_arithmetic)]\n") ||
+	DENY_FLOATS.test("#![deny(clippy::float_cmp)]\n")
+)
+	report(SIM, "the float_arithmetic rule misreads a lib.rs header");
 
 if (errors.length > 0) {
 	console.error(`architecture check failed (${errors.length}):`);
