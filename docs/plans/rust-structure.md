@@ -12,6 +12,21 @@ User decisions:
 - Combat is a full system of its own (attacks, spells), not an extension
   of predation.
 
+## 0. Approach
+
+- The Rust engine is written natively, not translated. The TS code is a
+  reference to read; its scenario tests are the behaviour to reach.
+- No bit-exact hash parity with TS. The Rust engine pins its own world
+  hash per seed for determinism.
+- One small mechanic at a time, each finished with its scenarios before
+  the next: `core` + `wander`, then `flora` (module interface extracted),
+  then `hunger` (core API frozen), then `temperament`, `explore`, `fire`,
+  `fear`.
+- Floor parallelism is not built first. A floor owns all its state and
+  reaches other floors only through its inbox, so it stays possible.
+- The TS server keeps serving the game until the Rust engine runs the
+  starter floor with a player.
+
 ## 1. Principle
 
 Each architecture rule becomes a crate boundary. A crate sees only what
