@@ -5,8 +5,7 @@
 use std::cell::RefCell;
 
 use korr_core::{
-    ActionDesc, Candidates, CommitCtx, Mechanics, Pos, PrepCtx, Prepared, Seed, Seen, Senses,
-    Target, World,
+    Action, CommitCtx, Module, Pos, PrepCtx, Prepared, Proposals, Seed, Seen, Senses, Target, World,
 };
 use korr_ecs::{EntityId, FloorId};
 use korr_scenarios::{Shy, floor, game};
@@ -22,25 +21,37 @@ struct Watcher {
     shown: RefCell<Vec<(Pos, Vec<Seen>)>>,
 }
 
-impl Mechanics for Watcher {
-    fn actions(&self, _: &mut Vec<&'static ActionDesc>) {}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Nothing {}
+
+impl Action for Nothing {
+    const ALL: &'static [Self] = &[];
+
+    fn name(self) -> &'static str {
+        match self {}
+    }
+}
+
+impl Module for Watcher {
+    const NAME: &'static str = "watcher";
+    type Action = Nothing;
 
     fn perceives(&self) -> bool {
         self.perceives
     }
 
-    fn propose(&self, senses: &Senses<'_>, _: &mut Candidates) {
+    fn propose(&self, senses: &Senses<'_>, _: &mut Proposals<'_, Nothing>) {
         self.shown
             .borrow_mut()
             .push((senses.pos(), senses.seen().to_vec()));
     }
 
-    fn prepare(&self, _: &'static ActionDesc, _: Target, _: &PrepCtx<'_>) -> Prepared {
-        unreachable!("the watcher proposes nothing")
+    fn prepare(&self, action: Nothing, _: Target, _: &PrepCtx<'_>) -> Prepared<Nothing> {
+        match action {}
     }
 
-    fn commit(&self, _: &'static ActionDesc, _: Target, _: &mut CommitCtx<'_>) {
-        unreachable!("the watcher proposes nothing")
+    fn commit(&self, action: Nothing, _: Target, _: &mut CommitCtx<'_>) {
+        match action {}
     }
 }
 

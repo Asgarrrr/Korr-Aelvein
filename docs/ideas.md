@@ -48,7 +48,7 @@ the spec is updated to include it.
 - Snapshot-decision turns (every actor decides on the round's start state, then all act), if the bench fails.
 - The floor stopping in phase 2 when a player is due (D13), with the server supplying the input.
 - The two-phase build test of the core design (a reader registered before its owner resolves; a missing required owner fails the build), once `Module` exists.
-- A module-name uniqueness check, so no crate can draw from another module's stream through `ActionDesc::new`.
+- `korr-random` hard-codes the `Phase` list: a mechanic with a phase of its own edits the RNG crate. Derive the phase key from a name, like `ModuleKey`, once a module needs its own phase.
 - `Subject::Cell` packing the floor, so two floors never share a cell subject.
 - Split `korr-grid` `tests/model/driver.rs` by subject.
 

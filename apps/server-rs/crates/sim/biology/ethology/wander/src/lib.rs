@@ -7,14 +7,10 @@ mod config;
 use core::num::NonZeroU32;
 
 use korr_core::{
-    ActionDesc, Band, Candidate, Candidates, CommitCtx, Dir, DrawIndex, PrepCtx, Prepared, Senses,
-    Target,
+    Action, Band, CommitCtx, Dir, DrawIndex, Module, PrepCtx, Prepared, Proposals, Senses, Target,
 };
 
 pub use config::{ROAM_COST, ROAM_WEIGHT};
-
-pub const NAME: &str = "wander";
-pub static ROAM: ActionDesc = ActionDesc::new(NAME, "roam");
 
 const DIRECTIONS: NonZeroU32 = NonZeroU32::new(8).expect("Dir::ALL holds eight directions");
 
@@ -31,28 +27,40 @@ impl From<Draw> for DrawIndex {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WanderAction {
+    Roam,
+}
+
+impl Action for WanderAction {
+    const ALL: &'static [Self] = &[Self::Roam];
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Roam => "roam",
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Wander;
 
-impl Wander {
-    pub fn propose(&self, _: &Senses<'_>, out: &mut Candidates) {
-        out.push(Candidate {
-            action: &ROAM,
-            band: Band::Routine,
-            weight: ROAM_WEIGHT,
-            target: Target::None,
-        });
+impl Module for Wander {
+    const NAME: &'static str = "wander";
+    type Action = WanderAction;
+
+    fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, WanderAction>) {
+        out.push(WanderAction::Roam, Band::Routine, ROAM_WEIGHT, Target::None);
     }
 
-    #[must_use]
-    pub fn prepare(&self, _: Target, ctx: &PrepCtx<'_>) -> Prepared {
+    fn prepare(&self, _: WanderAction, _: Target, ctx: &PrepCtx<'_>) -> Prepared<WanderAction> {
         match ctx.check_step(direction(ctx.below(Draw::Dir, DIRECTIONS))) {
             Ok(_) => Prepared::Go { cost: ROAM_COST },
             Err(_) => Prepared::Blocked,
         }
     }
 
-    pub fn commit(&self, _: Target, ctx: &mut CommitCtx<'_>) {
+    fn commit(&self, _: WanderAction, _: Target, ctx: &mut CommitCtx<'_>) {
         ctx.step(direction(ctx.below(Draw::Dir, DIRECTIONS)));
     }
 }

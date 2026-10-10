@@ -5,7 +5,7 @@ use korr_random::Seed;
 
 use crate::error::WorldError;
 use crate::floor::Floor;
-use crate::mechanics::Mechanics;
+use crate::module::Mechanics;
 use crate::ruleset::Ruleset;
 
 #[derive(Debug)]

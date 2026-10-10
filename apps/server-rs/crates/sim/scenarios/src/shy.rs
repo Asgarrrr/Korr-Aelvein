@@ -1,12 +1,9 @@
-use alloc::vec::Vec;
 use core::num::NonZeroU32;
 
 use korr_core::{
-    ActionDesc, Band, Candidate, Candidates, CommitCtx, Cost, Dir, DrawIndex, Mechanics, PrepCtx,
-    Prepared, Senses, Target,
+    Action, Band, CommitCtx, Cost, Dir, DrawIndex, Module, PrepCtx, Prepared, Proposals, Senses,
+    Target,
 };
-
-pub static STARTLE: ActionDesc = ActionDesc::new("shy", "startle");
 
 const DIRECTIONS: NonZeroU32 = NonZeroU32::new(8).expect("Dir::ALL holds eight directions");
 
@@ -14,27 +11,34 @@ const DIRECTIONS: NonZeroU32 = NonZeroU32::new(8).expect("Dir::ALL holds eight d
 #[derive(Debug, Default)]
 pub struct Shy;
 
-impl Mechanics for Shy {
-    fn actions(&self, out: &mut Vec<&'static ActionDesc>) {
-        out.push(&STARTLE);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Startle {
+    Startle,
+}
+
+impl Action for Startle {
+    const ALL: &'static [Self] = &[Self::Startle];
+
+    fn name(self) -> &'static str {
+        "startle"
     }
+}
+
+impl Module for Shy {
+    const NAME: &'static str = "shy";
+    type Action = Startle;
 
     fn perceives(&self) -> bool {
         true
     }
 
-    fn propose(&self, senses: &Senses<'_>, out: &mut Candidates) {
+    fn propose(&self, senses: &Senses<'_>, out: &mut Proposals<'_, Startle>) {
         if !senses.seen().is_empty() {
-            out.push(Candidate {
-                action: &STARTLE,
-                band: Band::Routine,
-                weight: 1,
-                target: Target::None,
-            });
+            out.push(Startle::Startle, Band::Routine, 1, Target::None);
         }
     }
 
-    fn prepare(&self, _: &'static ActionDesc, _: Target, ctx: &PrepCtx<'_>) -> Prepared {
+    fn prepare(&self, _: Startle, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Startle> {
         match ctx.check_step(Dir::ALL[ctx.below(DrawIndex(0), DIRECTIONS) as usize]) {
             Ok(_) => Prepared::Go {
                 cost: Cost::new(100),
@@ -43,7 +47,7 @@ impl Mechanics for Shy {
         }
     }
 
-    fn commit(&self, _: &'static ActionDesc, _: Target, ctx: &mut CommitCtx<'_>) {
+    fn commit(&self, _: Startle, _: Target, ctx: &mut CommitCtx<'_>) {
         ctx.step(Dir::ALL[ctx.below(DrawIndex(0), DIRECTIONS) as usize]);
     }
 }

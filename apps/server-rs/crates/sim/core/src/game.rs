@@ -1,7 +1,7 @@
 use korr_ecs::SchemaBuilder;
 use korr_random::Seed;
 
-use crate::mechanics::Mechanics;
+use crate::module::Mechanics;
 use crate::ruleset::Ruleset;
 use crate::world::World;
 
@@ -15,7 +15,7 @@ pub struct Game<M> {
 
 impl<M: Mechanics> Game<M> {
     /// # Panics
-    /// When two actions share an `ActionKey`.
+    /// When two modules share a name or two actions share an `ActionKey`.
     #[must_use]
     pub fn new(schema: SchemaBuilder, mechanics: M, seed: Seed) -> Self {
         let ruleset = Ruleset::new(schema, &mechanics);

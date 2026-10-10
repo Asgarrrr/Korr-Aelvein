@@ -8,18 +8,16 @@ mod leave;
 mod scripted;
 mod shy;
 
-use alloc::vec::Vec;
-
 use korr_core::{
-    ActionDesc, Band, Candidate, Candidates, CommitCtx, Cost, Dir, Floor, Game, Mechanics, PrepCtx,
-    Prepared, Ruleset, Seed, Senses, Target, World,
+    Action, Band, CommitCtx, Cost, Dir, Floor, Game, Mechanics, Module, PrepCtx, Prepared,
+    Proposals, Ruleset, Seed, Senses, Target, World,
 };
 use korr_ecs::{FloorId, SchemaBuilder};
 use korr_grid::Shape;
 
-pub use leave::{LEAVE, Leave};
-pub use scripted::{Act, Answer, Scripted};
-pub use shy::{STARTLE, Shy};
+pub use leave::Leave;
+pub use scripted::{Act, Answer, Fake, Scripted};
+pub use shy::Shy;
 
 /// # Panics
 /// When a side is outside the bounds of `Shape::new`.
@@ -30,7 +28,7 @@ pub fn floor(ruleset: &Ruleset, id: u16, width: u16, height: u16) -> Floor {
 }
 
 /// # Panics
-/// When two actions share an `ActionKey`.
+/// When two modules share a name or two actions share an `ActionKey`.
 #[must_use]
 pub fn game<M: Mechanics>(mechanics: M, seed: Seed) -> Game<M> {
     Game::new(SchemaBuilder::default(), mechanics, seed)
@@ -44,31 +42,32 @@ pub fn run<M: Mechanics>(game: &Game<M>, world: &mut World, rounds: u64) {
     }
 }
 
-static STEP: ActionDesc = ActionDesc::new("pace", "step");
-
 /// Every actor steps east each turn: 30 ticks for an even id, 100 for an odd one.
 #[derive(Debug)]
 pub struct Pace;
 
-impl Mechanics for Pace {
-    fn actions(&self, out: &mut Vec<&'static ActionDesc>) {
-        out.push(&STEP);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Step {
+    Step,
+}
+
+impl Action for Step {
+    const ALL: &'static [Self] = &[Self::Step];
+
+    fn name(self) -> &'static str {
+        "step"
+    }
+}
+
+impl Module for Pace {
+    const NAME: &'static str = "pace";
+    type Action = Step;
+
+    fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, Step>) {
+        out.push(Step::Step, Band::Routine, 0, Target::None);
     }
 
-    fn perceives(&self) -> bool {
-        false
-    }
-
-    fn propose(&self, _: &Senses<'_>, out: &mut Candidates) {
-        out.push(Candidate {
-            action: &STEP,
-            band: Band::Routine,
-            weight: 0,
-            target: Target::None,
-        });
-    }
-
-    fn prepare(&self, _: &'static ActionDesc, _: Target, ctx: &PrepCtx<'_>) -> Prepared {
+    fn prepare(&self, _: Step, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Step> {
         match ctx.check_step(Dir::East) {
             Ok(_) if ctx.actor().to_bits() % 2 == 0 => Prepared::Go {
                 cost: Cost::new(30),
@@ -80,7 +79,7 @@ impl Mechanics for Pace {
         }
     }
 
-    fn commit(&self, _: &'static ActionDesc, _: Target, ctx: &mut CommitCtx<'_>) {
+    fn commit(&self, _: Step, _: Target, ctx: &mut CommitCtx<'_>) {
         ctx.step(Dir::East);
     }
 }

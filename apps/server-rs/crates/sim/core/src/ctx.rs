@@ -3,9 +3,8 @@ use core::num::NonZeroU32;
 
 use korr_ecs::{EntityId, FloorId, Handle};
 use korr_grid::{Dir, Grid, Pos, StepError};
-use korr_random::{DrawIndex, Phase, Seed, Stream, Subject};
+use korr_random::{DrawIndex, ModuleKey, Phase, Seed, Stream, Subject};
 
-use crate::action::ActionDesc;
 use crate::time::Tick;
 
 /// The draws of one actor's action at one tick: equal in prepare and commit.
@@ -16,9 +15,9 @@ pub(crate) struct Draws {
 }
 
 impl Draws {
-    pub(crate) fn new(seed: Seed, action: &ActionDesc, now: Tick, actor: EntityId) -> Self {
+    pub(crate) fn new(seed: Seed, module: ModuleKey, now: Tick, actor: EntityId) -> Self {
         Self {
-            stream: Stream::new(seed, action.module, Phase::Action, now.0),
+            stream: Stream::new(seed, module, Phase::Action, now.0),
             actor: Subject::Entity(actor.to_bits()),
         }
     }

@@ -1,12 +1,12 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use korr_core::{
-    ActionDesc, Band, Candidate, Candidates, CommitCtx, Dir, Floor, Game, LoadError, Mechanics,
-    Pos, PrepCtx, Prepared, Ruleset, Seed, Senses, TICKS_PER_ROUND, Target, Tick, World,
+    Action, Band, CommitCtx, Cost, Dir, Floor, Game, LoadError, Mechanics, Module, Pos, PrepCtx,
+    Prepared, Proposals, Ruleset, Seed, Senses, TICKS_PER_ROUND, Target, Tick, Visit, World,
     WorldError,
 };
 use korr_ecs::{EntityId, FloorId, Handle, ImageError, checksum};
-use korr_scenarios::{Act, Answer, Leave, Scripted, floor, game, run};
+use korr_scenarios::{Act, Answer, Fake, Leave, Scripted, floor, game, run};
 
 const SEED: Seed = Seed(5);
 const A: FloorId = FloorId(0);
@@ -18,54 +18,62 @@ const TO_C: Leave = Leave {
     at: Pos { x: 2, y: 2 },
 };
 
-static HOME: ActionDesc = ActionDesc::new("keyed", "home");
-static STEP: ActionDesc = ActionDesc::new("keyed", "step");
-
-/// `rest` for every actor, except that `actor` runs `leave` from tick `from`.
+/// `actor` departs for `at` on floor `to` from tick `from`, unless already there.
 #[derive(Debug)]
-struct Keyed<M> {
+struct Home {
     actor: EntityId,
     from: Tick,
-    leave: Leave,
-    rest: M,
+    to: FloorId,
+    at: Pos,
 }
 
-impl<M: Mechanics> Mechanics for Keyed<M> {
-    fn actions(&self, out: &mut Vec<&'static ActionDesc>) {
-        out.push(&HOME);
-        self.rest.actions(out);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GoHome {
+    Home,
+}
+
+impl Action for GoHome {
+    const ALL: &'static [Self] = &[Self::Home];
+
+    fn name(self) -> &'static str {
+        "home"
+    }
+}
+
+impl Module for Home {
+    const NAME: &'static str = "keyed";
+    type Action = GoHome;
+
+    fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, GoHome>) {
+        out.push(GoHome::Home, Band::Vigilance, 0, Target::None);
     }
 
-    fn perceives(&self) -> bool {
-        self.rest.perceives()
-    }
-
-    fn propose(&self, senses: &Senses<'_>, out: &mut Candidates) {
-        out.push(Candidate {
-            action: &HOME,
-            band: Band::Vigilance,
-            weight: 0,
-            target: Target::None,
-        });
-        self.rest.propose(senses, out);
-    }
-
-    fn prepare(&self, action: &'static ActionDesc, target: Target, ctx: &PrepCtx<'_>) -> Prepared {
-        if action.key() != HOME.key() {
-            self.rest.prepare(action, target, ctx)
-        } else if ctx.actor() == self.actor && ctx.now() >= self.from {
-            self.leave.prepare(action, target, ctx)
+    fn prepare(&self, _: GoHome, _: Target, ctx: &PrepCtx<'_>) -> Prepared<GoHome> {
+        if ctx.actor() == self.actor && ctx.now() >= self.from && ctx.floor() != self.to {
+            Prepared::Go {
+                cost: Cost::new(100),
+            }
         } else {
             Prepared::Fail
         }
     }
 
-    fn commit(&self, action: &'static ActionDesc, target: Target, ctx: &mut CommitCtx<'_>) {
-        if action.key() == HOME.key() {
-            self.leave.commit(action, target, ctx);
-        } else {
-            self.rest.commit(action, target, ctx);
-        }
+    fn commit(&self, _: GoHome, _: Target, ctx: &mut CommitCtx<'_>) {
+        ctx.depart(self.to, self.at);
+    }
+}
+
+/// `rest` for every actor, except when `home` goes.
+#[derive(Debug)]
+struct Keyed<M> {
+    home: Home,
+    rest: M,
+}
+
+impl<M: Mechanics> Mechanics for Keyed<M> {
+    fn each<V: Visit>(&self, v: &mut V) {
+        v.module(&self.home);
+        self.rest.each(v);
     }
 }
 
@@ -125,9 +133,9 @@ fn floor_order_never_changes_arrivals() {
 fn save_with_travellers_waiting_replays() {
     let game = game(
         Keyed {
-            actor: EntityId::new(C, 0),
-            from: Tick(2 * TICKS_PER_ROUND),
-            leave: Leave {
+            home: Home {
+                actor: EntityId::new(C, 0),
+                from: Tick(2 * TICKS_PER_ROUND),
                 to: A,
                 at: Pos { x: 3, y: 3 },
             },
@@ -151,14 +159,14 @@ fn save_with_travellers_waiting_replays() {
 fn equal_ticks_break_on_entity_id_not_slot() {
     let game = game(
         Keyed {
-            actor: EntityId::new(A, 0),
-            from: Tick(0),
-            leave: Leave {
+            home: Home {
+                actor: EntityId::new(A, 0),
+                from: Tick(0),
                 to: B,
                 at: Pos { x: 1, y: 1 },
             },
             rest: Scripted(vec![Act {
-                desc: &STEP,
+                action: Fake::X,
                 band: Band::Routine,
                 weight: 0,
                 target: Target::None,
@@ -202,9 +210,12 @@ fn histories(c_full: bool) -> [Vec<Floor>; 2] {
     [Tick(u64::MAX), Tick(0)].map(|from| {
         let game = game(
             Keyed {
-                actor: EntityId::new(A, 0),
-                from,
-                leave: TO_C,
+                home: Home {
+                    actor: EntityId::new(A, 0),
+                    from,
+                    to: TO_C.to,
+                    at: TO_C.at,
+                },
                 rest: Scripted(Vec::new()),
             },
             SEED,

@@ -115,7 +115,8 @@ a second name anywhere.
   cells and config in registry order, and the species. A save only loads
   into a world with the same fingerprint.
 - **Ruleset**: what every floor of a Rust world shares: the schema, the
-  core's component keys and a fingerprint of the schema and the action
+  core's component keys, the module table (each module's key and action
+  keys, in visit order) and a fingerprint of the schema and the action
   keys. A floor image loads only under a ruleset with the same fingerprint.
 - **Traffic**: a per-floor running hash of the departures that leave or
   head for the floor. A single floor restores only when its traffic matches.
@@ -126,6 +127,11 @@ a second name anywhere.
 
 - **Mechanic**: one module folder (`modules/<name>/`) adding needs,
   components and systems. Removing it leaves a running game.
+  In Rust (korr-core): a `Module`, named by `NAME`, with a closed `Action`
+  enum. Its random stream derives from `NAME` alone.
+- **Mechanics**: in Rust (korr-core), what a world runs: every enabled
+  `Module`, visited in one fixed order. A single module is Mechanics; the
+  registry and test composites visit several.
 - **Domain**: a folder grouping Mechanics by subject in the Rust engine:
   `biology`, `milieu`, `combat`. Filing only: it holds no shared code.
 - **Contract**: a component or cell field read by a second module, typed

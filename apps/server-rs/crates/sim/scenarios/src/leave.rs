@@ -1,12 +1,7 @@
-use alloc::vec::Vec;
-
 use korr_core::{
-    ActionDesc, Band, Candidate, Candidates, CommitCtx, Cost, Mechanics, Pos, PrepCtx, Prepared,
-    Senses, Target,
+    Action, Band, CommitCtx, Cost, Module, Pos, PrepCtx, Prepared, Proposals, Senses, Target,
 };
 use korr_ecs::FloorId;
-
-pub static LEAVE: ActionDesc = ActionDesc::new("leave", "go");
 
 /// Every actor off floor `to` departs for `at` on it.
 #[derive(Debug)]
@@ -15,25 +10,28 @@ pub struct Leave {
     pub at: Pos,
 }
 
-impl Mechanics for Leave {
-    fn actions(&self, out: &mut Vec<&'static ActionDesc>) {
-        out.push(&LEAVE);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Go {
+    Go,
+}
+
+impl Action for Go {
+    const ALL: &'static [Self] = &[Self::Go];
+
+    fn name(self) -> &'static str {
+        "go"
+    }
+}
+
+impl Module for Leave {
+    const NAME: &'static str = "leave";
+    type Action = Go;
+
+    fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, Go>) {
+        out.push(Go::Go, Band::Routine, 1, Target::None);
     }
 
-    fn perceives(&self) -> bool {
-        false
-    }
-
-    fn propose(&self, _: &Senses<'_>, out: &mut Candidates) {
-        out.push(Candidate {
-            action: &LEAVE,
-            band: Band::Routine,
-            weight: 1,
-            target: Target::None,
-        });
-    }
-
-    fn prepare(&self, _: &'static ActionDesc, _: Target, ctx: &PrepCtx<'_>) -> Prepared {
+    fn prepare(&self, _: Go, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Go> {
         if ctx.floor() == self.to {
             Prepared::Fail
         } else {
@@ -43,7 +41,7 @@ impl Mechanics for Leave {
         }
     }
 
-    fn commit(&self, _: &'static ActionDesc, _: Target, ctx: &mut CommitCtx<'_>) {
+    fn commit(&self, _: Go, _: Target, ctx: &mut CommitCtx<'_>) {
         ctx.depart(self.to, self.at);
     }
 }

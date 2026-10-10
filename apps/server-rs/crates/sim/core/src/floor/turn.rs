@@ -2,12 +2,11 @@ use korr_ecs::{EntityId, Handle};
 use korr_grid::Pos;
 use korr_random::Seed;
 
-use crate::action::Prepared;
 use crate::config::{IDLE, MAX_INSTEAD, SIGHT};
 use crate::ctx::{CommitCtx, Draws, PrepCtx};
-use crate::decision::{Candidate, Intent};
+use crate::decision::{Candidate, Candidates, Intent};
 use crate::floor::Floor;
-use crate::mechanics::Mechanics;
+use crate::module::{Action, Mechanics, Module, Prepared, Proposals, Visit, module_key};
 use crate::ruleset::Ruleset;
 use crate::senses::{Seen, Senses};
 use crate::time::{Cost, Tick};
@@ -40,17 +39,35 @@ impl Floor {
     ) -> Cost {
         let pos = self.grid.pos(actor).expect("a due actor is placed");
         self.seen.clear();
-        if mechanics.perceives() {
+        if ruleset.perceives {
             self.look(actor, pos);
         }
         self.candidates.clear();
-        mechanics.propose(&Senses::new(pos, &self.seen), &mut self.candidates);
+        mechanics.each(&mut ProposeVisit {
+            ruleset,
+            senses: Senses::new(pos, &self.seen),
+            out: &mut self.candidates,
+            ordinal: 0,
+        });
         let intent = self.store.get(ruleset.intent.read(), actor).copied();
         let mut excluded = None;
         while let Some(pick) = self.candidates.pick(intent, excluded) {
-            if let Some(cost) = self.run(seed, mechanics, now, id, actor, pick) {
+            let mut run = RunVisit {
+                floor: self,
+                seed,
+                now,
+                id,
+                actor,
+                pick,
+                ordinal: 0,
+                routed: false,
+                cost: None,
+            };
+            mechanics.each(&mut run);
+            assert!(run.routed, "a candidate's module runs in this ruleset");
+            if let Some(cost) = run.cost {
                 let intent = Intent {
-                    action: pick.action.key(),
+                    action: pick.action.key,
                     target: pick.target,
                 };
                 self.store.insert(&ruleset.intent, actor, intent);
@@ -59,7 +76,7 @@ impl Floor {
             if excluded.is_some() {
                 break;
             }
-            excluded = Some(pick.action.key());
+            excluded = Some(pick.action.key);
         }
         self.store.remove(&ruleset.intent, actor);
         IDLE
@@ -79,39 +96,78 @@ impl Floor {
             }
         }
     }
+}
 
+/// Hands each module a `Proposals` bound to its ordinal and action keys.
+struct ProposeVisit<'a> {
+    ruleset: &'a Ruleset,
+    senses: Senses<'a>,
+    out: &'a mut Candidates,
+    ordinal: usize,
+}
+
+impl Visit for ProposeVisit<'_> {
+    fn module<M: Module>(&mut self, module: &M) {
+        let entry = &self.ruleset.modules[self.ordinal];
+        debug_assert_eq!(entry.key, module_key::<M>());
+        let ordinal = u16::try_from(self.ordinal).expect("a module table fits u16");
+        module.propose(
+            &self.senses,
+            &mut Proposals::new(self.out, ordinal, &entry.actions),
+        );
+        self.ordinal += 1;
+    }
+}
+
+/// Runs the picked candidate in the module whose ordinal it carries.
+struct RunVisit<'a> {
+    floor: &'a mut Floor,
+    seed: Seed,
+    now: Tick,
+    id: EntityId,
+    actor: Handle,
+    pick: Candidate,
+    ordinal: usize,
+    routed: bool,
     /// The cost of a run that ends in `Go` or `Blocked`; `None` when it fails.
-    fn run(
-        &mut self,
-        seed: Seed,
-        mechanics: &impl Mechanics,
-        now: Tick,
-        id: EntityId,
-        actor: Handle,
-        pick: Candidate,
-    ) -> Option<Cost> {
-        let (mut action, mut target) = (pick.action, pick.target);
-        let floor = self.id();
+    cost: Option<Cost>,
+}
+
+impl Visit for RunVisit<'_> {
+    fn module<M: Module>(&mut self, module: &M) {
+        if self.ordinal == usize::from(self.pick.action.module) {
+            self.routed = true;
+            self.cost = self.run(module);
+        }
+        self.ordinal += 1;
+    }
+}
+
+impl RunVisit<'_> {
+    fn run<M: Module>(&mut self, module: &M) -> Option<Cost> {
+        let mut action = M::Action::ALL[usize::from(self.pick.action.index)];
+        let mut target = self.pick.target;
+        let floor = self.floor.id();
         let mut hops = 0;
         loop {
-            let draws = Draws::new(seed, action, now, id);
+            let draws = Draws::new(self.seed, module_key::<M>(), self.now, self.id);
             let prep = PrepCtx {
-                grid: &self.grid,
-                actor,
-                id,
+                grid: &self.floor.grid,
+                actor: self.actor,
+                id: self.id,
                 floor,
                 draws,
-                now,
+                now: self.now,
             };
-            match mechanics.prepare(action, target, &prep) {
+            match module.prepare(action, target, &prep) {
                 Prepared::Go { cost } => {
                     let mut commit = CommitCtx {
-                        grid: &mut self.grid,
-                        actor,
+                        grid: &mut self.floor.grid,
+                        actor: self.actor,
                         draws,
-                        departures: &mut self.departures,
+                        departures: &mut self.floor.departures,
                     };
-                    mechanics.commit(action, target, &mut commit);
+                    module.commit(action, target, &mut commit);
                     return Some(cost);
                 }
                 Prepared::Blocked => return Some(IDLE),

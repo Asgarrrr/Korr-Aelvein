@@ -1,18 +1,35 @@
 use alloc::vec::Vec;
-use core::ptr;
 
 use korr_core::{
-    ActionDesc, Band, Candidate, Candidates, CommitCtx, Cost, Dir, Mechanics, PrepCtx, Prepared,
-    Senses, Target, Tick,
+    Action, Band, CommitCtx, Cost, Dir, Module, PrepCtx, Prepared, Proposals, Senses, Target, Tick,
 };
 
 /// A fake mechanic whose candidates and answers are fixed by the test.
 #[derive(Debug)]
 pub struct Scripted(pub Vec<Act>);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Fake {
+    X,
+    Y,
+    Z,
+}
+
+impl Action for Fake {
+    const ALL: &'static [Self] = &[Self::X, Self::Y, Self::Z];
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::X => "x",
+            Self::Y => "y",
+            Self::Z => "z",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Act {
-    pub desc: &'static ActionDesc,
+    pub action: Fake,
     pub band: Band,
     pub weight: u16,
     pub target: Target,
@@ -22,45 +39,31 @@ pub struct Act {
 #[derive(Debug, Clone, Copy)]
 pub enum Answer {
     Go(Dir),
-    Instead(&'static ActionDesc),
+    Instead(Fake),
     Fail,
     FailBefore(Tick, Dir),
 }
 
 impl Scripted {
-    fn act(&self, action: &'static ActionDesc, target: Target) -> &Act {
+    fn act(&self, action: Fake, target: Target) -> &Act {
         self.0
             .iter()
-            .find(|act| act.desc.key() == action.key() && act.target == target)
+            .find(|act| act.action == action && act.target == target)
             .expect("the script answers only what it proposed")
     }
 }
 
-impl Mechanics for Scripted {
-    fn actions(&self, out: &mut Vec<&'static ActionDesc>) {
+impl Module for Scripted {
+    const NAME: &'static str = "fake";
+    type Action = Fake;
+
+    fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, Fake>) {
         for act in &self.0 {
-            if !out.iter().any(|&desc| ptr::eq(desc, act.desc)) {
-                out.push(act.desc);
-            }
+            out.push(act.action, act.band, act.weight, act.target);
         }
     }
 
-    fn perceives(&self) -> bool {
-        false
-    }
-
-    fn propose(&self, _: &Senses<'_>, out: &mut Candidates) {
-        for act in &self.0 {
-            out.push(Candidate {
-                action: act.desc,
-                band: act.band,
-                weight: act.weight,
-                target: act.target,
-            });
-        }
-    }
-
-    fn prepare(&self, action: &'static ActionDesc, target: Target, ctx: &PrepCtx<'_>) -> Prepared {
+    fn prepare(&self, action: Fake, target: Target, ctx: &PrepCtx<'_>) -> Prepared<Fake> {
         match self.act(action, target).answer {
             Answer::Instead(next) => Prepared::Instead {
                 action: next,
@@ -77,7 +80,7 @@ impl Mechanics for Scripted {
         }
     }
 
-    fn commit(&self, action: &'static ActionDesc, target: Target, ctx: &mut CommitCtx<'_>) {
+    fn commit(&self, action: Fake, target: Target, ctx: &mut CommitCtx<'_>) {
         match self.act(action, target).answer {
             Answer::Go(dir) | Answer::FailBefore(_, dir) => {
                 ctx.step(dir);

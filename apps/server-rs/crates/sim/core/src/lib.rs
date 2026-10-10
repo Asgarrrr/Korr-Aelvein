@@ -4,29 +4,27 @@
 
 extern crate alloc;
 
-mod action;
 mod config;
 mod ctx;
 mod decision;
 mod error;
 mod floor;
 mod game;
-mod mechanics;
+mod module;
 mod ruleset;
 mod senses;
 mod time;
 mod world;
 
-pub use action::{ActionDesc, ActionKey, Prepared, Target};
 pub use config::{IDLE, INERTIA, MAX_INSTEAD, SIGHT, TICKS_PER_ROUND};
 pub use ctx::{CommitCtx, PrepCtx};
-pub use decision::{Band, Candidate, Candidates, Intent};
+pub use decision::{Band, Intent};
 pub use error::{LoadError, WorldError};
 pub use floor::Floor;
 pub use game::Game;
 pub use korr_grid::{Dir, Pos, StepError};
 pub use korr_random::{DrawIndex, Seed};
-pub use mechanics::Mechanics;
+pub use module::{Action, ActionKey, Mechanics, Module, Prepared, Proposals, Target, Visit};
 pub use ruleset::Ruleset;
 pub use senses::{Seen, Senses};
 pub use time::{Cost, Tick};

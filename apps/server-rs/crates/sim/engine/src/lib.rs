@@ -2,11 +2,7 @@
 #![no_std]
 #![deny(clippy::float_arithmetic)]
 
-extern crate alloc;
-
-use alloc::vec::Vec;
-
-use korr_core::{ActionDesc, Candidates, CommitCtx, Mechanics, PrepCtx, Prepared, Senses, Target};
+use korr_core::{Mechanics, Visit};
 use korr_wander::Wander;
 
 /// One field per mechanic, in run order. `None` disables it.
@@ -23,37 +19,10 @@ impl Default for Registry {
     }
 }
 
-impl Registry {
-    fn wander(&self, action: &ActionDesc) -> &Wander {
-        match &self.wander {
-            Some(wander) if action.same_module(&korr_wander::ROAM) => wander,
-            _ => panic!("action of no module in this registry: {action:?}"),
-        }
-    }
-}
-
 impl Mechanics for Registry {
-    fn actions(&self, out: &mut Vec<&'static ActionDesc>) {
-        if self.wander.is_some() {
-            out.push(&korr_wander::ROAM);
-        }
-    }
-
-    fn perceives(&self) -> bool {
-        false
-    }
-
-    fn propose(&self, senses: &Senses<'_>, out: &mut Candidates) {
+    fn each<V: Visit>(&self, v: &mut V) {
         if let Some(wander) = &self.wander {
-            wander.propose(senses, out);
+            v.module(wander);
         }
-    }
-
-    fn prepare(&self, action: &'static ActionDesc, target: Target, ctx: &PrepCtx<'_>) -> Prepared {
-        self.wander(action).prepare(target, ctx)
-    }
-
-    fn commit(&self, action: &'static ActionDesc, target: Target, ctx: &mut CommitCtx<'_>) {
-        self.wander(action).commit(target, ctx);
     }
 }
