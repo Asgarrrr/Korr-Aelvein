@@ -8,7 +8,7 @@ use core::num::NonZeroU32;
 const GOLDEN: u64 = 0x9e37_79b9_7f4a_7c15;
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
-const SUBJECT_LIMIT: u32 = 1 << 31;
+const SUBJECT_LIMIT: u64 = 1 << 63;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Phase {
@@ -20,8 +20,8 @@ pub enum Phase {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Subject {
-    Entity(u32),
-    Cell(u32),
+    Entity(u64),
+    Cell(u64),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,9 +86,9 @@ impl Subject {
         };
         assert!(
             value < SUBJECT_LIMIT,
-            "subject {value} must fit 31 bits so entities and cells never alias"
+            "subject {value} must fit 63 bits so entities and cells never alias"
         );
-        u64::from(kind | value)
+        kind | value
     }
 }
 
@@ -102,22 +102,36 @@ impl Stream {
     }
 
     /// # Panics
-    /// When the subject's value does not fit 31 bits.
+    /// When the subject's value does not fit 63 bits.
     #[must_use]
     #[inline]
     pub fn draw(self, subject: Subject, n: DrawIndex) -> u64 {
-        absorb(self.0, (subject.packed() << 32) | u64::from(n.0))
+        absorb(absorb(self.0, subject.packed()), u64::from(n.0))
     }
 
     /// A value in `0..bound`. Multiply-high leaves a bias below 2^-32 per
     /// outcome, so no draw is ever rejected.
     ///
     /// # Panics
-    /// When the subject's value does not fit 31 bits.
+    /// When the subject's value does not fit 63 bits.
     #[must_use]
     #[inline]
     pub fn below(self, subject: Subject, n: DrawIndex, bound: NonZeroU32) -> u32 {
         let wide = u128::from(self.draw(subject, n)) * u128::from(bound.get());
         u32::try_from(wide >> 64).expect("the high word of x * bound is below bound")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DrawIndex, Stream, Subject};
+
+    // Two streams whose prefixes differ only in low bits must not share draws
+    // at shifted indices: one fold of (prefix ^ subject ^ index) would.
+    #[test]
+    fn streams_one_bit_apart_share_no_draw() {
+        let a = Stream(0).draw(Subject::Entity(0), DrawIndex(1));
+        let b = Stream(1).draw(Subject::Entity(0), DrawIndex(0));
+        assert_ne!(a, b);
     }
 }

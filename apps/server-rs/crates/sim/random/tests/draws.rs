@@ -10,7 +10,7 @@ fn draw(seed: u64, module: &str, phase: Phase, time: u64, subject: Subject, n: u
     Stream::new(Seed(seed), ModuleKey::of(module), phase, time).draw(subject, DrawIndex(n))
 }
 
-fn tick(seed: u64, time: u64, subject: u32, n: u32) -> u64 {
+fn tick(seed: u64, time: u64, subject: u64, n: u32) -> u64 {
     draw(
         seed,
         "hunger",
@@ -56,14 +56,14 @@ fn subjects_and_indices_never_alias() {
 
 #[test]
 #[should_panic(expected = "subject")]
-fn a_subject_past_31_bits_is_refused() {
-    let _ = tick(1, 0, 1 << 31, 0);
+fn a_subject_past_63_bits_is_refused() {
+    let _ = tick(1, 0, 1 << 63, 0);
 }
 
 #[test]
 #[should_panic(expected = "subject")]
-fn a_cell_past_31_bits_is_refused() {
-    let _ = draw(1, "hunger", Phase::Tick, 0, Subject::Cell(1 << 31), 0);
+fn a_cell_past_63_bits_is_refused() {
+    let _ = draw(1, "hunger", Phase::Tick, 0, Subject::Cell(1 << 63), 0);
 }
 
 fn assert_avalanche(field: &str, width: u32, pair: impl Fn(u32, u32) -> (u64, u64)) {
@@ -103,8 +103,9 @@ fn one_input_bit_flips_half_the_output() {
         let time = u64::from(k);
         (tick(1, time, 0, 0), tick(1, time ^ (1 << bit), 0, 0))
     });
-    assert_avalanche("subject", 31, |k, bit| {
-        (tick(1, 0, k, 0), tick(1, 0, k ^ (1 << bit), 0))
+    assert_avalanche("subject", 63, |k, bit| {
+        let subject = u64::from(k);
+        (tick(1, 0, subject, 0), tick(1, 0, subject ^ (1 << bit), 0))
     });
     assert_avalanche("index", 32, |k, bit| {
         (tick(1, 0, 0, k), tick(1, 0, 0, k ^ (1 << bit)))
@@ -138,7 +139,7 @@ fn bounded_draws_are_uniform() {
     for bound in [2, 7, 1000] {
         let b = NonZeroU32::new(bound).expect("test bounds are nonzero");
         assert_uniform("sequential subjects", bound, |i| {
-            stream.below(Subject::Entity(i), DrawIndex(0), b)
+            stream.below(Subject::Entity(u64::from(i)), DrawIndex(0), b)
         });
         assert_uniform("sequential indices", bound, |i| {
             stream.below(Subject::Cell(7), DrawIndex(i), b)
@@ -156,29 +157,29 @@ fn bounded_draws_are_uniform() {
 // Catches a mistyped constant or a platform difference the statistics miss.
 #[test]
 fn known_answers() {
-    assert_eq!(tick(0, 0, 0, 0), 0x0e84_afbb_3143_386f);
-    assert_eq!(tick(1, 10, 5, 3), 0x6c3d_42db_28f6_42b4);
+    assert_eq!(tick(0, 0, 0, 0), 0xdd9e_bbfe_228d_a77f);
+    assert_eq!(tick(1, 10, 5, 3), 0xd063_fc36_08a7_296b);
     assert_eq!(
         draw(42, "fear", Phase::Action, 7, Subject::Cell(1023), 9),
-        0x34ba_af07_df45_2930
+        0x4348_7fc7_3898_f4d9
     );
     assert_eq!(
         draw(3, "wander", Phase::Propose, 2, Subject::Entity(8), 1),
-        0x9a30_3032_3487_ec0d
+        0x0e3f_3c1d_07dd_5009
     );
-    let last = Subject::Entity((1 << 31) - 1);
+    let last = Subject::Entity((1 << 63) - 1);
     assert_eq!(
         draw(u64::MAX, "flora", Phase::Spawn, u64::MAX, last, u32::MAX),
-        0x04e6_606c_8c6f_a1fe
+        0x83ec_afd6_28e9_f31b
     );
     let stream = Stream::new(Seed(1), ModuleKey::of("hunger"), Phase::Tick, 10);
     let below = |bound, n| {
         let bound = NonZeroU32::new(bound).expect("test bounds are nonzero");
         stream.below(Subject::Entity(5), DrawIndex(n), bound)
     };
-    assert_eq!([below(7, 0), below(7, 1), below(7, 2)], [2, 3, 0]);
+    assert_eq!([below(7, 0), below(7, 1), below(7, 2)], [5, 5, 1]);
     assert_eq!(
         [below(1000, 0), below(1000, 1), below(1000, 2)],
-        [362, 555, 77]
+        [834, 822, 222]
     );
 }

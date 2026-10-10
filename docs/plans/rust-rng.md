@@ -19,8 +19,12 @@ evidence; a partial Codex report (usage limit reached before its answer).
   common field value. No Philox: a block cipher costs too much per word.
 - **Shape.** A `Stream` hashes the stable prefix once per callback:
   seed, module, phase, time. The seed is hashed alone first: a raw
-  `seed ^ module` would give two worlds the same stream. A draw folds kind,
-  subject and index into the stream with one more finalizer.
+  `seed ^ module` would give two worlds the same stream. A draw absorbs
+  the subject, then the index, one finalizer each. One fold of
+  `prefix ^ (subject, index)` would let two streams whose prefixes differ in
+  low bits share draws at shifted indices. The extra finalizer costs about
+  one Moremur per draw; `core` can cache the subject step when it draws
+  several times for one subject.
 - **Bounded draw.** Multiply-high on 64 bits: `(x * bound) >> 64` in u128,
   `bound: NonZeroU32`. Bias is below 2^-32 per outcome, so no rejection
   and no extra draw.
@@ -31,8 +35,9 @@ evidence; a partial Codex report (usage limit reached before its answer).
   draw. Mechanics never name it: `core` builds one private `Stream` per
   callback context and exposes only the draws.
 - **Types.** `Subject` is an enum,
-  `Entity(u32)` or `Cell(u32)`; its value must fit 31 bits so the kind
-  and the index pack into one word, and a larger value panics. `Seed`,
+  `Entity(u64)` or `Cell(u64)`; its value must fit 63 bits so the kind
+  bit separates entities from cells, and a larger value panics. The id
+  layout stays a `core` choice. `Seed`,
   `ModuleKey`, `DrawIndex` are newtypes. Time stays a raw integer here;
   `core` wraps it in its own type.
 
@@ -40,7 +45,7 @@ evidence; a partial Codex report (usage limit reached before its answer).
 
 ```rust
 pub enum Phase { Propose, Action, Tick, Spawn }
-pub enum Subject { Entity(u32), Cell(u32) }
+pub enum Subject { Entity(u64), Cell(u64) }
 pub struct Seed(pub u64);
 pub struct ModuleKey(u64);
 pub struct DrawIndex(pub u32);
@@ -77,6 +82,5 @@ In `crates/sim/random/tests/`, all under 1 s:
   a turn bench.
 - An offline PractRand run per field stream (one field counts, the others
   fixed): in `host/tools/sim-cli`, before the `core` API freezes.
-- Two final finalizers (subject, then index) if PractRand shows a
-  weakness. Any 64-bit scheme overlaps short stretches of two streams;
-  PractRand tells whether ours is visible.
+- A stronger mixer than Moremur (NASAM) if PractRand shows a weakness on
+  small sequential subjects and indices.
