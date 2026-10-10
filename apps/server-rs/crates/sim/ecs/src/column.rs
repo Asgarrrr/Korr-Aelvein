@@ -9,6 +9,8 @@ use crate::codec::{Component, Reader, Writer};
 use crate::entities::Entities;
 use crate::error::ImageError;
 
+pub(crate) const FOREIGN_KEY: &str = "component key from another schema";
+
 const ABSENT: u32 = u32::MAX;
 const ROW_ABSENT: u8 = 0;
 const ROW_PRESENT: u8 = 1;
@@ -27,6 +29,24 @@ pub(crate) trait ErasedColumn: Any + Send {
     fn check_row(&self, r: &mut Reader<'_>) -> Result<(), ImageError>;
 
     fn attach_row(&mut self, slot: u32, r: &mut Reader<'_>) -> Result<(), ImageError>;
+}
+
+#[inline]
+pub(crate) fn find(sparse: &[u32], slot: u32) -> Option<usize> {
+    match sparse.get(slot as usize) {
+        Some(&index) if index != ABSENT => Some(index as usize),
+        _ => None,
+    }
+}
+
+pub(crate) fn typed<T: Component>(column: &dyn ErasedColumn) -> &Column<T> {
+    let column: &dyn Any = column;
+    column.downcast_ref().expect(FOREIGN_KEY)
+}
+
+pub(crate) fn typed_mut<T: Component>(column: &mut dyn ErasedColumn) -> &mut Column<T> {
+    let column: &mut dyn Any = column;
+    column.downcast_mut().expect(FOREIGN_KEY)
 }
 
 /// `sparse` maps a slot to its index in `dense` and `owners`; `owners` maps
@@ -48,10 +68,7 @@ impl<T> Column<T> {
 
     #[inline]
     fn index(&self, slot: u32) -> Option<usize> {
-        match self.sparse.get(slot as usize) {
-            Some(&index) if index != ABSENT => Some(index as usize),
-            _ => None,
-        }
+        find(&self.sparse, slot)
     }
 
     pub(crate) fn insert(&mut self, slot: u32, value: T) -> Option<T> {

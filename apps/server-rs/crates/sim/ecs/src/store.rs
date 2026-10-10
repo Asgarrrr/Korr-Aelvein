@@ -1,15 +1,12 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::any::Any;
 use core::fmt::{self, Debug};
 
 use crate::codec::Component;
-use crate::column::{Column, ErasedColumn};
+use crate::column::{Column, ErasedColumn, FOREIGN_KEY, typed, typed_mut};
 use crate::entities::Entities;
 use crate::id::{EntityId, FloorId, Handle};
 use crate::schema::{ComponentKey, Schema};
-
-pub(crate) const FOREIGN_KEY: &str = "component key from another schema";
 
 /// The entities and component columns of one floor.
 pub struct Store {
@@ -157,14 +154,11 @@ impl Store {
     }
 
     pub(crate) fn column<T: Component>(&self, key: ComponentKey<T>) -> &Column<T> {
-        let column: &dyn Any = &**self.columns.get(key.id.0 as usize).expect(FOREIGN_KEY);
-        column.downcast_ref().expect(FOREIGN_KEY)
+        typed(&**self.columns.get(key.id.0 as usize).expect(FOREIGN_KEY))
     }
 
     fn column_mut<T: Component>(&mut self, key: ComponentKey<T>) -> &mut Column<T> {
-        let column: &mut dyn Any =
-            &mut **self.columns.get_mut(key.id.0 as usize).expect(FOREIGN_KEY);
-        column.downcast_mut().expect(FOREIGN_KEY)
+        typed_mut(&mut **self.columns.get_mut(key.id.0 as usize).expect(FOREIGN_KEY))
     }
 }
 

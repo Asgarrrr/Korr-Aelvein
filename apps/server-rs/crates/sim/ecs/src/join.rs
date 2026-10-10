@@ -1,20 +1,13 @@
 //! Joins walk the first key's dense order, so the order is predictable from
 //! one column: put the rarer component first.
 
-use core::any::Any;
-
 use crate::codec::Component;
-use crate::column::{Column, ErasedColumn};
+use crate::column::{FOREIGN_KEY, typed_mut};
 use crate::id::Handle;
 use crate::schema::ComponentKey;
-use crate::store::{FOREIGN_KEY, Store};
+use crate::store::Store;
 
 const SELF_JOIN: &str = "join of a component with itself";
-
-fn downcast_mut<T: Component>(column: &mut dyn ErasedColumn) -> &mut Column<T> {
-    let column: &mut dyn Any = column;
-    column.downcast_mut().expect(FOREIGN_KEY)
-}
 
 impl Store {
     /// Every holder of both `a` and `b`, in the dense order of `a`.
@@ -50,8 +43,8 @@ impl Store {
             .columns
             .get_disjoint_mut([a.id.0 as usize, b.id.0 as usize])
             .expect(FOREIGN_KEY);
-        let a = downcast_mut::<A>(&mut **a);
-        let b = downcast_mut::<B>(&mut **b);
+        let a = typed_mut::<A>(&mut **a);
+        let b = typed_mut::<B>(&mut **b);
         for index in 0..a.owners().len() {
             let slot = a.owners()[index];
             if let Some(b) = b.get_mut(slot) {

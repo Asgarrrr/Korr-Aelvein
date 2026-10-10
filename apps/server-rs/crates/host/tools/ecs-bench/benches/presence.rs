@@ -252,9 +252,24 @@ fn group<F: Fn(&mut Ours) -> u64, G: Fn(&mut Dense) -> u64>(
     group.finish();
 }
 
+fn assert_backends_agree(picks: &[u32]) {
+    let mut o = Ours::populate();
+    let mut d = Dense::populate();
+    for _ in 0..2 {
+        assert_eq!(o.actor_turn(picks), d.actor_turn(picks));
+    }
+    for i in 0..N as usize {
+        assert_eq!(
+            o.store.get(o.keys[1], o.index[i]).copied(),
+            d.columns[1][d.at(d.index[i])]
+        );
+    }
+}
+
 fn presence(c: &mut Criterion) {
     let picks = picks(1, N, K);
     let p = &picks;
+    assert_backends_agree(p);
     group(
         c,
         "presence/churn",

@@ -226,6 +226,44 @@ same key on both sides, or a key from another schema, panics.
 a caller collects the handles to kill and applies them afterwards. There
 is no N-ary query until a mechanic needs one.
 
+### Views (not exported)
+
+A view resolves a column once, so later lookups skip the bounds check and
+the `dyn Any` downcast. The experiment was `Store::split_mut(key)`, which
+takes one column as a `ViewMut` and returns the others as `Rest`, from
+which `Rest::view(key)` makes a read-only `View`. Each lookup still
+checked liveness, so a stale handle to a reused slot gave `None`. Views
+held slices, not a `&Column`: a write through the `ViewMut` otherwise
+makes every `View` reload its column (measured 6.28 against 5.72 µs).
+
+A creature acts alone on the current state, and may spawn or despawn
+between two turns, so an actor turn cannot keep views from an earlier
+turn. The engine can resolve views only inside one turn: one `split_mut`
+per pick. Median time per call, 1,000 picks, against the same code before
+the experiment:
+
+| Layout | `presence/actor_turn` ours | `actor_turn` ours (2 floors) |
+|---|---|---|
+| `Store::get` (before) | 10.4 µs | 3.89 µs |
+| one `split_mut` and 5 views per pick | 27.3 µs (+160%) | 4.41 µs (+13%) |
+| views resolved once per 1,000 picks, not reachable by the engine | 6.80 µs (-35%) | not measured |
+
+Gate: the per-pick layout had to be at least 15% faster than `before`. It
+is 2.6x slower on 30 columns: each pick resolves the same six columns as
+six `get`s, and adds the split. No view is reused. The `View`, `ViewMut`, `Rest` and `split_mut`
+types are therefore not exported and the experiment is deleted. Views only
+pay off when one turn reads many entities through one view. No such
+caller exists yet, so they are not exported. The hoisted row shows the
+ceiling: it is a layout the engine cannot use.
+
+Kept from the experiment: `column.rs` owns the single `dyn Any` downcast
+(`typed`, `typed_mut`), the sparse lookup (`find`) and `FOREIGN_KEY`;
+`join_mut` reuses `typed_mut`. `Store::get` and `get_mut` are unchanged.
+Adding the `assert_backends_agree` guard to `benches/presence.rs` moved
+that binary's `actor_turn/ours` from 10.4 to about 11.3 µs with the library
+code unchanged. Read the 10.4 µs figures above as the before value, not as
+a regression of the library.
+
 ### Image
 
 `Store::save` writes one floor as an image; `Store::load(schema, bytes)`
@@ -238,6 +276,11 @@ Every component implements `Component`: `write(&self, &mut Writer)` and
 `read(&mut Reader) -> Result<Self, ImageError>`. `read` is a pure
 function of the bytes and consumes exactly what `write` produced. The
 codec is hand-written little-endian; the checksum is FNV-1a 64.
+
+There is no derive or macro codec. Generated field-order code ties the
+v1 layout to the declaration order of the fields, so swapping two fields
+writes a valid-checksum image with swapped values. `codec.rs` keeps
+hand-written little-endian code by decision.
 
 Image v1, little-endian:
 
@@ -326,6 +369,10 @@ hecs 0.11.2, bevy_ecs 0.20.0 (`bevy`) and `dense`, a minimal candidate with
 generational slots and one `Vec<Option<T>>` per component. hecs, bevy_ecs
 and criterion 0.8.2 are MIT OR Apache-2.0 and serve only as baselines; the
 crate is outside `sim/`, so the wall-clock bans do not apply.
+The presence benchmark keeps its own `Backend` trait: only `churn` and
+`actor_turn` have matching signatures. `populate`, `bulk` and `query`
+differ, and presence has no `travel` or `checksum`. One shared trait would
+force 30-column work on hecs and bevy.
 `tests/equivalence.rs` runs the same op sequence on all four backends, seeds
 1 to 3, and compares the actor-turn sum and a checksum of every entity after
 every op, so a timing difference is never a behaviour difference.
@@ -422,8 +469,12 @@ batches of 20 ms after warmup, storage only, not a whole-engine figure:
 
 The TS store scans every slot up to its high-water mark and tests a mask
 word; the Rust store walks only present rows. Rust loses random access
-because each `get` finds its column again (bounds check, `dyn Any`
-downcast) before the liveness check and the sparse lookup.
+mainly because each `get` finds its column again (bounds check, `dyn Any`
+downcast) before the liveness check and the sparse lookup. An earlier
+experiment, not kept, split the 6 reads and 1 write of an actor turn: 6
+`get`s took 11.46 µs, the same without the liveness check 10.28 µs, views
+resolved once 4.12 µs, and dense 3.09 µs. The per-call column lookup
+dominates; liveness costs about 1.2 µs.
 
 Open points from the results:
 
