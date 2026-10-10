@@ -58,6 +58,7 @@ row fits, that is a design question: propose a new row before coding.
 | Domain glossary: one name per concept | `CONTEXT.md` |
 | Repository tooling | `scripts/` |
 | Rust simulation crates, during the rewrite (layout: `docs/plans/rust-structure.md`) | `apps/server-rs/crates/sim/<crate>/` |
+| Rust entity storage: ids, handles, columns, floor images, travellers (imports no workspace crate) | `apps/server-rs/crates/sim/ecs/` |
 | Rust server, during the rewrite | `apps/server-rs/crates/host/server/` |
 | Rust tooling: toolchain pin, workspace lints | `apps/server-rs/` root files |
 
@@ -164,6 +165,9 @@ the code around it: every needless comment breeds more.
   transcendental functions: their precision differs between engines.
 - Entity ids are `originFloor * 2^25 + counter`: monotonic per origin floor,
   never reused. Storage slots are recycled and never leave a core callback.
+- In korr-ecs an `EntityId` is `origin floor << 47 | counter`, 63 bits, never
+  reused. A `Handle` (slot, generation) is floor-local and never sent to
+  another floor or over the network; a slot retires at generation `u32::MAX`.
 - Every floor runs every system every turn. Creatures re-decide every P
   turns, P set by distance to the nearest player; otherwise they repeat
   their cached action. No separate aggregate model unless measurement

@@ -3,6 +3,13 @@
 version = 4
 
 [[package]]
+name = "korr-ecs"
+version = "0.0.0"
+dependencies = [
+ "korr-random",
+]
+
+[[package]]
 name = "korr-engine"
 version = "0.0.0"
 

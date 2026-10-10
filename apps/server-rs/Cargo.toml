@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "crates/sim/ecs",
   "crates/sim/engine",
   "crates/sim/random",
   "crates/host/server",
@@ -13,6 +14,7 @@ rust-version = "1.96"
 publish = false
 
 [workspace.dependencies]
+korr-ecs = { path = "crates/sim/ecs" }
 korr-engine = { path = "crates/sim/engine" }
 korr-random = { path = "crates/sim/random" }
 

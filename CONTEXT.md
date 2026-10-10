@@ -22,7 +22,12 @@ a second name anywhere.
 
 - **Entity**: anything on a floor: a creature, an item, stairs.
 - **EntityId**: an entity's name for life, `originFloor * 2^25 + counter`.
-  Never reused, kept across floors.
+  Never reused, kept across floors. In Rust (korr-ecs): a `u64`,
+  `origin floor << 47 | counter`, bit 63 always 0.
+- **Handle**: a slot and its generation, valid only on the floor store that
+  returned it. A stale handle reads nothing; never saved or sent.
+- **Schema**: the ordered list of registered components, shared by every
+  floor of a world.
 - **Slot**: an index into the columns. Valid only inside the current core
   callback; never stored.
 - **Row**: the values at one slot across all columns.

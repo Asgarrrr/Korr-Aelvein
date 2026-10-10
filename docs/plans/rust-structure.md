@@ -139,3 +139,66 @@ example `sim/biology/physiology/hunger/` is `korr-hunger`.
   motive stays in hunger, the attack itself moves to `combat`. To settle in
   the combat plan.
 - The workspace folder name once the TS server is gone.
+- No `EntityId` -> `Handle` index exists yet for components that reference
+  other entities.
+
+## 7. korr-ecs
+
+`apps/server-rs/crates/sim/ecs`, no dependency. It stores entities and
+their components; it imports no workspace crate.
+
+### Storage decision
+
+A throwaway spike (`/tmp/korr-ecs-spike`, 10k and 50k entities, not kept)
+compared dense `Option` columns indexed by slot with sparse sets:
+
+| Workload | Result |
+|---|---|
+| Actor turn, dense columns and sparse sets | 6-10 ns, no clear winner |
+| Actor turn through a `dyn` downcast per column | 16-23 ns |
+| `BTreeMap` lookup from `EntityId` to slot | ~43 ns |
+| Sparse-set bulk iteration | ~0.01 ns/row, likely inflated by loop folding |
+
+- The hot path has no id index: an actor turn reads through a `Handle`,
+  never through an `EntityId` lookup.
+- The downcast is paid once per call, at a column lookup, never per row.
+- Slice 6 reproduces this decision with criterion benchmarks. Until then
+  the column is a stub, `Vec<Option<T>>` by slot.
+
+### Ids
+
+An `EntityId` is a `u64`, never reused, kept across floors, saves and
+snapshots:
+
+```
+bit 63      always 0, so the id is a valid korr-random subject
+bits 62..47 origin floor (FloorId, u16)
+bits 46..0  counter, monotonic per origin floor
+```
+
+Ordering follows the bits: origin floor first, then counter.
+
+### Handle
+
+A `Handle` is a slot and its generation. It is valid only on the `Store`
+that returned it: never stored across floors, saves or the network.
+Free slots go on a LIFO stack, so slot reuse is deterministic. A free
+bumps the generation; at `u32::MAX` the slot retires instead of wrapping,
+so a stale handle never comes back to life.
+
+### Schema
+
+`SchemaBuilder::register::<T>(name)` returns a typed `ComponentKey<T>`.
+Its id is the registration index; a name is registered once and is never
+empty. `Schema` is the ordered list of registered components, shared by
+every floor of a world. A `Store` holds one floor: its entities and one
+type-erased column per component, in schema order. A key used on a store
+of another schema panics.
+
+### Borrowed pieces
+
+Ideas only; no upstream code is copied. slotmap (Zlib) is excluded.
+
+| Piece | Source | Why it fits |
+|---|---|---|
+| Generational slot allocator with a LIFO free list | thunderdome 0.6.1, hecs 0.11.2 (MIT OR Apache-2.0) | O(1) spawn and despawn, deterministic reuse. Both wrap the generation; korr-ecs retires the slot instead |
