@@ -72,8 +72,8 @@ example `sim/biology/physiology/hunger/` is `korr-hunger`.
 
 - Dependency order: `random`, `ecs` < `core` < `contracts`, `genome` < mechanics <
   `catalogue` < `engine` < `scenarios`. A mechanic depends on `core`,
-  `contracts` and `genome` only. Only `core`, `genome` and `worldgen`
-  depend on `random`: a mechanic draws through its `core` context, so it
+  `contracts` and `genome` only. Only `core`, `genome`, `worldgen` and
+  host tools depend on `random`: a mechanic draws through its `core` context, so it
   cannot forge another module's stream.
 - A mechanic about a creature, its actions or its components, goes in
   `biology/`, even when it also owns cell fields (fear owns `danger`,

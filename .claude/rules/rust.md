@@ -57,8 +57,9 @@ holds what a lint cannot check. Paths below are relative to `apps/server-rs/`.
 
 ## Random draws
 
-- Only `core`, `genome` and `worldgen` build a `Stream`. A mechanic draws
-  through its ctx, so it cannot forge another module's stream.
+- Only `core`, `genome`, `worldgen` and host tools build a `Stream`. A
+  mechanic draws through its ctx, so it cannot forge another module's
+  stream.
 - A module's key is a literal: `const KEY: ModuleKey = ModuleKey::of("hunger")`.
   The string is part of every draw: it never follows a crate or folder
   rename.
