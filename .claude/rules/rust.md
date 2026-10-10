@@ -5,9 +5,9 @@ paths: ["apps/server-rs/**"]
 # Rust guide
 
 Read with `CLAUDE.md`. Lints are the floor, not the goal: the workspace
-lints live in `apps/server-rs/Cargo.toml`, and the engine's determinism
-bans in `crates/engine/clippy.toml`. This file holds what a lint cannot
-check. Paths below are relative to `apps/server-rs/`.
+lints live in `apps/server-rs/Cargo.toml`, and the determinism bans in
+`crates/sim/clippy.toml`, the only `clippy.toml` under `sim/`. This file
+holds what a lint cannot check. Paths below are relative to `apps/server-rs/`.
 
 ## Lints
 

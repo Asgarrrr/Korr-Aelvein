@@ -41,9 +41,10 @@ a review finding.
 ```
 apps/server-rs/crates/
 ├── sim/                      deterministic; sim/clippy.toml bans apply
+│   ├── random/               korr-random: counter-based draws; no dependency
 │   ├── ecs/                  korr-ecs: ids, columns, storage; no dependency
 │   ├── core/                 korr-core: grid, turns, arbitration, perception,
-│   │                         health, death, containment, events, RNG, hash
+│   │                         health, death, containment, events, hash
 │   ├── contracts/            korr-contracts: types read by 2+ mechanics, no logic
 │   ├── genome/               korr-genome: genes, crossover, mutation, expression rows
 │   ├── biology/              mechanics about a creature: its actions or its components
@@ -69,9 +70,10 @@ example `sim/biology/physiology/hunger/` is `korr-hunger`.
 
 ## 3. Rules
 
-- Dependency order: `ecs` < `core` < `contracts`, `genome` < mechanics <
+- Dependency order: `random`, `ecs` < `core` < `contracts`, `genome` < mechanics <
   `catalogue` < `engine` < `scenarios`. A mechanic depends on `core`,
-  `contracts` and `genome` only.
+  `contracts`, `genome` and `random` only. `genome` and `worldgen` may
+  also draw from `random`.
 - A mechanic about a creature, its actions or its components, goes in
   `biology/`, even when it also owns cell fields (fear owns `danger`,
   `alarm`, `presence`). A mechanic that only owns cell fields goes in
