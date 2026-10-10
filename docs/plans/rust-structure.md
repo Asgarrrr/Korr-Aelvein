@@ -18,8 +18,11 @@ User decisions:
   reference to read; its scenario tests are the behaviour to reach.
 - No bit-exact hash parity with TS. The Rust engine pins its own world
   hash per seed for determinism.
-- One small mechanic at a time, each finished with its scenarios before
-  the next: `core` + `wander`, then `flora` (module interface extracted),
+- Foundations first, each a leaf with a fixed contract and its own tests:
+  RNG (counter-based draws), entity ids and storage, grid. Storage stays
+  minimal until `wander` shapes its queries.
+- Then one small mechanic at a time, each finished with its scenarios
+  before the next: turns and arbitration with `wander`, then `flora` (module interface extracted),
   then `hunger` (core API frozen), then `temperament`, `explore`, `fire`,
   `fear`.
 - Floor parallelism is not built first. A floor owns all its state and
