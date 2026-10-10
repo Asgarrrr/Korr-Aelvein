@@ -1,5 +1,5 @@
 use korr_core::{Floor, LoadError, Mechanics, Pos, Ruleset, Seed, TICKS_PER_ROUND, World};
-use korr_ecs::{ImageError, SchemaBuilder, checksum};
+use korr_ecs::{FloorId, Handle, ImageError, SchemaBuilder, checksum};
 use korr_engine::Registry;
 use korr_scenarios::{Pace, floor};
 
@@ -14,14 +14,15 @@ fn ruleset(mechanics: &impl Mechanics) -> Ruleset {
 /// 40 actors, two per row. The fast even id starts at x = 3: blocked by the
 /// wall from tick 570, its clock stays off the round boundary. The slow odd
 /// id starts at x = 1: it takes its last step after a save at round 20.
-fn populated(ruleset: &Ruleset) -> Floor {
+fn populated(ruleset: &Ruleset) -> (Floor, Vec<Handle>) {
     let mut f = floor(ruleset, 0, 24, 24);
+    let mut actors = Vec::new();
     for y in 1..=20 {
         for x in [3, 1] {
-            f.spawn_actor(ruleset, Pos { x, y });
+            actors.push(f.spawn_actor(ruleset, Pos { x, y }));
         }
     }
-    f
+    (f, actors)
 }
 
 fn run(world: &mut World, ruleset: &Ruleset, rounds: u64) {
@@ -32,7 +33,7 @@ fn run(world: &mut World, ruleset: &Ruleset, rounds: u64) {
 
 fn uninterrupted_hash(rounds: u64) -> u64 {
     let ruleset = ruleset(&Pace);
-    let mut world = World::new(SEED, vec![populated(&ruleset)]);
+    let mut world = World::new(SEED, vec![populated(&ruleset).0]);
     run(&mut world, &ruleset, rounds);
     world.hash(&ruleset)
 }
@@ -50,18 +51,40 @@ const PINNED_WANDER: u64 = 0x9419_ab3a_d669_63c9;
 fn wander_world_hash_pins_the_draws() {
     let registry = Registry::default();
     let ruleset = ruleset(&registry);
-    let mut world = World::new(SEED, vec![populated(&ruleset)]);
+    let mut world = World::new(SEED, vec![populated(&ruleset).0]);
     for _ in 0..20 {
         world.run_round(&ruleset, &registry);
     }
     assert_eq!(world.hash(&ruleset), PINNED_WANDER);
 }
 
+/// Positions alone, outside any image: survives a change to the image format.
+/// Never re-pin.
+const PINNED_DRAWS: u64 = 0xe258_a413_e4ea_1633;
+
+#[test]
+fn wander_positions_pin_the_draws() {
+    let registry = Registry::default();
+    let ruleset = ruleset(&registry);
+    let (f, actors) = populated(&ruleset);
+    let mut world = World::new(SEED, vec![f]);
+    for _ in 0..20 {
+        world.run_round(&ruleset, &registry);
+    }
+    let floor = world.floor(FloorId(0));
+    let bytes: Vec<u8> = actors
+        .iter()
+        .map(|&h| floor.pos(h).expect("every actor stays placed"))
+        .flat_map(|p| [p.x.to_le_bytes(), p.y.to_le_bytes()].concat())
+        .collect();
+    assert_eq!(checksum(&bytes), PINNED_DRAWS);
+}
+
 #[test]
 fn save_reload_replay_matches_the_uninterrupted_run() {
     let saved: Vec<Vec<u8>> = {
         let ruleset = ruleset(&Pace);
-        let mut world = World::new(SEED, vec![populated(&ruleset)]);
+        let mut world = World::new(SEED, vec![populated(&ruleset).0]);
         run(&mut world, &ruleset, 20);
         world.floors().iter().map(|f| f.save(&ruleset)).collect()
     };
@@ -78,7 +101,7 @@ fn save_reload_replay_matches_the_uninterrupted_run() {
 #[test]
 fn a_changed_ruleset_refuses_the_save() {
     let saving = ruleset(&Registry::default());
-    let bytes = populated(&saving).save(&saving);
+    let bytes = populated(&saving).0.save(&saving);
     let running = ruleset(&Registry { wander: None });
     assert!(matches!(
         Floor::load(&running, &bytes),
@@ -89,7 +112,7 @@ fn a_changed_ruleset_refuses_the_save() {
 #[test]
 fn forged_round_is_corrupt_not_a_panic() {
     let ruleset = ruleset(&Pace);
-    let mut bytes = populated(&ruleset).save(&ruleset);
+    let mut bytes = populated(&ruleset).0.save(&ruleset);
     bytes[..8].copy_from_slice(&u64::MAX.to_le_bytes());
     let body = bytes.len() - 8;
     let sum = checksum(&bytes[..body]);
