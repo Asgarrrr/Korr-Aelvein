@@ -14,8 +14,9 @@ evidence; a partial Codex report (usage limit reached before its answer).
   `members` lists paths by depth (cargo#11405).
 - **Mixer.** NASAM (Evensen), own code, two multiplies plus one
   rotate-xor. Moremur came first and failed PractRand (Gap-16) at 2^40
-  bytes on 2^32 sequential indices of one subject. NASAM passes
-  RRC-64-42-TF2-0.94 to 1 PB per its author; Mix13 (SplitMix64's
+  bytes on 32 subjects of 2^32 sequential indices each. Its author reports
+  NASAM passing RRC-64-42-TF2-0.94 to 1 PB
+  (mostlymangling.blogspot.com, 2020-01); Mix13 (SplitMix64's
   finalizer) fails PractRand at 2^19 on counters. No `rapidhash`: its
   folded multiply discards an input when the other is zero, and zero is a
   common field value. No Philox: a block cipher costs too much per word.

@@ -36,8 +36,7 @@ pub struct DrawIndex(pub u32);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Stream(u64);
 
-// Evensen's NASAM. Moremur failed PractRand at 2^40 bytes on one subject's
-// sequential indices; NASAM passes far stronger batteries.
+// Evensen's NASAM.
 const fn nasam(mut x: u64) -> u64 {
     x ^= x.rotate_right(25) ^ x.rotate_right(47);
     x = x.wrapping_mul(0x9e6c_63d0_676a_9a99);
