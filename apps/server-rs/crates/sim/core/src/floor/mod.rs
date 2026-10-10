@@ -8,7 +8,6 @@ use crate::decision::Candidates;
 use crate::floor::schedule::Schedule;
 use crate::time::Tick;
 
-/// All the state of one floor.
 #[derive(Debug)]
 pub struct Floor {
     store: Store,

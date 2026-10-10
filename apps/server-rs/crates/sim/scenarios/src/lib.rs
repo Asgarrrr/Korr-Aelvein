@@ -8,8 +8,6 @@ use korr_core::{
 use korr_ecs::{FloorId, SchemaBuilder};
 use korr_grid::Shape;
 
-/// A floor over an empty schema.
-///
 /// # Panics
 /// When a side is outside the bounds of `Shape::new`.
 #[must_use]
