@@ -89,9 +89,7 @@ impl Store {
         reason = "taking the traveller keeps one value from attaching twice"
     )]
     pub fn attach(&mut self, t: Traveller) -> Result<Handle, ImageError> {
-        if t.id.origin() == self.floor && t.id.counter() >= self.next_counter {
-            return Err(ImageError::Corrupt("id beyond the floor counter"));
-        }
+        let arrival = self.entities.admit(t.id)?;
         let mut r = Reader::new(&t.row);
         let count = r.read_u32()?;
         if count != self.columns.len() as u32 {
@@ -102,7 +100,7 @@ impl Store {
         }
         r.finish()?;
 
-        let h = self.entities.alloc(t.id);
+        let h = self.entities.arrive(arrival);
         let mut r = Reader::new(&t.row);
         r.read_u32().expect(VALIDATED);
         for column in &mut self.columns {

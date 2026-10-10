@@ -10,8 +10,6 @@ use crate::schema::{ComponentKey, Schema};
 
 /// The entities and component columns of one floor.
 pub struct Store {
-    pub(crate) floor: FloorId,
-    pub(crate) next_counter: u64,
     pub(crate) entities: Entities,
     pub(crate) columns: Vec<Box<dyn ErasedColumn>>,
     pub(crate) names: Vec<&'static str>,
@@ -21,9 +19,7 @@ impl Store {
     #[must_use]
     pub fn new(schema: &Schema, floor: FloorId) -> Self {
         Self {
-            floor,
-            next_counter: 0,
-            entities: Entities::default(),
+            entities: Entities::new(floor),
             columns: schema
                 .components
                 .iter()
@@ -36,14 +32,12 @@ impl Store {
     #[must_use]
     #[inline]
     pub fn floor(&self) -> FloorId {
-        self.floor
+        self.entities.floor()
     }
 
     /// The new entity's id is never reused, even when its slot is.
     pub fn spawn(&mut self) -> Handle {
-        let id = EntityId::new(self.floor, self.next_counter);
-        self.next_counter += 1;
-        self.entities.alloc(id)
+        self.entities.spawn()
     }
 
     /// # Panics
@@ -165,7 +159,7 @@ impl Store {
 impl Debug for Store {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Store")
-            .field("floor", &self.floor)
+            .field("floor", &self.floor())
             .field("len", &self.len())
             .field("columns", &self.columns.len())
             .finish_non_exhaustive()

@@ -8,7 +8,7 @@ use core::mem;
 
 use crate::codec::{Reader, Writer};
 use crate::error::ImageError;
-use crate::id::{EntityId, FloorId, Handle};
+use crate::id::{COUNTER_MASK, EntityId, FloorId, Handle};
 
 const DEAD: u8 = 0;
 const ALIVE: u8 = 1;
@@ -19,15 +19,62 @@ struct Meta {
     id: Option<EntityId>,
 }
 
-#[derive(Default)]
 pub(crate) struct Entities {
+    floor: FloorId,
+    next_counter: u64,
     metas: Vec<Meta>,
     free: Vec<u32>,
     alive: usize,
 }
 
+/// Only `admit` builds one, so `arrive` never skips the counter check.
+pub(crate) struct Arrival {
+    id: EntityId,
+}
+
 impl Entities {
-    pub(crate) fn alloc(&mut self, id: EntityId) -> Handle {
+    pub(crate) const fn new(floor: FloorId) -> Self {
+        Self {
+            floor,
+            next_counter: 0,
+            metas: Vec::new(),
+            free: Vec::new(),
+            alive: 0,
+        }
+    }
+
+    #[inline]
+    pub(crate) const fn floor(&self) -> FloorId {
+        self.floor
+    }
+
+    pub(crate) fn spawn(&mut self) -> Handle {
+        let id = EntityId::new(self.floor, self.next_counter);
+        self.next_counter += 1;
+        self.alloc(id)
+    }
+
+    pub(crate) fn admit(&self, id: EntityId) -> Result<Arrival, ImageError> {
+        self.check_id(id)?;
+        Ok(Arrival { id })
+    }
+
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "taking the arrival keeps one admission from allocating twice"
+    )]
+    pub(crate) fn arrive(&mut self, arrival: Arrival) -> Handle {
+        self.alloc(arrival.id)
+    }
+
+    fn check_id(&self, id: EntityId) -> Result<(), ImageError> {
+        if id.origin() == self.floor && id.counter() >= self.next_counter {
+            return Err(ImageError::Corrupt("id beyond the floor counter"));
+        }
+        Ok(())
+    }
+
+    fn alloc(&mut self, id: EntityId) -> Handle {
         self.alive += 1;
         if let Some(slot) = self.free.pop() {
             let meta = &mut self.metas[slot as usize];
@@ -97,6 +144,8 @@ impl Entities {
     }
 
     pub(crate) fn write(&self, w: &mut Writer) {
+        w.write_u16(self.floor.0);
+        w.write_u64(self.next_counter);
         w.write_u32(u32::try_from(self.metas.len()).expect("slots fit u32"));
         for meta in &self.metas {
             w.write_u32(meta.generation);
@@ -116,12 +165,9 @@ impl Entities {
 
     /// Keeps the slot table and the free stack as written, so a reloaded
     /// floor hands out the same slots as the saved one would have.
-    pub(crate) fn read(
-        r: &mut Reader<'_>,
-        floor: FloorId,
-        next_counter: u64,
-    ) -> Result<Self, ImageError> {
-        let mut entities = Self::default();
+    pub(crate) fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> {
+        let mut entities = Self::new(FloorId(r.read_u16()?));
+        entities.next_counter = r.read_u64()?;
         let mut ids = BTreeSet::new();
         for _ in 0..r.read_u32()? {
             let generation = r.read_u32()?;
@@ -133,9 +179,7 @@ impl Entities {
                     if !ids.insert(id) {
                         return Err(ImageError::Corrupt("duplicate entity id"));
                     }
-                    if id.origin() == floor && id.counter() >= next_counter {
-                        return Err(ImageError::Corrupt("id beyond the floor counter"));
-                    }
+                    entities.check_id(id)?;
                     entities.alive += 1;
                     Some(id)
                 }
@@ -161,27 +205,35 @@ impl Entities {
         }
         Ok(entities)
     }
+
+    pub(crate) fn check_counter(&self) -> Result<(), ImageError> {
+        // No live store gets past 2^47: its next spawn could not name the entity.
+        if self.next_counter > COUNTER_MASK + 1 {
+            return Err(ImageError::Corrupt("floor counter"));
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::Entities;
-    use crate::id::{EntityId, FloorId};
+    use crate::id::FloorId;
 
     #[test]
     fn slot_retires_at_max_generation() {
-        let mut entities = Entities::default();
-        let first = entities.alloc(EntityId::new(FloorId(0), 0));
+        let mut entities = Entities::new(FloorId(0));
+        let first = entities.spawn();
         entities.free(first);
         entities.metas[0].generation = u32::MAX - 1;
 
-        let before_last = entities.alloc(EntityId::new(FloorId(0), 1));
+        let before_last = entities.spawn();
         entities.free(before_last);
-        let last = entities.alloc(EntityId::new(FloorId(0), 2));
+        let last = entities.spawn();
         assert_eq!((last.slot, last.generation), (0, u32::MAX));
         entities.free(last);
 
-        let next = entities.alloc(EntityId::new(FloorId(0), 3));
+        let next = entities.spawn();
         assert_eq!(next.slot, 1);
         assert!(!entities.is_alive(last));
     }

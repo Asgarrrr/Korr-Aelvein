@@ -322,6 +322,11 @@ checksum      u64, FNV-1a 64 over every preceding byte
 `load` never reserves capacity from a count it has not verified: it
 pushes while reading, so a huge count ends in `Truncated`.
 
+`Entities` writes and reads `floor`, `next_counter`, the slot table and
+the free stack; `Store` holds neither field. `Entities` owns admission:
+checks 5 to 8 and 13 run inside it, and check 7 is the only copy of the
+id-versus-counter rule.
+
 ### Travel
 
 `Store::detach(h)` takes an entity off its floor as a `Traveller`: its
@@ -354,6 +359,11 @@ this order:
 
 Only then does it allocate the slot and read the row a second time to
 insert it. The second read cannot fail because `Component::read` is pure.
+
+`Entities` owns admission. `Entities::admit` runs check 1 and returns an
+`Arrival`, which only it can build; `Entities::arrive` takes that
+`Arrival` and allocates the slot. `Entities::spawn` is the only issuer of
+new ids on a floor.
 
 World invariant, documented and not checked, since a check costs O(n): an
 `EntityId` is alive on at most one floor, and a detach always precedes its

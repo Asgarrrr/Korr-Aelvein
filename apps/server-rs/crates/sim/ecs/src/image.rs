@@ -6,7 +6,6 @@ use alloc::vec::Vec;
 use crate::codec::{Reader, Writer, checksum};
 use crate::entities::Entities;
 use crate::error::ImageError;
-use crate::id::{COUNTER_MASK, FloorId};
 use crate::schema::Schema;
 use crate::store::Store;
 
@@ -28,8 +27,6 @@ impl Store {
         let mut w = Writer::new();
         w.write_bytes(MAGIC);
         w.write_u16(VERSION);
-        w.write_u16(self.floor.0);
-        w.write_u64(self.next_counter);
         self.entities.write(&mut w);
         w.write_u32(self.columns.len() as u32);
         for (name, column) in self.names.iter().zip(&self.columns) {
@@ -68,9 +65,9 @@ impl Store {
         if version != VERSION {
             return Err(ImageError::Version(version));
         }
-        let mut store = Self::new(schema, FloorId(r.read_u16()?));
-        store.next_counter = r.read_u64()?;
-        store.entities = Entities::read(&mut r, store.floor, store.next_counter)?;
+        let entities = Entities::read(&mut r)?;
+        let mut store = Self::new(schema, entities.floor());
+        store.entities = entities;
 
         let count = r.read_u32()?;
         let expected = store.columns.len() as u32;
@@ -87,10 +84,7 @@ impl Store {
             column.read(&mut r, &store.entities)?;
         }
         r.finish()?;
-        // No live store gets past 2^47: its next spawn could not name the entity.
-        if store.next_counter > COUNTER_MASK + 1 {
-            return Err(ImageError::Corrupt("floor counter"));
-        }
+        store.entities.check_counter()?;
         Ok(store)
     }
 }
