@@ -8,6 +8,7 @@ const USAGE: &str = "usage: sim-cli rng <index|subject|cell|time|seed|turn>  (ra
 
 // Each field counts up while the others stay fixed: sequential inputs are
 // the worst case for a counter-based mixer and the common case in a turn.
+// `index` moves to the next subject every 2^32 draws.
 #[derive(Debug, Clone, Copy)]
 enum Field {
     Index,
