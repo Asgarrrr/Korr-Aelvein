@@ -682,12 +682,22 @@ dependencies = [
  "criterion",
  "hecs",
  "korr-ecs",
+ "korr-grid",
  "korr-random",
 ]
 
 [[package]]
 name = "korr-engine"
 version = "0.0.0"
+
+[[package]]
+name = "korr-grid"
+version = "0.0.0"
+dependencies = [
+ "korr-ecs",
+ "korr-random",
+ "thiserror",
+]
 
 [[package]]
 name = "korr-random"

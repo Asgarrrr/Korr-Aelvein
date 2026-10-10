@@ -17,7 +17,7 @@ mod travel;
 
 pub use codec::{Component, Reader, Writer, checksum};
 pub use error::ImageError;
-pub use id::{EntityId, FloorId, Handle};
+pub use id::{EntityId, FloorId, Handle, SlotIdx};
 pub use schema::{ComponentKey, Schema, SchemaBuilder};
 pub use store::Store;
 pub use travel::Traveller;

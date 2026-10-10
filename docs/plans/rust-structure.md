@@ -43,7 +43,8 @@ apps/server-rs/crates/
 ├── sim/                      deterministic; sim/clippy.toml bans apply
 │   ├── random/               korr-random: counter-based draws; no dependency
 │   ├── ecs/                  korr-ecs: ids, columns, storage; thiserror only
-│   ├── core/                 korr-core: grid, turns, arbitration, perception,
+│   ├── grid/                 korr-grid: shape, terrain, occupancy; korr-ecs only
+│   ├── core/                 korr-core: turns, arbitration, perception,
 │   │                         health, death, containment, events, hash
 │   ├── contracts/            korr-contracts: types read by 2+ mechanics, no logic
 │   ├── genome/               korr-genome: genes, crossover, mutation, expression rows
@@ -72,7 +73,7 @@ example `sim/biology/physiology/hunger/` is `korr-hunger`.
 
 ## 3. Rules
 
-- Dependency order: `random`, `ecs` < `core` < `contracts`, `genome` < mechanics <
+- Dependency order: `random`, `ecs` < `grid` < `core` < `contracts`, `genome` < mechanics <
   `catalogue` < `engine` < `scenarios`. A mechanic depends on `core`,
   `contracts` and `genome` only. Only `core`, `genome`, `worldgen` and
   host tools depend on `random`: a mechanic draws through its `core` context, so it
