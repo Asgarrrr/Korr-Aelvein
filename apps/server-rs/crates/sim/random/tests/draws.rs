@@ -60,6 +60,12 @@ fn a_subject_past_31_bits_is_refused() {
     let _ = tick(1, 0, 1 << 31, 0);
 }
 
+#[test]
+#[should_panic(expected = "subject")]
+fn a_cell_past_31_bits_is_refused() {
+    let _ = draw(1, "hunger", Phase::Tick, 0, Subject::Cell(1 << 31), 0);
+}
+
 fn assert_avalanche(field: &str, width: u32, pair: impl Fn(u32, u32) -> (u64, u64)) {
     for bit in 0..width {
         let mut flips = [0_u32; 64];

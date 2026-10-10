@@ -1,6 +1,9 @@
+//! Counter-based draws: each value is a pure hash of (seed, module, phase,
+//! time, subject, index), so no call order or added module shifts a draw.
+#![no_std]
 #![deny(clippy::float_arithmetic)]
 
-use std::num::NonZeroU32;
+use core::num::NonZeroU32;
 
 const GOLDEN: u64 = 0x9e37_79b9_7f4a_7c15;
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
@@ -48,6 +51,7 @@ const fn absorb(h: u64, v: u64) -> u64 {
 }
 
 impl ModuleKey {
+    /// The name is part of every draw's hash: renaming a module changes its draws.
     #[must_use]
     pub const fn of(name: &str) -> Self {
         let bytes = name.as_bytes();
@@ -90,6 +94,7 @@ impl Subject {
 
 impl Stream {
     #[must_use]
+    #[inline]
     pub fn new(seed: Seed, module: ModuleKey, phase: Phase, time: u64) -> Self {
         let h = absorb(absorb(0, seed.0), module.0);
         let h = absorb(h, phase.tag());
@@ -99,6 +104,7 @@ impl Stream {
     /// # Panics
     /// When the subject's value does not fit 31 bits.
     #[must_use]
+    #[inline]
     pub fn draw(self, subject: Subject, n: DrawIndex) -> u64 {
         absorb(self.0, (subject.packed() << 32) | u64::from(n.0))
     }
@@ -109,6 +115,7 @@ impl Stream {
     /// # Panics
     /// When the subject's value does not fit 31 bits.
     #[must_use]
+    #[inline]
     pub fn below(self, subject: Subject, n: DrawIndex, bound: NonZeroU32) -> u32 {
         let wide = u128::from(self.draw(subject, n)) * u128::from(bound.get());
         u32::try_from(wide >> 64).expect("the high word of x * bound is below bound")
