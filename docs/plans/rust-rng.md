@@ -83,5 +83,18 @@ In `crates/sim/random/tests/`, all under 1 s:
 
 - The cost of one draw against the turn budget: measured once `core` has
   a turn bench.
-- An offline PractRand run per field stream (one field counts, the others
-  fixed): in `host/tools/sim-cli`, before the `core` API freezes.
+
+## 5. PractRand results
+
+`sim-cli rng <field> | RNG_test stdin64 -multithreaded`, PractRand pre0.95,
+one field counting, the others fixed. A weakened mixer (one multiply)
+fails BCFN at 256 MB, so the pipeline catches a weak mixer.
+
+| Field | Moremur | NASAM |
+|---|---|---|
+| index | FAIL Gap-16:B at 1 TB (p = 3.5e-14) | pass to 1 TB |
+| subject, cell, time, turn | pass to 512 GB | pass to 512 GB |
+| seed | pass to 256 GB | pass to 512 GB |
+
+NASAM shows no suspicious result, and no unusual result repeats across
+sizes.
