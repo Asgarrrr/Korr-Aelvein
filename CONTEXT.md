@@ -97,6 +97,8 @@ a second name anywhere.
 
 - **Mechanic**: one module folder (`modules/<name>/`) adding needs,
   components and systems. Removing it leaves a running game.
+- **Domain**: a folder grouping Mechanics by subject in the Rust engine:
+  `biology`, `milieu`, `combat`. Filing only: it holds no shared code.
 - **Contract**: a component or cell field read by a second module, typed
   in `contracts/` and read through a getter view.
 - **Trait**: one independent personality axis of an individual, such as
