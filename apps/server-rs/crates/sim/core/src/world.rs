@@ -13,8 +13,17 @@ pub struct World {
 }
 
 impl World {
+    /// # Panics
+    /// When two floors share a `FloorId`: their entity ids and draws would collide.
     #[must_use]
     pub fn new(seed: Seed, floors: Vec<Floor>) -> Self {
+        for (i, a) in floors.iter().enumerate() {
+            assert!(
+                floors[i + 1..].iter().all(|b| b.id() != a.id()),
+                "duplicate floor id {:?}",
+                a.id()
+            );
+        }
         Self { seed, floors }
     }
 

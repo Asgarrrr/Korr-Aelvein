@@ -95,3 +95,9 @@ fn cheap_actions_take_several_turns_per_round() {
         [Pos { x: 5, y: 1 }, Pos { x: 2, y: 2 }]
     );
 }
+
+#[test]
+#[should_panic(expected = "duplicate floor id")]
+fn duplicate_floor_ids_are_refused() {
+    let _ = World::new(Seed(1), vec![floor(0, 5, 5), floor(0, 5, 5)]);
+}
