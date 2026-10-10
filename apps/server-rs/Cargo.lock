@@ -16,3 +16,10 @@ version = "0.0.0"
 dependencies = [
  "korr-engine",
 ]
+
+[[package]]
+name = "korr-sim-cli"
+version = "0.0.0"
+dependencies = [
+ "korr-random",
+]

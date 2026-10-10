@@ -52,6 +52,23 @@ holds what a lint cannot check. Paths below are relative to `apps/server-rs/`.
   channels: commands in, snapshots out.
 - No blocking call (`std::thread::sleep`, blocking I/O) inside `async`
   code.
+- The seed never leaves the server while its run is live: whoever knows it
+  predicts every draw.
+
+## Random draws
+
+- Only `core`, `genome` and `worldgen` build a `Stream`. A mechanic draws
+  through its ctx, so it cannot forge another module's stream.
+- A module's key is a literal: `const KEY: ModuleKey = ModuleKey::of("hunger")`.
+  The string is part of every draw: it never follows a crate or folder
+  rename.
+- A module names its draws in an enum the ctx turns into a `DrawIndex`
+  (`enum Draw { Aim, Hit, Candidate(u16) }`). Never a running counter:
+  inserting a draw would shift every later one.
+- A replay or save records the engine build (git commit) with the seed and
+  the inputs. The server refuses to replay another build: any rule, tuning
+  or RNG change alters the outcome.
+- The cost of a draw is measured in the `core` turn bench, never alone.
 
 ## Dependencies
 
