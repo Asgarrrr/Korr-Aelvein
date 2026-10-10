@@ -116,6 +116,25 @@ impl Grid {
             .find(|&at| self.can_place(at, layer))
     }
 
+    /// `None` when `h` is not linked, a stale handle on a recycled slot included.
+    #[must_use]
+    pub fn pos(&self, h: Handle) -> Option<Pos> {
+        self.occupancy
+            .linked_cell(h)
+            .map(|at| self.shape.pos(at.cell()))
+    }
+
+    /// The target [`Grid::step`] would move `h` to; writes nothing.
+    ///
+    /// # Errors
+    /// The errors of [`Grid::step`], in the same order.
+    ///
+    /// # Panics
+    /// When `h` is not a linked actor.
+    pub fn check_step(&self, h: Handle, dir: Dir) -> Result<Pos, StepError> {
+        self.target(h, dir).map(|to| self.shape.pos(to.cell()))
+    }
+
     /// Moves `h` one cell; a refused step changes nothing.
     ///
     /// # Errors
@@ -126,6 +145,12 @@ impl Grid {
     /// # Panics
     /// When `h` is not a linked actor.
     pub fn step(&mut self, h: Handle, dir: Dir) -> Result<Pos, StepError> {
+        let to = self.target(h, dir)?;
+        self.occupancy.move_actor(h, to);
+        Ok(self.shape.pos(to.cell()))
+    }
+
+    fn target(&self, h: Handle, dir: Dir) -> Result<Interior, StepError> {
         let from = self
             .occupancy
             .cell_of(h)
@@ -145,9 +170,7 @@ impl Grid {
         if self.occupancy.holds_actor(to) {
             return Err(StepError::Occupied);
         }
-        let to = Interior::of_walkable(to);
-        self.occupancy.move_actor(h, to);
-        Ok(self.shape.pos(to.cell()))
+        Ok(Interior::of_walkable(to))
     }
 
     fn check_interior(&self, at: Interior) {

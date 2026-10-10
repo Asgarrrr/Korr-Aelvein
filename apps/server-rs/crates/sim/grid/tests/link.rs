@@ -117,3 +117,23 @@ fn despawn_without_unlink_is_caught_when_the_slot_returns() {
     assert_eq!(b.slot(), a.slot(), "the store recycles A's slot");
     grid.link_actor(&store, b, interior(&grid, EAST));
 }
+
+#[test]
+fn pos_follows_link_step_and_unlink() {
+    let (mut store, mut grid) = setup_wide();
+    let actor = store.spawn();
+    let thing = store.spawn();
+    assert_eq!(grid.pos(actor), None);
+    grid.link_actor(&store, actor, interior(&grid, WEST));
+    grid.link_thing(&store, thing, interior(&grid, EAST));
+    assert_eq!(grid.pos(actor), Some(WEST));
+    assert_eq!(grid.pos(thing), Some(EAST));
+    assert_eq!(grid.step(actor, Dir::East), Ok(EAST));
+    assert_eq!(grid.pos(actor), Some(EAST));
+    grid.unlink(actor);
+    assert_eq!(grid.pos(actor), None);
+
+    let (grid, stale, holder) = recycled();
+    assert_eq!(grid.pos(stale), None);
+    assert_eq!(grid.pos(holder), Some(EAST));
+}

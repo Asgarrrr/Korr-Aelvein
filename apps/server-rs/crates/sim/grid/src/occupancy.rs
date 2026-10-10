@@ -161,12 +161,16 @@ impl Occupancy {
 
     /// `None` when `h` is not a linked actor.
     pub(crate) fn cell_of(&self, h: Handle) -> Option<Interior> {
+        self.linked_cell(h)
+            .filter(|at| self.actor[at.cell().index()] == h.slot().get())
+    }
+
+    /// Any layer. `None` when `h` is not linked.
+    pub(crate) fn linked_cell(&self, h: Handle) -> Option<Interior> {
         self.links
             .get(h.slot().get() as usize)?
             .as_ref()
-            .filter(|link| {
-                link.handle == h && self.actor[link.cell.cell().index()] == h.slot().get()
-            })
+            .filter(|link| link.handle == h)
             .map(|link| link.cell)
     }
 
