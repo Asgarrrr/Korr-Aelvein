@@ -34,7 +34,7 @@ only. `korr-core` later assembles it into `Floor`.
 |---|---|
 | `Shape { width, height }` | Per-floor size, includes a one-cell wall ring. |
 | `Pos { x: i16, y: i16 }` | API coordinate: distances, serialization, protocol. |
-| `CellIdx(u32)` | Opaque linear index of any padded cell, ring included. Readers take it. |
+| `CellIdx` | Opaque linear index of any padded cell, ring included, tagged with its shape width. Readers take it. |
 | `Interior(CellIdx)` | An interior cell. Only `Shape::idx(Pos) -> Option<Interior>` and the neighbourhood scan mint one. Writers and stencil centres take it. |
 | `Material(u8)` | Material id. Its properties (walkable, opaque, liquid) are a table in `config.rs`. Material 0 is the ring wall. |
 | `Terrain` | Two SoA layers: `material: Vec<Material>`, `height: Vec<i8>`. |
@@ -47,8 +47,9 @@ Invariants:
   `Shape::neighbour(Interior, Dir) -> CellIdx` needs no branch. A ring
   cell reads `WALL` and no actor. Chebyshev squares of radius > 1 still
   clip at the ring.
-- Writers panic on an `Interior` that is not an interior cell of their own
-  shape: floors of different shapes coexist.
+- Readers and writers panic on a cell of another floor: floors of different
+  shapes coexist. An index means the same cell on every shape of one width,
+  so the width tag plus a bounds check is exact.
 - Only actors may cover several cells. Every cell of an actor's footprint
   points to it in `actor`. The footprint is always 1x1 for now.
 - Items, plants and corpses occupy exactly one cell.

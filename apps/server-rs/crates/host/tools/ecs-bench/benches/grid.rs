@@ -1,4 +1,4 @@
-//! Occupancy of one 66x66 floor: the "actor here?" probe and a step there and back.
+//! Occupancy of one 66x66 floor: the "actor here?" probes and a step there and back.
 
 use std::hint::black_box;
 
@@ -58,6 +58,16 @@ fn grid(c: &mut Criterion) {
                 black_box(&cells)
                     .iter()
                     .filter(|&&at| grid.actor_at(at).is_some())
+                    .count(),
+            )
+        });
+    });
+    group.bench_function("holds_actor", |b| {
+        b.iter(|| {
+            black_box(
+                black_box(&cells)
+                    .iter()
+                    .filter(|&&at| grid.holds_actor(at))
                     .count(),
             )
         });

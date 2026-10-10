@@ -10,18 +10,23 @@ pub struct Pos {
 }
 
 /// Any cell of the padded frame, ring included, in row-major order.
+/// Carries the width of its shape: an index means the same cell on every
+/// shape of that width, so a width check catches a cell of another floor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct CellIdx(u32);
+pub struct CellIdx {
+    at: u32,
+    width: u16,
+}
 
 impl CellIdx {
     #[inline]
     pub(crate) const fn index(self) -> usize {
-        self.0 as usize
+        self.at as usize
     }
 }
 
 /// A cell inside the wall ring: its 8 neighbours are in bounds.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Interior(CellIdx);
 
 impl Interior {
@@ -79,29 +84,46 @@ impl Shape {
         if x == 0 || y == 0 || x > self.width - 2 || y > self.height - 2 {
             return None;
         }
-        Some(Interior(CellIdx(
-            u32::from(y) * u32::from(self.width) + u32::from(x),
-        )))
+        Some(Interior(self.cell(u32::from(y), u32::from(x))))
     }
 
-    /// # Panics
-    /// When the row or column of `at` does not fit an `i16`. A `CellIdx` from a
-    /// smaller or larger shape otherwise gives a wrong `Pos`.
-    #[must_use]
-    pub fn pos(self, at: CellIdx) -> Pos {
-        let width = u32::from(self.width);
-        let coord = |v: u32| i16::try_from(v).expect("a cell of this shape has an i16 position");
-        Pos {
-            x: coord(at.0 % width),
-            y: coord(at.0 / width),
+    #[inline]
+    const fn cell(self, y: u32, x: u32) -> CellIdx {
+        CellIdx {
+            at: y * self.width as u32 + x,
+            width: self.width,
         }
     }
 
-    /// `false` when `at` was minted by a shape of another size and lands on this ring or past it.
-    pub(crate) fn holds(self, at: Interior) -> bool {
+    /// # Panics
+    /// When `at` is not a cell of this shape.
+    #[must_use]
+    pub fn pos(self, at: CellIdx) -> Pos {
+        self.check(at);
         let width = u32::from(self.width);
-        let (x, y) = (at.0.0 % width, at.0.0 / width);
-        (1..width - 1).contains(&x) && (1..u32::from(self.height) - 1).contains(&y)
+        let coord = |v: u32| i16::try_from(v).expect("a cell of this shape has an i16 position");
+        Pos {
+            x: coord(at.at % width),
+            y: coord(at.at / width),
+        }
+    }
+
+    #[inline]
+    pub(crate) fn check(self, at: CellIdx) {
+        assert!(
+            at.width == self.width && at.index() < self.cell_count(),
+            "cell of another floor"
+        );
+    }
+
+    pub(crate) fn check_interior(self, at: Interior) {
+        self.check(at.0);
+        let width = u32::from(self.width);
+        let (x, y) = (at.0.at % width, at.0.at / width);
+        assert!(
+            (1..width - 1).contains(&x) && (1..u32::from(self.height) - 1).contains(&y),
+            "cell of another floor"
+        );
     }
 
     /// The nearest interior position.
@@ -141,11 +163,7 @@ impl Shape {
                     .chain(sides)
                     .chain(bottom.flat_map(move |y| row(y, left, right)))
             })
-            .map(move |(x, y)| {
-                Interior(CellIdx(
-                    y.unsigned_abs() * u32::from(self.width) + x.unsigned_abs(),
-                ))
-            })
+            .map(move |(x, y)| Interior(self.cell(y.unsigned_abs(), x.unsigned_abs())))
     }
 
     #[must_use]
@@ -154,7 +172,10 @@ impl Shape {
         let (dx, dy) = dir.offset();
         let delta = i32::from(dy) * i32::from(self.width) + i32::from(dx);
         // The wall ring keeps every neighbour of an interior cell in bounds: no wrap.
-        CellIdx(at.0.0.wrapping_add_signed(delta))
+        CellIdx {
+            at: at.0.at.wrapping_add_signed(delta),
+            width: self.width,
+        }
     }
 }
 
