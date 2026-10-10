@@ -3,6 +3,7 @@ members = [
   "crates/sim/engine",
   "crates/sim/random",
   "crates/host/server",
+  "crates/host/tools/sim-cli",
 ]
 resolver = "3"
 
