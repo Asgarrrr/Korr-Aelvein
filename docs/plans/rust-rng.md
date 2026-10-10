@@ -26,7 +26,11 @@ evidence; a partial Codex report (usage limit reached before its answer).
   and no extra draw.
 - **Module key.** `const fn` FNV-1a-64 of the module name, then Moremur.
   The registry will panic on two equal keys.
-- **Types.** `Phase` is a `#[repr(u8)]` enum. `Subject` is an enum,
+- **Phase.** An enum with no `Core` variant: no core draw exists yet. Each
+  variant maps to a literal tag, so reordering or inserting one shifts no
+  draw. Mechanics never name it: `core` builds one private `Stream` per
+  callback context and exposes only the draws.
+- **Types.** `Subject` is an enum,
   `Entity(u32)` or `Cell(u32)`; its value must fit 31 bits so the kind
   and the index pack into one word, and a larger value panics. `Seed`,
   `ModuleKey`, `DrawIndex` are newtypes. Time stays a raw integer here;
@@ -35,7 +39,7 @@ evidence; a partial Codex report (usage limit reached before its answer).
 ## 2. API
 
 ```rust
-pub enum Phase { Propose, Action, Tick, Spawn, Core }
+pub enum Phase { Propose, Action, Tick, Spawn }
 pub enum Subject { Entity(u32), Cell(u32) }
 pub struct Seed(pub u64);
 pub struct ModuleKey(u64);

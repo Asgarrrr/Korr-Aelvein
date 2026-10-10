@@ -156,6 +156,10 @@ fn known_answers() {
         draw(42, "fear", Phase::Action, 7, Subject::Cell(1023), 9),
         0x34ba_af07_df45_2930
     );
+    assert_eq!(
+        draw(3, "wander", Phase::Propose, 2, Subject::Entity(8), 1),
+        0x9a30_3032_3487_ec0d
+    );
     let last = Subject::Entity((1 << 31) - 1);
     assert_eq!(
         draw(u64::MAX, "flora", Phase::Spawn, u64::MAX, last, u32::MAX),

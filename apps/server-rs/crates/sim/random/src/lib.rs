@@ -8,13 +8,11 @@ const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 const SUBJECT_LIMIT: u32 = 1 << 31;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
 pub enum Phase {
-    Propose = 1,
+    Propose,
     Action,
     Tick,
     Spawn,
-    Core,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,6 +62,18 @@ impl ModuleKey {
     }
 }
 
+impl Phase {
+    // Pinned per variant: reordering or inserting a variant must not shift draws.
+    const fn tag(self) -> u64 {
+        match self {
+            Self::Propose => 1,
+            Self::Action => 2,
+            Self::Tick => 3,
+            Self::Spawn => 4,
+        }
+    }
+}
+
 impl Subject {
     fn packed(self) -> u64 {
         let (kind, value) = match self {
@@ -82,7 +92,7 @@ impl Stream {
     #[must_use]
     pub fn new(seed: Seed, module: ModuleKey, phase: Phase, time: u64) -> Self {
         let h = absorb(absorb(0, seed.0), module.0);
-        let h = absorb(h, u64::from(phase as u8));
+        let h = absorb(h, phase.tag());
         Self(absorb(h, time))
     }
 
