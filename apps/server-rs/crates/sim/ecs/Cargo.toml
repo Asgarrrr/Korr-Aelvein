@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[dependencies]
+thiserror.workspace = true
+
 [dev-dependencies]
 korr-random.workspace = true
 

@@ -1,5 +1,5 @@
 const COUNTER_BITS: u32 = 47;
-const COUNTER_MASK: u64 = (1 << COUNTER_BITS) - 1;
+pub(crate) const COUNTER_MASK: u64 = (1 << COUNTER_BITS) - 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FloorId(pub u16);
@@ -20,6 +20,16 @@ impl EntityId {
             origin.0
         );
         Self(u64::from(origin.0) << COUNTER_BITS | counter)
+    }
+
+    /// `None` when bit 63 is set.
+    #[must_use]
+    pub const fn from_bits(bits: u64) -> Option<Self> {
+        if bits >> 63 == 0 {
+            Some(Self(bits))
+        } else {
+            None
+        }
     }
 
     #[must_use]

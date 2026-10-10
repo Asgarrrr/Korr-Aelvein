@@ -1,10 +1,33 @@
-use korr_ecs::{ComponentKey, EntityId, FloorId, Schema, SchemaBuilder, Store};
+use korr_ecs::{
+    Component, ComponentKey, EntityId, FloorId, ImageError, Reader, Schema, SchemaBuilder, Store,
+    Writer,
+};
 
 #[derive(Debug, PartialEq, Eq)]
 struct Satiety(u32);
 
+impl Component for Satiety {
+    fn write(&self, w: &mut Writer) {
+        w.write_u32(self.0);
+    }
+
+    fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> {
+        r.read_u32().map(Self)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 struct Dread(u8);
+
+impl Component for Dread {
+    fn write(&self, w: &mut Writer) {
+        w.write_u8(self.0);
+    }
+
+    fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> {
+        r.read_u8().map(Self)
+    }
+}
 
 const _: () = {
     const fn assert_send<T: Send>() {}
@@ -107,6 +130,13 @@ fn duplicate_name_panics() {
 #[should_panic(expected = "component name must not be empty")]
 fn empty_name_panics() {
     SchemaBuilder::default().register::<Satiety>("");
+}
+
+#[test]
+#[should_panic(expected = "component name longer than u16::MAX bytes")]
+fn register_rejects_a_name_the_image_cannot_hold() {
+    let name = "n".repeat(usize::from(u16::MAX) + 1).leak();
+    SchemaBuilder::default().register::<Satiety>(name);
 }
 
 #[test]

@@ -3,6 +3,7 @@ use alloc::vec::Vec;
 use core::fmt;
 use core::marker::PhantomData;
 
+use crate::codec::Component;
 use crate::column::{Column, ErasedColumn};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -10,7 +11,7 @@ pub(crate) struct ComponentId(pub(crate) u32);
 
 #[derive(Debug)]
 pub(crate) struct ComponentInfo {
-    name: &'static str,
+    pub(crate) name: &'static str,
     pub(crate) new_column: fn() -> Box<dyn ErasedColumn>,
 }
 
@@ -52,9 +53,14 @@ impl SchemaBuilder {
     /// One type may be registered under two names; each gets its own key.
     ///
     /// # Panics
-    /// When `name` is empty or already registered.
-    pub fn register<T: Send + 'static>(&mut self, name: &'static str) -> ComponentKey<T> {
+    /// When `name` is empty, longer than `u16::MAX` bytes, or already
+    /// registered.
+    pub fn register<T: Component>(&mut self, name: &'static str) -> ComponentKey<T> {
         assert!(!name.is_empty(), "component name must not be empty");
+        assert!(
+            u16::try_from(name.len()).is_ok(),
+            "component name longer than u16::MAX bytes"
+        );
         assert!(
             self.components.iter().all(|info| info.name != name),
             "component name registered twice: {name}"
@@ -85,6 +91,6 @@ pub struct Schema {
     pub(crate) components: Vec<ComponentInfo>,
 }
 
-fn new_column<T: Send + 'static>() -> Box<dyn ErasedColumn> {
+fn new_column<T: Component>() -> Box<dyn ErasedColumn> {
     Box::new(Column::<T>::new())
 }

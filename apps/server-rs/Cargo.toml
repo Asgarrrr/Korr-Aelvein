@@ -4,6 +4,7 @@ members = [
   "crates/sim/engine",
   "crates/sim/random",
   "crates/host/server",
+  "crates/host/tools/ecs-bench",
   "crates/host/tools/sim-cli",
 ]
 resolver = "3"
@@ -17,6 +18,14 @@ publish = false
 korr-ecs = { path = "crates/sim/ecs" }
 korr-engine = { path = "crates/sim/engine" }
 korr-random = { path = "crates/sim/random" }
+bevy_ecs = { version = "0.20.0", default-features = false, features = ["std"] }
+criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
+hecs = "0.11.2"
+thiserror = { version = "2.0.21", default-features = false }
+
+[profile.release]
+lto = true
+codegen-units = 1
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

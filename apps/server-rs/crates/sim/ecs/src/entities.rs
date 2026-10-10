@@ -1,9 +1,18 @@
 //! Generational slots on a LIFO free list follow thunderdome 0.6.1 and hecs
 //! 0.11.2 (MIT OR Apache-2.0). Both wrap the generation; here a slot retires.
 
+use alloc::collections::BTreeSet;
+use alloc::vec;
 use alloc::vec::Vec;
+use core::mem;
 
-use crate::id::{EntityId, Handle};
+use crate::codec::{Reader, Writer};
+use crate::error::ImageError;
+use crate::id::{EntityId, FloorId, Handle};
+
+const DEAD: u8 = 0;
+const ALIVE: u8 = 1;
+const FREE_LIST: ImageError = ImageError::Corrupt("free list");
 
 struct Meta {
     generation: u32,
@@ -66,9 +75,91 @@ impl Entities {
             .and_then(|meta| meta.id)
     }
 
+    pub(crate) fn is_slot_alive(&self, slot: u32) -> bool {
+        self.metas
+            .get(slot as usize)
+            .is_some_and(|meta| meta.id.is_some())
+    }
+
+    #[inline]
+    pub(crate) fn handle_at(&self, slot: u32) -> Handle {
+        let meta = &self.metas[slot as usize];
+        assert!(meta.id.is_some(), "column owner is dead");
+        Handle {
+            slot,
+            generation: meta.generation,
+        }
+    }
+
     #[inline]
     pub(crate) fn len(&self) -> usize {
         self.alive
+    }
+
+    pub(crate) fn write(&self, w: &mut Writer) {
+        w.write_u32(u32::try_from(self.metas.len()).expect("slots fit u32"));
+        for meta in &self.metas {
+            w.write_u32(meta.generation);
+            match meta.id {
+                None => w.write_u8(DEAD),
+                Some(id) => {
+                    w.write_u8(ALIVE);
+                    w.write_u64(id.to_bits());
+                }
+            }
+        }
+        w.write_u32(u32::try_from(self.free.len()).expect("slots fit u32"));
+        for &slot in &self.free {
+            w.write_u32(slot);
+        }
+    }
+
+    /// Keeps the slot table and the free stack as written, so a reloaded
+    /// floor hands out the same slots as the saved one would have.
+    pub(crate) fn read(
+        r: &mut Reader<'_>,
+        floor: FloorId,
+        next_counter: u64,
+    ) -> Result<Self, ImageError> {
+        let mut entities = Self::default();
+        let mut ids = BTreeSet::new();
+        for _ in 0..r.read_u32()? {
+            let generation = r.read_u32()?;
+            let id = match r.read_u8()? {
+                DEAD => None,
+                ALIVE => {
+                    let id = EntityId::from_bits(r.read_u64()?)
+                        .ok_or(ImageError::Corrupt("entity id"))?;
+                    if !ids.insert(id) {
+                        return Err(ImageError::Corrupt("duplicate entity id"));
+                    }
+                    if id.origin() == floor && id.counter() >= next_counter {
+                        return Err(ImageError::Corrupt("id beyond the floor counter"));
+                    }
+                    entities.alive += 1;
+                    Some(id)
+                }
+                _ => return Err(ImageError::Corrupt("slot state")),
+            };
+            entities.metas.push(Meta { generation, id });
+        }
+
+        let reusable = |meta: &Meta| meta.id.is_none() && meta.generation != u32::MAX;
+        let mut listed = vec![false; entities.metas.len()];
+        for _ in 0..r.read_u32()? {
+            let slot = r.read_u32()?;
+            let index = slot as usize;
+            if !entities.metas.get(index).is_some_and(reusable)
+                || mem::replace(&mut listed[index], true)
+            {
+                return Err(FREE_LIST);
+            }
+            entities.free.push(slot);
+        }
+        if entities.free.len() != entities.metas.iter().filter(|meta| reusable(meta)).count() {
+            return Err(FREE_LIST);
+        }
+        Ok(entities)
     }
 }
 

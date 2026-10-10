@@ -3,19 +3,21 @@ use alloc::vec::Vec;
 use core::any::Any;
 use core::fmt::{self, Debug};
 
+use crate::codec::Component;
 use crate::column::{Column, ErasedColumn};
 use crate::entities::Entities;
 use crate::id::{EntityId, FloorId, Handle};
 use crate::schema::{ComponentKey, Schema};
 
-const FOREIGN_KEY: &str = "component key from another schema";
+pub(crate) const FOREIGN_KEY: &str = "component key from another schema";
 
 /// The entities and component columns of one floor.
 pub struct Store {
-    floor: FloorId,
-    next_counter: u64,
-    entities: Entities,
-    columns: Vec<Box<dyn ErasedColumn>>,
+    pub(crate) floor: FloorId,
+    pub(crate) next_counter: u64,
+    pub(crate) entities: Entities,
+    pub(crate) columns: Vec<Box<dyn ErasedColumn>>,
+    pub(crate) names: Vec<&'static str>,
 }
 
 impl Store {
@@ -30,6 +32,7 @@ impl Store {
                 .iter()
                 .map(|info| (info.new_column)())
                 .collect(),
+            names: schema.components.iter().map(|info| info.name).collect(),
         }
     }
 
@@ -83,31 +86,85 @@ impl Store {
     ///
     /// # Panics
     /// When `h` is dead, or `key` comes from another schema.
-    pub fn insert<T: Send + 'static>(
-        &mut self,
-        key: ComponentKey<T>,
-        h: Handle,
-        value: T,
-    ) -> Option<T> {
+    pub fn insert<T: Component>(&mut self, key: ComponentKey<T>, h: Handle, value: T) -> Option<T> {
         assert!(self.is_alive(h), "insert on a dead handle");
-        let column: &mut dyn Any =
-            &mut **self.columns.get_mut(key.id.0 as usize).expect(FOREIGN_KEY);
-        column
-            .downcast_mut::<Column<T>>()
-            .expect(FOREIGN_KEY)
-            .insert(h.slot, value)
+        self.column_mut(key).insert(h.slot, value)
     }
 
     /// # Panics
     /// When `key` comes from another schema.
     #[must_use]
-    pub fn get<T: Send + 'static>(&self, key: ComponentKey<T>, h: Handle) -> Option<&T> {
-        let column: &dyn Any = &**self.columns.get(key.id.0 as usize).expect(FOREIGN_KEY);
-        let column = column.downcast_ref::<Column<T>>().expect(FOREIGN_KEY);
+    pub fn get<T: Component>(&self, key: ComponentKey<T>, h: Handle) -> Option<&T> {
+        let column = self.column(key);
         if !self.is_alive(h) {
             return None;
         }
         column.get(h.slot)
+    }
+
+    /// # Panics
+    /// When `key` comes from another schema.
+    pub fn get_mut<T: Component>(&mut self, key: ComponentKey<T>, h: Handle) -> Option<&mut T> {
+        let alive = self.is_alive(h);
+        let column = self.column_mut(key);
+        if !alive {
+            return None;
+        }
+        column.get_mut(h.slot)
+    }
+
+    /// Returns the value `h` held.
+    ///
+    /// # Panics
+    /// When `h` is dead, or `key` comes from another schema.
+    pub fn remove<T: Component>(&mut self, key: ComponentKey<T>, h: Handle) -> Option<T> {
+        assert!(self.is_alive(h), "remove on a dead handle");
+        self.column_mut(key).remove(h.slot)
+    }
+
+    /// Every value of `key`, in dense order.
+    ///
+    /// # Panics
+    /// When `key` comes from another schema.
+    #[must_use]
+    pub fn values<T: Component>(&self, key: ComponentKey<T>) -> &[T] {
+        self.column(key).values()
+    }
+
+    /// Every value of `key`, in dense order. Without the owners, a bulk tick
+    /// writes only the rows it iterates.
+    ///
+    /// # Panics
+    /// When `key` comes from another schema.
+    pub fn values_mut<T: Component>(&mut self, key: ComponentKey<T>) -> &mut [T] {
+        self.column_mut(key).values_mut()
+    }
+
+    /// Every holder of `key` and its value, in dense order.
+    ///
+    /// # Panics
+    /// When `key` comes from another schema.
+    pub fn iter<T: Component>(
+        &self,
+        key: ComponentKey<T>,
+    ) -> impl Iterator<Item = (Handle, &T)> + '_ {
+        let column = self.column(key);
+        column
+            .owners()
+            .iter()
+            .zip(column.values())
+            .map(|(&slot, value)| (self.entities.handle_at(slot), value))
+    }
+
+    pub(crate) fn column<T: Component>(&self, key: ComponentKey<T>) -> &Column<T> {
+        let column: &dyn Any = &**self.columns.get(key.id.0 as usize).expect(FOREIGN_KEY);
+        column.downcast_ref().expect(FOREIGN_KEY)
+    }
+
+    fn column_mut<T: Component>(&mut self, key: ComponentKey<T>) -> &mut Column<T> {
+        let column: &mut dyn Any =
+            &mut **self.columns.get_mut(key.id.0 as usize).expect(FOREIGN_KEY);
+        column.downcast_mut().expect(FOREIGN_KEY)
     }
 }
 
