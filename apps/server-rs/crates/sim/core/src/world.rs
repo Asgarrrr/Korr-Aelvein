@@ -11,6 +11,7 @@ use crate::runner::{Runner, jobs};
 
 #[derive(Debug)]
 pub struct World {
+    /// Strictly ascending by `FloorId`.
     floors: Vec<Floor>,
 }
 
@@ -26,29 +27,30 @@ impl World {
     /// come from different histories.
     ///
     /// # Errors
-    /// [`WorldError::DuplicateFloor`] when two floors share a `FloorId`: their
-    /// entity ids and draws would collide. [`WorldError::Rounds`] when two
-    /// floors are at different rounds. Then, for the lowest failing id:
+    /// [`WorldError::DuplicateFloor`] for the lowest `FloorId` two floors
+    /// share: their entity ids and draws would collide.
+    /// [`WorldError::Rounds`] when two floors are at different rounds. Then,
+    /// for the lowest failing id:
     /// [`WorldError::UnknownOrigin`] when its origin floor is absent, since that
     /// floor could re-mint it; [`WorldError::BeyondCounter`] when its origin
     /// floor has not minted it yet; [`WorldError::DuplicateEntity`] when it is
     /// alive or waiting on two floors.
-    pub fn try_new(floors: Vec<Floor>) -> Result<Self, WorldError> {
-        for (i, a) in floors.iter().enumerate() {
-            if floors[i + 1..].iter().any(|b| b.id() == a.id()) {
-                return Err(WorldError::DuplicateFloor(a.id()));
-            }
-            if a.round() != floors[0].round() {
-                return Err(WorldError::Rounds);
-            }
+    pub fn try_new(mut floors: Vec<Floor>) -> Result<Self, WorldError> {
+        floors.sort_unstable_by_key(Floor::id);
+        if let Some(pair) = floors.windows(2).find(|pair| pair[0].id() == pair[1].id()) {
+            return Err(WorldError::DuplicateFloor(pair[0].id()));
         }
-        let mut ids: Vec<EntityId> = floors.iter().flat_map(Floor::ids).collect();
+        if floors.iter().any(|f| f.round() != floors[0].round()) {
+            return Err(WorldError::Rounds);
+        }
+        let world = Self { floors };
+        let mut ids: Vec<EntityId> = world.floors.iter().flat_map(Floor::ids).collect();
         ids.sort_unstable();
         let mut previous = None;
         for &id in &ids {
-            let origin = floors
-                .iter()
-                .find(|floor| floor.id() == id.origin())
+            let origin = world
+                .position(id.origin())
+                .map(|i| &world.floors[i])
                 .ok_or(WorldError::UnknownOrigin(id))?;
             if id.counter() >= origin.next_counter() {
                 return Err(WorldError::BeyondCounter(id));
@@ -58,7 +60,11 @@ impl World {
             }
             previous = Some(id);
         }
-        Ok(Self { floors })
+        Ok(world)
+    }
+
+    fn position(&self, id: FloorId) -> Option<usize> {
+        self.floors.binary_search_by_key(&id, Floor::id).ok()
     }
 
     /// Every floor runs its environment then its actors through `runner`, then
@@ -86,12 +92,10 @@ impl World {
             flights.extend(floor.send());
         }
         for (to, flight) in flights {
-            self.floors
-                .iter_mut()
-                .find(|floor| floor.id() == to)
-                .expect("departure to a floor outside this world")
-                .inbox
-                .insert(flight);
+            let at = self
+                .position(to)
+                .expect("departure to a floor outside this world");
+            self.floors[at].inbox.insert(flight);
         }
         for floor in &mut self.floors {
             floor.land(ruleset);
@@ -101,7 +105,7 @@ impl World {
         }
     }
 
-    /// In the order `new` received them.
+    /// In ascending `FloorId`.
     #[must_use]
     pub fn floors(&self) -> &[Floor] {
         &self.floors
@@ -110,10 +114,9 @@ impl World {
     /// The checksum of every floor image, concatenated in ascending `FloorId`.
     #[must_use]
     pub(crate) fn hash(&self, ruleset: &Ruleset) -> u64 {
-        let mut floors: Vec<&Floor> = self.floors.iter().collect();
-        floors.sort_unstable_by_key(|floor| floor.id());
-        let images: Vec<u8> = floors
-            .into_iter()
+        let images: Vec<u8> = self
+            .floors
+            .iter()
             .flat_map(|floor| floor.save(ruleset))
             .collect();
         checksum(&images)
@@ -123,9 +126,6 @@ impl World {
     /// When no floor of this world has `id`.
     #[must_use]
     pub fn floor(&self, id: FloorId) -> &Floor {
-        self.floors
-            .iter()
-            .find(|floor| floor.id() == id)
-            .expect("no floor in this world")
+        &self.floors[self.position(id).expect("no floor in this world")]
     }
 }
