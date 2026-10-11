@@ -28,6 +28,8 @@ pub trait Module {
     type Action: Action;
     /// What `commit` needs: a commit cannot draw, so it cannot redo the plan differently.
     type Plan;
+    /// One `u8` per cell of every floor, 0 on a new floor, named by the module.
+    const CELL_COLUMN: bool = false;
     /// Whether `propose` reads `Senses::seen`; when no module does, the core skips the scan.
     fn perceives(&self) -> bool {
         false

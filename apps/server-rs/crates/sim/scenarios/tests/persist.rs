@@ -6,11 +6,12 @@ use korr_core::host::{
 use korr_core::mechanic::{CommitCtx, Module, PrepCtx, Prepared, Proposals, Senses, Target};
 use korr_ecs::{Component, FloorId, Handle, ImageError, Reader, SchemaBuilder, Writer, checksum};
 use korr_engine::Registry;
-use korr_scenarios::{Pace, floor, game, run};
+use korr_flora::Flora;
+use korr_scenarios::{Pace, floor, game, reload, run};
 
 const SEED: Seed = Seed(7);
 /// Re-pin on every intended change to the image format or to behaviour.
-const PINNED: u64 = 0xa003_1f56_4699_d1f2;
+const PINNED: u64 = 0x93cd_b873_5eb0_37d1;
 
 /// 40 actors, two per row. The fast even id starts at x = 3: blocked by the
 /// wall from tick 570, its clock stays off the round boundary. The slow odd
@@ -54,7 +55,7 @@ fn save_load_replay_matches_the_pinned_run() {
 
 /// The whole image under wander: its saved intent and ruleset fingerprint,
 /// which positions alone miss. Any behaviour or floor image change moves it.
-const PINNED_WANDER: u64 = 0x7e35_02e0_c3f5_9d25;
+const PINNED_WANDER: u64 = 0x53ce_641d_44ab_2a92;
 
 #[test]
 fn wander_world_hash_pins_the_image() {
@@ -112,11 +113,12 @@ fn a_changed_ruleset_refuses_the_save() {
 
 /// A module with no action, named `$name`.
 macro_rules! actionless {
-    ($module:ident, $name:literal) => {
+    ($module:ident, $name:literal $(, CELL_COLUMN = $column:literal)?) => {
         struct $module;
 
         impl Module for $module {
             const NAME: &'static str = $name;
+            $(const CELL_COLUMN: bool = $column;)?
             type Action = Infallible;
             type Plan = Infallible;
 
@@ -151,6 +153,88 @@ fn a_renamed_module_refuses_the_save() {
         Floor::load(running.ruleset(), &bytes),
         Err(LoadError::Ruleset { .. })
     ));
+}
+
+// One name, with and without a cell column.
+actionless!(Bare, "test.soil");
+actionless!(Soiled, "test.soil", CELL_COLUMN = true);
+
+#[test]
+fn a_module_that_gains_a_column_refuses_the_save() {
+    let saving = game(Bare, SEED);
+    let bytes = floor(saving.ruleset(), FloorId(0), 4, 4).save(saving.ruleset());
+    let running = game(Soiled, SEED);
+    assert!(matches!(
+        Floor::load(running.ruleset(), &bytes),
+        Err(LoadError::Ruleset { .. })
+    ));
+}
+
+actionless!(Peat, "test.peat", CELL_COLUMN = true);
+
+#[test]
+#[should_panic(expected = "ruleset is not the one that built this floor")]
+fn a_cell_column_is_not_readable_under_a_foreign_ruleset() {
+    let building = game(Soiled, SEED);
+    let f = floor(building.ruleset(), FloorId(0), 4, 4);
+    let foreign = game(Peat, SEED);
+    let _ = f.cell_value::<Peat>(foreign.ruleset(), Pos { x: 1, y: 1 });
+}
+
+/// Not square: a transposed walk lands on other cells.
+fn planted(ruleset: &Ruleset) -> Floor {
+    let mut f = floor(ruleset, FloorId(0), 10, 7);
+    for (x, y, value) in [(1, 1, 1), (8, 1, 2), (1, 5, 3), (8, 5, 255), (4, 3, 4)] {
+        f.set_cell_value::<Flora>(ruleset, Pos { x, y }, value);
+    }
+    f
+}
+
+fn flora_only() -> Game<Registry> {
+    game(
+        Registry {
+            wander: None,
+            ..Registry::default()
+        },
+        SEED,
+    )
+}
+
+#[test]
+fn planted_cells_survive_a_reload() {
+    let game = flora_only();
+    let ruleset = game.ruleset();
+    let saved = planted(ruleset);
+    let loaded = reload(ruleset, &saved);
+    for y in 1..=5 {
+        for x in 1..=8 {
+            let at = Pos { x, y };
+            assert_eq!(
+                loaded.cell_value::<Flora>(ruleset, at),
+                saved.cell_value::<Flora>(ruleset, at),
+                "{at:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_cut_or_padded_column_section_is_refused() {
+    let game = flora_only();
+    let ruleset = game.ruleset();
+    let sections = Sections::parse(&planted(ruleset).save(ruleset)).expect("own save parses");
+    let mut cut = sections.clone();
+    cut.columns.pop();
+    assert!(matches!(
+        Floor::load(ruleset, &cut.seal()),
+        Err(LoadError::Image(ImageError::Truncated { .. }))
+    ));
+    let mut padded = sections;
+    padded.columns.push(0);
+    assert_eq!(
+        Floor::load(ruleset, &padded.seal()).err(),
+        Some(LoadError::Image(ImageError::Trailing(1)))
+    );
 }
 
 struct MarkV0;

@@ -47,10 +47,10 @@ fn a_save_of_another_format_is_refused() {
         Some(LoadError::Image(ImageError::Magic))
     );
     let mut newer = bytes;
-    newer[8..10].copy_from_slice(&2u16.to_le_bytes());
+    newer[8..10].copy_from_slice(&3u16.to_le_bytes());
     assert_eq!(
         game.load(&newer).err(),
-        Some(LoadError::Image(ImageError::Version(2)))
+        Some(LoadError::Image(ImageError::Version(3)))
     );
 }
 
@@ -108,7 +108,7 @@ fn the_lowest_failing_id_decides() {
 /// A Save holding `floors`, framed by hand.
 fn framed(seed: Seed, floors: &[Vec<u8>]) -> Vec<u8> {
     let mut bytes = b"KORRSAV\0".to_vec();
-    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&2u16.to_le_bytes());
     bytes.extend_from_slice(&seed.0.to_le_bytes());
     bytes.extend_from_slice(&u32::try_from(floors.len()).expect("fits u32").to_le_bytes());
     for image in floors {

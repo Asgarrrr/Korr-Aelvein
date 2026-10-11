@@ -14,6 +14,7 @@ pub(crate) struct ModuleEntry {
     pub(crate) name: &'static str,
     pub(crate) actions: Vec<ActionKey>,
     pub(crate) requires: Vec<Vec<AnyRead>>,
+    pub(crate) column: bool,
 }
 
 /// What every floor of a world shares: the schema, the module table and the core's keys.
@@ -27,6 +28,8 @@ pub struct Ruleset {
     pub(crate) modules: Vec<ModuleEntry>,
     /// Whether any module reads `Senses::seen`.
     pub(crate) perceives: bool,
+    /// The names of the modules that own a cell column, in visit order.
+    pub(crate) columns: Vec<&'static str>,
     fingerprint: u64,
 }
 
@@ -34,6 +37,7 @@ struct Table<'a> {
     schema: &'a Schema,
     modules: Vec<ModuleEntry>,
     perceives: bool,
+    columns: Vec<&'static str>,
     /// Every action key with its module ordinal and name, to report a collision.
     keys: Vec<(ActionKey, usize, &'static str)>,
 }
@@ -75,11 +79,15 @@ impl Visit for Table<'_> {
             })
             .collect();
         self.perceives |= module.perceives();
+        if M::CELL_COLUMN {
+            self.columns.push(M::NAME);
+        }
         self.modules.push(ModuleEntry {
             key,
             name: M::NAME,
             actions,
             requires,
+            column: M::CELL_COLUMN,
         });
     }
 }
@@ -98,6 +106,7 @@ impl Ruleset {
             schema: &schema,
             modules: Vec::new(),
             perceives: false,
+            columns: Vec::new(),
             keys: Vec::new(),
         };
         mechanics.each(&mut table);
@@ -111,6 +120,7 @@ impl Ruleset {
             for action in &module.actions {
                 bytes.extend_from_slice(&action.to_bits().to_le_bytes());
             }
+            bytes.push(u8::from(module.column));
         }
         let fingerprint = checksum(&bytes);
         table.keys.sort_unstable_by_key(|&(key, ..)| key);
@@ -125,7 +135,10 @@ impl Ruleset {
             }
         }
         let Table {
-            modules, perceives, ..
+            modules,
+            perceives,
+            columns,
+            ..
         } = table;
         Self {
             schema,
@@ -133,12 +146,14 @@ impl Ruleset {
             clock,
             modules,
             perceives,
+            columns,
             fingerprint,
         }
     }
 
-    /// The schema, then the name and action keys of each module in visit
-    /// order: a save loads only under a ruleset with the same fingerprint.
+    /// The schema, then the name, action keys and whether it owns a cell column
+    /// of each module in visit order: a save loads only under a ruleset with
+    /// the same fingerprint.
     #[must_use]
     pub fn fingerprint(&self) -> u64 {
         self.fingerprint

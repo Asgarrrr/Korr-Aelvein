@@ -10,7 +10,7 @@ use crate::world::World;
 
 const MAGIC: &[u8; 8] = b"KORRSAV\0";
 /// Versions the framing of the save and of every image nested in it, except the store image.
-const VERSION: u16 = 1;
+const VERSION: u16 = 2;
 
 impl<M: Mechanics> Game<M> {
     /// Magic, `u16` version, `u64` seed, `u32` floor count, then per floor in ascending `FloorId` a

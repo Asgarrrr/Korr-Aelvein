@@ -8,9 +8,10 @@ use crate::time::Round;
 const CHECKSUM_LEN: usize = 8;
 
 /// The framing of a floor image, little-endian: `u64` round, `u64` ruleset
-/// fingerprint, the store, the grid, then a `u32` flight count and per flight
-/// a `u64` round, `i16` x, `i16` y and the traveller. Each section is a `u32`
-/// length then its bytes. A `u64` checksum of every byte before it ends the image.
+/// fingerprint, the store, the grid, the cell columns, then a `u32` flight
+/// count and per flight a `u64` round, `i16` x, `i16` y and the traveller.
+/// Each section is a `u32` length then its bytes. A `u64` checksum of every
+/// byte before it ends the image.
 /// A layout change bumps the save `VERSION` in `save.rs`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sections {
@@ -18,6 +19,7 @@ pub struct Sections {
     pub fingerprint: u64,
     pub store: Vec<u8>,
     pub grid: Vec<u8>,
+    pub columns: Vec<u8>,
     pub flights: Vec<FlightImage>,
 }
 
@@ -49,6 +51,7 @@ impl Sections {
         let fingerprint = r.read_u64()?;
         let store = read_section(&mut r)?;
         let grid = read_section(&mut r)?;
+        let columns = read_section(&mut r)?;
         let mut flights = Vec::new();
         for _ in 0..r.read_u32()? {
             flights.push(FlightImage {
@@ -66,6 +69,7 @@ impl Sections {
             fingerprint,
             store,
             grid,
+            columns,
             flights,
         })
     }
@@ -79,6 +83,7 @@ impl Sections {
         w.write_u64(self.fingerprint);
         write_section(&mut w, &self.store);
         write_section(&mut w, &self.grid);
+        write_section(&mut w, &self.columns);
         w.write_u32(u32::try_from(self.flights.len()).expect("an inbox fits u32 flights"));
         for flight in &self.flights {
             w.write_u64(flight.round.0);

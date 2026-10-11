@@ -12,7 +12,8 @@ engine uses its grid.
 - Terrain is material and height from the start.
 - Large creatures are in the vision: only actors may cover several cells.
 - First delivery: shape, coordinates, neighbourhoods, terrain, occupancy.
-  Cell field layers come with `flora`, their first real consumer. FOV and
+  Cell field layers came with `flora`, their first real consumer, as
+  `CellColumn`: one `u8` per cell, padded like the terrain. FOV and
   Dijkstra maps come with the mechanics that need them.
 
 ## What the TS engine needs (reference, not a spec)

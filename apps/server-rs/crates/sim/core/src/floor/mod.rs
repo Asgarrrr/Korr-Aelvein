@@ -9,13 +9,14 @@ use alloc::vec::Vec;
 use core::mem;
 
 use korr_ecs::{Component, EntityId, FloorId, Handle, Own, Store};
-use korr_grid::{Grid, Interior, Layer, Material, Pos, Shape};
+use korr_grid::{CellColumn, Grid, Interior, Layer, Material, Pos, Shape};
 
 use crate::ctx::Departure;
 use crate::decision::Candidates;
 use crate::floor::inbox::{Flight, Inbox};
 use crate::floor::membership::Joiner;
 use crate::floor::schedule::Schedule;
+use crate::module::Module;
 use crate::ruleset::Ruleset;
 use crate::senses::Seen;
 use crate::time::{Round, Tick};
@@ -26,6 +27,10 @@ pub use sections::{FlightImage, Sections};
 pub struct Floor {
     store: Store,
     grid: Grid,
+    /// One per entry of `Ruleset::columns`, in the same order.
+    columns: Vec<CellColumn>,
+    /// Fingerprint of the ruleset that built the floor: its column order is the only key to `columns`.
+    fingerprint: u64,
     schedule: Schedule,
     round: Round,
     /// Actors that departed this round, in departure order; empty at the barrier.
@@ -43,6 +48,12 @@ impl Floor {
         Self {
             store: Store::new(&ruleset.schema, id),
             grid: Grid::new(shape),
+            columns: ruleset
+                .columns
+                .iter()
+                .map(|_| CellColumn::new(shape))
+                .collect(),
+            fingerprint: ruleset.fingerprint(),
             schedule: Schedule::default(),
             round: Round(0),
             departures: Vec::new(),
@@ -57,6 +68,25 @@ impl Floor {
     pub fn set_material(&mut self, at: Pos, m: Material) {
         let at = self.interior(at);
         self.grid.set_material(at, m);
+    }
+
+    /// # Panics
+    /// When `ruleset` is not the one that built this floor, does not run `M`,
+    /// or `at` is not an interior cell of this floor.
+    #[must_use]
+    pub fn cell_value<M: Module>(&self, ruleset: &Ruleset, at: Pos) -> u8 {
+        self.columns[self.column_of::<M>(ruleset)].get(self.interior(at))
+    }
+
+    /// For setup and content: a round never calls it.
+    ///
+    /// # Panics
+    /// When `ruleset` is not the one that built this floor, does not run `M`,
+    /// or `at` is not an interior cell of this floor.
+    pub fn set_cell_value<M: Module>(&mut self, ruleset: &Ruleset, at: Pos, value: u8) {
+        let at = self.interior(at);
+        let column = self.column_of::<M>(ruleset);
+        self.columns[column].set(at, value);
     }
 
     /// The actor first acts this round.
@@ -143,5 +173,19 @@ impl Floor {
 
     fn interior(&self, at: Pos) -> Interior {
         self.grid.shape().idx(at).expect("cell off the floor")
+    }
+
+    fn column_of<M: Module>(&self, ruleset: &Ruleset) -> usize {
+        const { assert!(M::CELL_COLUMN, "the module owns no cell column") };
+        assert_eq!(
+            self.fingerprint,
+            ruleset.fingerprint(),
+            "ruleset is not the one that built this floor"
+        );
+        ruleset
+            .columns
+            .iter()
+            .position(|&name| name == M::NAME)
+            .unwrap_or_else(|| panic!("the ruleset does not run {}", M::NAME))
     }
 }

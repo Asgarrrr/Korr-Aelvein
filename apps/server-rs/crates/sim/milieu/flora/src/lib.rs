@@ -13,6 +13,7 @@ impl Module for Flora {
     const NAME: &'static str = "flora";
     type Action = Infallible;
     type Plan = Infallible;
+    const CELL_COLUMN: bool = true;
 
     fn propose(&self, _: &Senses<'_>, _: &mut Proposals<'_, Infallible>) {}
 
