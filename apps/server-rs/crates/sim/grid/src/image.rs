@@ -106,7 +106,7 @@ impl Grid {
             let at = shape
                 .idx(pos)
                 .ok_or(ImageError::Corrupt("position off the floor"))?;
-            if layer == Layer::Actor && grid.actor_at(at.cell()).is_some() {
+            if layer == Layer::Actor && grid.holds_actor(at.cell()) {
                 return Err(ImageError::Corrupt("two actors on one cell"));
             }
             grid.link(h, id, at, layer);

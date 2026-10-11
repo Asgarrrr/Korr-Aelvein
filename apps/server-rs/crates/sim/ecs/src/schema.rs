@@ -163,17 +163,13 @@ impl SchemaBuilder {
     /// registered.
     pub fn register<T: Component>(&mut self, name: &'static str) -> Own<T> {
         assert!(!name.is_empty(), "component name must not be empty");
-        assert!(
-            u16::try_from(name.len()).is_ok(),
-            "component name longer than u16::MAX bytes"
-        );
+        let len = u16::try_from(name.len()).expect("component name longer than u16::MAX bytes");
         assert!(
             self.components.iter().all(|info| info.name != name),
             "component name registered twice: {name}"
         );
         let id =
             ComponentId(u32::try_from(self.components.len()).expect("fewer than 2^32 components"));
-        let len = u16::try_from(name.len()).expect("a component name fits in u16 bytes");
         self.prefix = absorb(
             absorb(absorb(self.prefix, &len.to_le_bytes()), name.as_bytes()),
             &T::VERSION.to_le_bytes(),
