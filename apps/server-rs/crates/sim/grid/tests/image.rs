@@ -27,7 +27,7 @@ fn bytes(grid: &Grid) -> Vec<u8> {
 }
 
 fn read(bytes: &[u8], store: &Store) -> Result<Grid, ImageError> {
-    Grid::read(&mut Reader::new(bytes), |id| {
+    Grid::read(&mut Reader::new(bytes), store, |id| {
         store.handles().find(|&h| store.id(h) == Some(id))
     })
 }
@@ -299,7 +299,23 @@ fn a_record_of_an_absent_entity_is_corrupt() {
         grid.shape().idx(Pos { x: 1, y: 1 }).expect("inside"),
     );
     assert_eq!(
-        Grid::read(&mut Reader::new(&bytes(&grid)), |_| None).err(),
+        Grid::read(&mut Reader::new(&bytes(&grid)), &store, |_| None).err(),
+        Some(ImageError::Corrupt("placement of an absent entity"))
+    );
+}
+
+#[test]
+fn a_record_resolved_to_another_entity_is_corrupt() {
+    let mut store = store();
+    let (a, b) = (store.spawn(), store.spawn());
+    let mut grid = cliff();
+    for (h, x) in [(a, 1), (b, 2)] {
+        let at = grid.shape().idx(Pos { x, y: 1 }).expect("inside");
+        grid.link_thing(&store, h, at);
+    }
+    let swapped = |id| Some(if store.id(a) == Some(id) { b } else { a });
+    assert_eq!(
+        Grid::read(&mut Reader::new(&bytes(&grid)), &store, swapped).err(),
         Some(ImageError::Corrupt("placement of an absent entity"))
     );
 }

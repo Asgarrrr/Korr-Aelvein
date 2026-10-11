@@ -313,8 +313,8 @@ impl World {
                 .handles()
                 .map(|h| (store.id(h).expect("a listed handle is alive"), h))
                 .collect();
-            *grid =
-                Grid::read(&mut reader, |id| handles.get(&id).copied()).expect("own grid rebuilds");
+            *grid = Grid::read(&mut reader, store, |id| handles.get(&id).copied())
+                .expect("own grid rebuilds");
             reader.finish().expect("the grid reads every byte it wrote");
         }
     }

@@ -4,7 +4,7 @@
 
 use alloc::vec::Vec;
 
-use korr_ecs::{EntityId, Handle, ImageError, Reader, Writer};
+use korr_ecs::{EntityId, Handle, ImageError, Reader, Store, Writer};
 
 use crate::grid::Grid;
 use crate::occupancy::Layer;
@@ -50,9 +50,8 @@ impl Grid {
     }
 
     /// Reads what [`Grid::write`] wrote and links each record's entity on the
-    /// live handle `resolve` maps its id to, which must carry that id. Never calls
-    /// `Reader::finish`. When `resolve` maps distinct ids to distinct live handles,
-    /// never panics.
+    /// handle `resolve` maps its id to. Never calls `Reader::finish`. Never panics:
+    /// a handle that does not carry the record's id in `store` counts as absent.
     ///
     /// # Errors
     /// [`ImageError::Truncated`] when the bytes run out, or [`ImageError::Corrupt`] with:
@@ -60,12 +59,14 @@ impl Grid {
     /// - `"material"`: an id outside the material table;
     /// - `"entity id"`: record id bits that name no `EntityId`;
     /// - `"placement order"`: a record id not above the previous one;
-    /// - `"placement of an absent entity"`: a record id `resolve` maps to no handle;
+    /// - `"placement of an absent entity"`: a record id `resolve` maps to no handle
+    ///   that carries it;
     /// - `"layer"`: a layer byte other than 0 and 1;
     /// - `"position off the floor"`: a record position outside the shape or on the ring;
     /// - `"two actors on one cell"`.
     pub fn read(
         r: &mut Reader<'_>,
+        store: &Store,
         mut resolve: impl FnMut(EntityId) -> Option<Handle>,
     ) -> Result<Self, ImageError> {
         let width = r.read_u16()?;
@@ -94,7 +95,9 @@ impl Grid {
                 return Err(ImageError::Corrupt("placement order"));
             }
             previous = Some(id);
-            let h = resolve(id).ok_or(ImageError::Corrupt("placement of an absent entity"))?;
+            let h = resolve(id)
+                .filter(|&h| store.id(h) == Some(id))
+                .ok_or(ImageError::Corrupt("placement of an absent entity"))?;
             let layer = match layer {
                 ACTOR => Layer::Actor,
                 THING => Layer::Thing,

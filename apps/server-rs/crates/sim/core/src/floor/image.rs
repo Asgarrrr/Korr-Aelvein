@@ -77,7 +77,7 @@ impl Floor {
             .filter_map(|h| Some((store.id(h)?, h)))
             .collect();
         let mut r = Reader::new(&sections.grid);
-        let grid = Grid::read(&mut r, |id| handles.get(&id).copied())?;
+        let grid = Grid::read(&mut r, &store, |id| handles.get(&id).copied())?;
         r.finish()?;
         let mut inbox = Inbox::default();
         let mut waiting = BTreeSet::new();
