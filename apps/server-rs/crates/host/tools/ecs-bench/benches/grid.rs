@@ -4,6 +4,7 @@
 use std::hint::black_box;
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
+use korr_core::host::SIGHT;
 use korr_ecs::{FloorId, Handle, SchemaBuilder, Store};
 use korr_ecs_bench::picks;
 use korr_grid::{CellIdx, Dir, Grid, Interior, Layer, Pos, Shape};
@@ -12,8 +13,6 @@ const SIDE: u16 = 66;
 const INSIDE: u32 = 64;
 const ACTORS: u32 = 1024;
 const K: u32 = 4096;
-/// The widest neighbourhood the TS engine perceives.
-const PERCEPTION: u16 = 4;
 
 fn interior(shape: Shape, pick: u32) -> Interior {
     let coord = |v: u32| i16::try_from(v + 1).expect("an interior coordinate fits i16");
@@ -94,7 +93,7 @@ fn grid(c: &mut Criterion) {
             let mut seen = 0_usize;
             for &centre in black_box(&centres) {
                 seen += shape
-                    .neighbourhood(centre, PERCEPTION)
+                    .neighbourhood(centre, SIGHT)
                     .filter(|at| grid.holds_actor(at.cell()))
                     .count();
             }
