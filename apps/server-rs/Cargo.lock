@@ -694,6 +694,7 @@ dependencies = [
  "korr-core",
  "korr-ecs",
  "korr-engine",
+ "korr-flora",
  "korr-grid",
  "korr-random",
  "korr-scenarios",
