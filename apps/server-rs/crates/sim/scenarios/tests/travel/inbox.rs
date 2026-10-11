@@ -1,4 +1,4 @@
-use korr_core::host::{Floor, Game, LoadError, Sections};
+use korr_core::host::{Floor, Game, LoadError, Round, Sections};
 use korr_ecs::{ImageError, checksum};
 use korr_scenarios::{Leave, game, run};
 
@@ -108,7 +108,7 @@ fn a_flight_repeated_is_corrupt() {
 #[test]
 fn a_flight_sent_in_the_current_round_is_corrupt() {
     assert_eq!(
-        load_forged(|s| s.flights[4].round = 1),
+        load_forged(|s| s.flights[4].round = Round(1)),
         Some(LoadError::Image(ImageError::Corrupt("inbox round")))
     );
 }
@@ -116,9 +116,9 @@ fn a_flight_sent_in_the_current_round_is_corrupt() {
 #[test]
 fn an_id_waiting_twice_is_corrupt() {
     let forged = load_forged(|s| {
-        s.round = 2;
+        s.round = Round(2);
         let mut twin = s.flights[0].clone();
-        twin.round = 1;
+        twin.round = Round(1);
         s.flights.push(twin);
     });
     assert_eq!(

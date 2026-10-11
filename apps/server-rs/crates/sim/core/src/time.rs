@@ -7,9 +7,24 @@ use crate::config::TICKS_PER_ROUND;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Tick(pub u64);
 
+/// One barrier to the next, [`TICKS_PER_ROUND`] ticks long.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Round(pub u64);
+
+impl Round {
+    pub(crate) fn next(self) -> Self {
+        Self(self.0 + 1)
+    }
+}
+
 impl Tick {
-    pub(crate) fn start_of(round: u64) -> Self {
-        Self(round.checked_mul(TICKS_PER_ROUND).expect("clock overflow"))
+    pub(crate) fn start_of(round: Round) -> Self {
+        Self(
+            round
+                .0
+                .checked_mul(TICKS_PER_ROUND)
+                .expect("clock overflow"),
+        )
     }
 
     pub(crate) fn after(self, c: Cost) -> Self {

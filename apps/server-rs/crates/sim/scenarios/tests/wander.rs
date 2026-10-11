@@ -1,4 +1,4 @@
-use korr_core::host::{Floor, Pos, Ruleset, Seed, World, WorldError};
+use korr_core::host::{Floor, Pos, Round, Ruleset, Seed, World, WorldError};
 use korr_ecs::{FloorId, Handle};
 use korr_engine::Registry;
 use korr_grid::Material;
@@ -64,7 +64,7 @@ fn walled_in_wanderer_still_ends_the_round() {
     let wanderer = f.spawn_actor(game.ruleset(), centre);
     let mut world = World::new(vec![f]);
     run(&game, &mut world, 10);
-    assert_eq!(world.floor(FLOOR).round(), 10);
+    assert_eq!(world.floor(FLOOR).round(), Round(10));
     assert_eq!(world.floor(FLOOR).pos(wanderer), Some(centre));
 }
 
@@ -79,7 +79,7 @@ fn wander_disabled_creatures_idle() {
     let mut world = World::new(vec![f]);
     run(&game, &mut world, 10);
     assert_eq!(positions(&world, &actors), cells);
-    assert_eq!(world.floor(FLOOR).round(), 10);
+    assert_eq!(world.floor(FLOOR).round(), Round(10));
 }
 
 #[test]

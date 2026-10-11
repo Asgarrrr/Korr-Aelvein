@@ -3,6 +3,8 @@ use alloc::vec::Vec;
 use korr_ecs::{ImageError, Reader, Writer, checksum};
 use korr_grid::Pos;
 
+use crate::time::Round;
+
 const CHECKSUM_LEN: usize = 8;
 
 /// The framing of a floor image, little-endian: `u64` round, `u64` ruleset
@@ -12,7 +14,7 @@ const CHECKSUM_LEN: usize = 8;
 /// A layout change bumps the save `VERSION` in `save.rs`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sections {
-    pub round: u64,
+    pub round: Round,
     pub fingerprint: u64,
     pub store: Vec<u8>,
     pub grid: Vec<u8>,
@@ -22,7 +24,7 @@ pub struct Sections {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FlightImage {
     /// The round the traveller left in.
-    pub round: u64,
+    pub round: Round,
     pub at: Pos,
     pub traveller: Vec<u8>,
 }
@@ -43,14 +45,14 @@ impl Sections {
         }
 
         let mut r = Reader::new(body);
-        let round = r.read_u64()?;
+        let round = Round(r.read_u64()?);
         let fingerprint = r.read_u64()?;
         let store = read_section(&mut r)?;
         let grid = read_section(&mut r)?;
         let mut flights = Vec::new();
         for _ in 0..r.read_u32()? {
             flights.push(FlightImage {
-                round: r.read_u64()?,
+                round: Round(r.read_u64()?),
                 at: Pos {
                     x: r.read_i16()?,
                     y: r.read_i16()?,
@@ -73,13 +75,13 @@ impl Sections {
     #[must_use]
     pub fn seal(&self) -> Vec<u8> {
         let mut w = Writer::new();
-        w.write_u64(self.round);
+        w.write_u64(self.round.0);
         w.write_u64(self.fingerprint);
         write_section(&mut w, &self.store);
         write_section(&mut w, &self.grid);
         w.write_u32(u32::try_from(self.flights.len()).expect("an inbox fits u32 flights"));
         for flight in &self.flights {
-            w.write_u64(flight.round);
+            w.write_u64(flight.round.0);
             w.write_i16(flight.at.x);
             w.write_i16(flight.at.y);
             write_section(&mut w, &flight.traveller);

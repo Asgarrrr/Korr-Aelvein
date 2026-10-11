@@ -1,5 +1,5 @@
 use korr_core::host::{
-    Floor, Game, LoadError, Pos, Ruleset, Sections, Seed, TICKS_PER_ROUND, World,
+    Floor, Game, LoadError, Pos, Round, Ruleset, Sections, Seed, TICKS_PER_ROUND, World,
 };
 use korr_ecs::{Component, FloorId, Handle, ImageError, Reader, SchemaBuilder, Writer, checksum};
 use korr_engine::Registry;
@@ -136,7 +136,7 @@ fn forged_round_is_corrupt_not_a_panic() {
     let ruleset = game.ruleset();
     let mut sections =
         Sections::parse(&populated(ruleset).0.save(ruleset)).expect("own save parses");
-    sections.round = u64::MAX;
+    sections.round = Round(u64::MAX);
     assert_eq!(
         Floor::load(ruleset, &sections.seal()).err(),
         Some(LoadError::Image(ImageError::Corrupt("round")))

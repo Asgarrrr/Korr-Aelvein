@@ -15,7 +15,7 @@ impl Floor {
     /// Every actor due this round acts on the current state, one at a
     /// time. A departed actor leaves the schedule; its rows travel with it.
     pub(crate) fn run_actors(&mut self, seed: Seed, ruleset: &Ruleset, mechanics: &impl Mechanics) {
-        let end = Tick::start_of(self.round + 1);
+        let end = Tick::start_of(self.round.next());
         while let Some((now, id, actor)) = self.schedule.pop_before(end) {
             let cost = self.turn(seed, ruleset, mechanics, now, id, actor);
             if departed(&self.departures, actor) {

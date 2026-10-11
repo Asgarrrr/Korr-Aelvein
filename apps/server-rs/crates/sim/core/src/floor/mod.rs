@@ -18,7 +18,7 @@ use crate::floor::membership::Joiner;
 use crate::floor::schedule::Schedule;
 use crate::ruleset::Ruleset;
 use crate::senses::Seen;
-use crate::time::Tick;
+use crate::time::{Round, Tick};
 
 pub use sections::{FlightImage, Sections};
 
@@ -27,7 +27,7 @@ pub struct Floor {
     store: Store,
     grid: Grid,
     schedule: Schedule,
-    round: u64,
+    round: Round,
     /// Actors that departed this round, in departure order; empty at the barrier.
     departures: Vec<Departure>,
     pub(crate) inbox: Inbox,
@@ -44,7 +44,7 @@ impl Floor {
             store: Store::new(&ruleset.schema, id),
             grid: Grid::new(shape),
             schedule: Schedule::default(),
-            round: 0,
+            round: Round(0),
             departures: Vec::new(),
             inbox: Inbox::default(),
             candidates: Candidates::default(),
@@ -98,7 +98,7 @@ impl Floor {
     }
 
     #[must_use]
-    pub fn round(&self) -> u64 {
+    pub fn round(&self) -> Round {
         self.round
     }
 
@@ -138,7 +138,7 @@ impl Floor {
     }
 
     pub(crate) fn end_round(&mut self) {
-        self.round += 1;
+        self.round = self.round.next();
     }
 
     fn interior(&self, at: Pos) -> Interior {

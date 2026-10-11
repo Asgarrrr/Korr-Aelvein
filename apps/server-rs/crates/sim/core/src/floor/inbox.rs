@@ -7,18 +7,18 @@ use korr_grid::{Layer, Pos};
 use crate::floor::Floor;
 use crate::floor::membership::Joiner;
 use crate::ruleset::Ruleset;
-use crate::time::Tick;
+use crate::time::{Round, Tick};
 
 #[derive(Debug)]
 pub(crate) struct Flight {
     pub(crate) traveller: Traveller,
     pub(crate) at: Pos,
     /// The round the traveller left in.
-    pub(crate) round: u64,
+    pub(crate) round: Round,
 }
 
 impl Flight {
-    pub(crate) fn key(&self) -> (u64, EntityId) {
+    pub(crate) fn key(&self) -> (Round, EntityId) {
         (self.round, self.traveller.id())
     }
 }
@@ -47,7 +47,7 @@ impl Floor {
     /// At the barrier, each flight in order takes the free cell nearest its `at` and
     /// acts next round. A flight with no free cell waits, in order.
     pub(crate) fn land(&mut self, ruleset: &Ruleset) {
-        let next = Tick::start_of(self.round + 1);
+        let next = Tick::start_of(self.round.next());
         for flight in mem::take(&mut self.inbox.0) {
             let Some(cell) = self.grid.nearest_place(flight.at, Layer::Actor) else {
                 self.inbox.0.push(flight);

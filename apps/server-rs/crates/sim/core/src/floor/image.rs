@@ -110,6 +110,7 @@ impl Floor {
 
         let margin = u64::from(u32::MAX);
         let start = round
+            .0
             .checked_mul(TICKS_PER_ROUND)
             .filter(|start| start.checked_add(margin).is_some())
             .ok_or(ImageError::Corrupt("round"))?;
