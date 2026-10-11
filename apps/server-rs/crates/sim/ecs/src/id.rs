@@ -61,3 +61,23 @@ pub struct Handle {
     pub(crate) slot: u32,
     pub(crate) generation: u32,
 }
+
+impl Handle {
+    #[must_use]
+    #[inline]
+    pub const fn slot(self) -> SlotIdx {
+        SlotIdx(self.slot)
+    }
+}
+
+/// A storage slot. Valid only inside the current core callback.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SlotIdx(u32);
+
+impl SlotIdx {
+    #[must_use]
+    #[inline]
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+}

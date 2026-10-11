@@ -70,6 +70,19 @@ fn ids_are_monotonic_per_floor() {
 }
 
 #[test]
+fn recycled_slot_keeps_its_slot_idx() {
+    let (schema, _) = hunger_only();
+    let mut store = Store::new(&schema, FloorId(0));
+    let a = store.spawn();
+    let b = store.spawn();
+    store.despawn(a);
+    let c = store.spawn();
+    assert_eq!(c.slot(), a.slot());
+    assert_ne!(c, a);
+    assert_ne!(b.slot(), a.slot());
+}
+
+#[test]
 fn reused_slot_starts_without_components() {
     let (schema, satiety) = hunger_only();
     let mut store = Store::new(&schema, FloorId(0));

@@ -10,6 +10,11 @@ a second name anywhere.
   Code: `World` (`packages/engine/src/core/world/world.ts`).
 - **Floor**: one dungeon level. It owns its slots, ids, grid, scheduler,
   events, inbox and its slice of every cell column.
+- **Wall ring**: the one-cell WALL border of every floor's grid; its cells
+  have a CellIdx but never an Interior, so nothing is written or placed
+  there.
+- **Neighbourhood**: the interior cells within Chebyshev distance r of a
+  centre, in scan order: ring by ring, row-major within a ring.
 - **Round**: one lockstep turn of every floor, `TICKS_PER_TURN` ticks long.
   Each floor runs its phases in order: inbox arrivals, then ticks, then
   actors, then deferred changes.
@@ -29,7 +34,8 @@ a second name anywhere.
 - **Schema**: the ordered list of registered components, shared by every
   floor of a world.
 - **Slot**: an index into the columns. Valid only inside the current core
-  callback; never stored.
+  callback; only core storage (the store's columns, the grid's index) keeps
+  one. In Rust (korr-ecs): `SlotIdx`, read from a `Handle`.
 - **Row**: the values at one slot across all columns.
 - **Component**: a named group of fields a module owns, such as `satiety`.
 - **Column**: one typed array holding one field for every slot.
@@ -49,6 +55,9 @@ a second name anywhere.
   a field value. A Trait is a field with a Range.
 - **Actor**: an entity the scheduler runs. A **player** is an actor whose
   decision comes from a recorded input.
+- **Thing**: an entity linked to a cell that is not an actor: an item, a
+  plant, a corpse, stairs. Many share a cell, in ascending EntityId order; a
+  thing never blocks a step.
 
 ## Decisions
 
