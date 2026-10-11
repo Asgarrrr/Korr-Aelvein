@@ -30,8 +30,8 @@ impl Floor {
                 .attach(t)
                 .expect("an inbox traveller was checked"),
         };
+        self.grid.link_actor(&self.store, h, at);
         let id = self.store.id(h).expect("a joined handle is alive");
-        self.grid.link_actor(h, id, at);
         self.store.insert(&ruleset.clock, h, clock);
         self.schedule.push(clock, id, h);
         h
@@ -39,8 +39,7 @@ impl Floor {
 
     pub(crate) fn join_thing(&mut self, at: Interior) -> Handle {
         let h = self.store.spawn();
-        let id = self.store.id(h).expect("a spawned handle is alive");
-        self.grid.link_thing(h, id, at);
+        self.grid.link_thing(&self.store, h, at);
         h
     }
 

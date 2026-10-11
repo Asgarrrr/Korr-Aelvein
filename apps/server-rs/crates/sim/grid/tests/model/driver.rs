@@ -360,10 +360,9 @@ impl World {
 }
 
 fn link(grid: &mut Grid, store: &Store, h: Handle, at: Interior, layer: Layer) {
-    let id = store.id(h).expect("a linked handle is alive");
     match layer {
-        Layer::Actor => grid.link_actor(h, id, at),
-        Layer::Thing => grid.link_thing(h, id, at),
+        Layer::Actor => grid.link_actor(store, h, at),
+        Layer::Thing => grid.link_thing(store, h, at),
     }
 }
 

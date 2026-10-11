@@ -50,8 +50,9 @@ impl Grid {
     }
 
     /// Reads what [`Grid::write`] wrote and links each record's entity on the
-    /// handle `resolve` maps its id to. Never calls `Reader::finish`. When
-    /// `resolve` maps distinct ids to distinct live handles, never panics.
+    /// live handle `resolve` maps its id to, which must carry that id. Never calls
+    /// `Reader::finish`. When `resolve` maps distinct ids to distinct live handles,
+    /// never panics.
     ///
     /// # Errors
     /// [`ImageError::Truncated`] when the bytes run out, or [`ImageError::Corrupt`] with:
@@ -102,15 +103,10 @@ impl Grid {
             let at = shape
                 .idx(pos)
                 .ok_or(ImageError::Corrupt("position off the floor"))?;
-            match layer {
-                Layer::Actor => {
-                    if grid.actor_at(at.cell()).is_some() {
-                        return Err(ImageError::Corrupt("two actors on one cell"));
-                    }
-                    grid.link_actor(h, id, at);
-                }
-                Layer::Thing => grid.link_thing(h, id, at),
+            if layer == Layer::Actor && grid.actor_at(at.cell()).is_some() {
+                return Err(ImageError::Corrupt("two actors on one cell"));
             }
+            grid.link(h, id, at, layer);
         }
         Ok(grid)
     }

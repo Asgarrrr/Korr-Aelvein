@@ -1,8 +1,6 @@
 use std::num::NonZeroU32;
 
-use korr_ecs::{
-    EntityId, FloorId, Handle, ImageError, Reader, SchemaBuilder, Store, Traveller, Writer,
-};
+use korr_ecs::{FloorId, Handle, ImageError, Reader, SchemaBuilder, Store, Traveller, Writer};
 use korr_grid::{Dir, Grid, MAX_STEP, Material, Pos, Shape, StepError};
 use korr_random::{DrawIndex, ModuleKey, Phase, Seed, Stream, Subject};
 
@@ -55,12 +53,8 @@ fn slot(h: Handle) -> u32 {
     h.slot().get()
 }
 
-fn id(store: &Store, h: Handle) -> EntityId {
-    store.id(h).expect("a test handle is alive")
-}
-
 fn bits(store: &Store, h: Handle) -> u64 {
-    id(store, h).to_bits()
+    store.id(h).expect("a test handle is alive").to_bits()
 }
 
 fn seeded() -> Grid {
@@ -253,11 +247,7 @@ fn rebuilt_grid_steps_like_the_original() {
     let h = store.spawn();
     let start = Pos { x: 1, y: 1 };
     let mut original = cliff();
-    original.link_actor(
-        h,
-        id(&store, h),
-        original.shape().idx(start).expect("inside"),
-    );
+    original.link_actor(&store, h, original.shape().idx(start).expect("inside"));
     let mut rebuilt = read(&bytes(&original), &store).expect("own image rebuilds");
     for (dir, expected) in [
         (Dir::East, Err(StepError::Blocked)),
@@ -278,14 +268,14 @@ fn placement_records_round_trip_byte_equal() {
     for (i, &h) in (0u16..).zip(&handles) {
         let at = shape.idx(pos(1 + i % 4, 1 + i / 4)).expect("inside");
         if i % 3 == 0 {
-            original.link_thing(h, id(&store, h), at);
+            original.link_thing(&store, h, at);
         } else {
-            original.link_actor(h, id(&store, h), at);
+            original.link_actor(&store, h, at);
         }
     }
     let shared = shape.idx(pos(1, 1)).expect("inside");
     let extra = store.spawn();
-    original.link_thing(extra, id(&store, extra), shared);
+    original.link_thing(&store, extra, shared);
     let image = bytes(&original);
     let reloaded = read(&image, &store).expect("own image reads");
     assert_eq!(bytes(&reloaded), image);
@@ -304,8 +294,8 @@ fn a_record_of_an_absent_entity_is_corrupt() {
     let h = store.spawn();
     let mut grid = cliff();
     grid.link_thing(
+        &store,
         h,
-        id(&store, h),
         grid.shape().idx(Pos { x: 1, y: 1 }).expect("inside"),
     );
     assert_eq!(
@@ -325,7 +315,6 @@ fn placement_records_ignore_slot_order() {
     let image = |x: Traveller, y: Traveller, y_first: bool| {
         let mut store = Store::new(&schema, FloorId(1));
         let mut grid = cliff();
-        let (x_id, y_id) = (x.id(), y.id());
         let mut attach = |t| store.attach(t).expect("a detached row attaches");
         let (hx, hy) = if y_first {
             let hy = attach(y);
@@ -336,8 +325,8 @@ fn placement_records_ignore_slot_order() {
         };
         let at = |p| grid.shape().idx(p).expect("inside");
         let (p, q) = (at(Pos { x: 1, y: 1 }), at(Pos { x: 2, y: 2 }));
-        grid.link_actor(hx, x_id, p);
-        grid.link_actor(hy, y_id, q);
+        grid.link_actor(&store, hx, p);
+        grid.link_actor(&store, hy, q);
         bytes(&grid)
     };
     let (x1, y1) = travellers();

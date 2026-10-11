@@ -1,4 +1,4 @@
-use korr_ecs::{EntityId, Handle};
+use korr_ecs::{EntityId, Handle, Store};
 
 use crate::config::MAX_STEP;
 use crate::error::StepError;
@@ -29,28 +29,30 @@ impl Grid {
         self.shape
     }
 
-    /// The caller links a live handle with its own id; core floor membership does.
     /// Walkability is not checked: worldgen and arrival choose the cell.
-    /// Unlink before `Store::despawn` and before `Store::detach`.
     ///
     /// # Panics
-    /// When the slot of `h` is still linked, `at` holds an actor, or `at` is not
-    /// an interior cell of this floor.
-    pub fn link_actor(&mut self, h: Handle, id: EntityId, at: Interior) {
-        self.check_interior(at);
-        self.occupancy.link_actor(h, id, at);
+    /// When `h` is dead in `store`, the slot of `h` is still linked, `at` holds an
+    /// actor, or `at` is not an interior cell of this floor.
+    pub fn link_actor(&mut self, store: &Store, h: Handle, at: Interior) {
+        self.link(h, live_id(store, h), at, Layer::Actor);
     }
 
-    /// The caller links a live handle with its own id; core floor membership does.
     /// Things never block a step and never touch the actor layer.
-    /// Unlink before `Store::despawn` and before `Store::detach`.
     ///
     /// # Panics
-    /// When the slot of `h` is still linked, or `at` is not an interior cell of
-    /// this floor.
-    pub fn link_thing(&mut self, h: Handle, id: EntityId, at: Interior) {
+    /// When `h` is dead in `store`, the slot of `h` is still linked, or `at` is not
+    /// an interior cell of this floor.
+    pub fn link_thing(&mut self, store: &Store, h: Handle, at: Interior) {
+        self.link(h, live_id(store, h), at, Layer::Thing);
+    }
+
+    pub(crate) fn link(&mut self, h: Handle, id: EntityId, at: Interior, layer: Layer) {
         self.check_interior(at);
-        self.occupancy.link_thing(h, id, at);
+        match layer {
+            Layer::Actor => self.occupancy.link_actor(h, id, at),
+            Layer::Thing => self.occupancy.link_thing(h, id, at),
+        }
     }
 
     /// Call before `Store::despawn` and before `Store::detach`: the slot is recycled after.
@@ -180,4 +182,8 @@ impl Grid {
     fn check_interior(&self, at: Interior) {
         self.shape.check_interior(at);
     }
+}
+
+fn live_id(store: &Store, h: Handle) -> EntityId {
+    store.id(h).expect("link of a dead handle")
 }
