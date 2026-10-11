@@ -158,7 +158,9 @@ impl World {
         } else {
             Layer::Actor
         };
-        if !self.reference.can_place((floor, at.cell()), layer) {
+        let fits = self.reference.can_place((floor, at.cell()), layer);
+        assert_eq!(self.floors[floor].grid.can_place(at, layer), fits);
+        if !fits {
             return;
         }
         let Floor { store, grid } = &mut self.floors[floor];

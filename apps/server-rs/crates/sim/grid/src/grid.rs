@@ -99,6 +99,7 @@ impl Grid {
     /// Height is not a placement rule.
     #[must_use]
     pub fn can_place(&self, at: Interior, layer: Layer) -> bool {
+        self.check_interior(at);
         self.terrain.material(at.cell()).walkable()
             && match layer {
                 Layer::Actor => !self.occupancy.holds_actor(at.cell()),
