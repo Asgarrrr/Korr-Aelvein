@@ -49,7 +49,7 @@ impl World {
                 .iter()
                 .find(|floor| floor.id() == id.origin())
                 .ok_or(WorldError::UnknownOrigin(id))?;
-            if id.counter() >= origin.counter() {
+            if id.counter() >= origin.next_counter() {
                 return Err(WorldError::BeyondCounter(id));
             }
             if previous == Some(id) {

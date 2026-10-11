@@ -37,10 +37,9 @@ impl Store {
         self.entities.floor()
     }
 
-    /// The counter the next spawn takes.
     #[must_use]
     #[inline]
-    pub fn counter(&self) -> u64 {
+    pub fn next_counter(&self) -> u64 {
         self.entities.next_counter()
     }
 

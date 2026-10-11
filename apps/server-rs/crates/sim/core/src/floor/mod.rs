@@ -102,8 +102,8 @@ impl Floor {
         self.round
     }
 
-    pub(crate) fn counter(&self) -> u64 {
-        self.store.counter()
+    pub(crate) fn next_counter(&self) -> u64 {
+        self.store.next_counter()
     }
 
     /// Travellers waiting for a free cell on this floor.
