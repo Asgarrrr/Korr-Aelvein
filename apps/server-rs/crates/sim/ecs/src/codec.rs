@@ -87,11 +87,6 @@ impl<'a> Reader<'a> {
         Self { bytes, at: 0 }
     }
 
-    #[must_use]
-    pub const fn position(&self) -> usize {
-        self.at
-    }
-
     /// # Errors
     /// `Truncated` when fewer than `n` bytes remain.
     pub fn read_bytes(&mut self, n: usize) -> Result<&'a [u8], ImageError> {
@@ -212,7 +207,6 @@ mod tests {
         assert_eq!(r.read_u16(), Ok(0xB2C3));
         assert_eq!(r.read_u32(), Ok(0xD4E5_F607));
         assert_eq!(r.read_u64(), Ok(0x1829_3A4B_5C6D_7E8F));
-        assert_eq!(r.position(), 15);
         assert_eq!(r.read_i8(), Ok(-2));
         assert_eq!(r.read_i16(), Ok(-3));
         assert_eq!(r.read_i32(), Ok(-4));
@@ -231,7 +225,6 @@ mod tests {
             r.read_bytes(usize::MAX),
             Err(ImageError::Truncated { at: 1 })
         );
-        assert_eq!(r.position(), 1);
         assert_eq!(r.finish(), Err(ImageError::Trailing(2)));
     }
 }
