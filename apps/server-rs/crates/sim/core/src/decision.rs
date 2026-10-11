@@ -106,3 +106,22 @@ impl Candidates {
             })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use korr_ecs::{Component, ImageError, Reader, Writer};
+
+    use super::{Intent, TARGET_POS};
+
+    #[test]
+    fn an_unknown_target_tag_is_corrupt() {
+        let mut w = Writer::new();
+        w.write_u64(0);
+        w.write_u8(TARGET_POS + 1);
+        let bytes = w.into_bytes();
+        assert_eq!(
+            Intent::read(&mut Reader::new(&bytes)).err(),
+            Some(ImageError::Corrupt("target"))
+        );
+    }
+}

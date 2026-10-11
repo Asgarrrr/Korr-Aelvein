@@ -76,3 +76,15 @@ fn check_arrival_agrees_with_attach() {
         .expect("a checked traveller attaches");
     assert_eq!(destination.get(satiety.read(), h), Some(&Satiety(7)));
 }
+
+#[test]
+fn a_traveller_id_with_bit_63_set_is_corrupt() {
+    let mut w = Writer::new();
+    w.write_u64(1 << 63);
+    w.write_u32(0);
+    let bytes = w.into_bytes();
+    assert_eq!(
+        Traveller::read(&mut Reader::new(&bytes)).err(),
+        Some(ImageError::Corrupt("entity id"))
+    );
+}

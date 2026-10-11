@@ -380,3 +380,12 @@ fn unknown_layer_is_corrupt() {
         Some(ImageError::Corrupt("layer"))
     );
 }
+
+#[test]
+fn record_id_bits_with_bit_63_set_are_corrupt() {
+    let record = (1 << 63, ACTOR, Pos { x: 1, y: 1 });
+    assert_eq!(
+        read(&forged(&cliff(), &[record]), &store()).err(),
+        Some(ImageError::Corrupt("entity id"))
+    );
+}
