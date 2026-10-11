@@ -217,6 +217,12 @@ fn clock_before_the_round_is_corrupt() {
 }
 
 #[test]
+fn clocks_at_the_round_start_and_one_maximal_cost_after_load() {
+    assert_eq!(load_with_clock(TICKS_PER_ROUND), None);
+    assert_eq!(load_with_clock(TICKS_PER_ROUND + u64::from(u32::MAX)), None);
+}
+
+#[test]
 fn clock_past_one_maximal_cost_is_corrupt() {
     let past = TICKS_PER_ROUND + u64::from(u32::MAX) + 1;
     assert_eq!(load_with_clock(past), Some(corrupt("clock out of range")));

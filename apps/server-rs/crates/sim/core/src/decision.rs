@@ -111,7 +111,41 @@ impl Candidates {
 mod tests {
     use korr_ecs::{Component, ImageError, Reader, Writer};
 
-    use super::{Intent, TARGET_POS};
+    use super::{ActionRef, Band, Candidate, Candidates, INERTIA, Intent, TARGET_POS};
+    use crate::module::{ActionKey, Target};
+
+    fn candidate(key: u64, weight: u16) -> Candidate {
+        Candidate {
+            action: ActionRef {
+                module: 0,
+                index: 0,
+                key: ActionKey(key),
+            },
+            band: Band::Routine,
+            weight,
+            target: Target::None,
+        }
+    }
+
+    /// The current intent holds the lower key, so a tie after the bonus keeps it.
+    fn keeps_intent_against(rival: u16) -> bool {
+        let mut candidates = Candidates::default();
+        candidates.push(candidate(1, 10));
+        candidates.push(candidate(2, 10 + rival));
+        let intent = Intent {
+            action: ActionKey(1),
+            target: Target::None,
+        };
+        candidates
+            .pick(Some(intent), None)
+            .is_some_and(|c| c.action.key == ActionKey(1))
+    }
+
+    #[test]
+    fn inertia_outweighs_a_rival_up_to_its_bonus_and_no_further() {
+        assert!(keeps_intent_against(INERTIA));
+        assert!(!keeps_intent_against(INERTIA + 1));
+    }
 
     #[test]
     fn an_unknown_target_tag_is_corrupt() {
