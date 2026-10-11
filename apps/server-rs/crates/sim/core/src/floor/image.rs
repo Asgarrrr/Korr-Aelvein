@@ -80,7 +80,7 @@ impl Floor {
         let grid = Grid::read(&mut r, |id| handles.get(&id).copied())?;
         r.finish()?;
         let mut inbox = Inbox::default();
-        let mut taken: BTreeSet<_> = store.handles().filter_map(|h| store.id(h)).collect();
+        let mut waiting = BTreeSet::new();
         for image in &sections.flights {
             let mut r = Reader::new(&image.traveller);
             let traveller = Traveller::read(&mut r)?;
@@ -100,7 +100,8 @@ impl Floor {
             if flight.round >= round {
                 return Err(ImageError::Corrupt("inbox round").into());
             }
-            if !taken.insert(flight.traveller.id()) {
+            let id = flight.traveller.id();
+            if handles.contains_key(&id) || !waiting.insert(id) {
                 return Err(ImageError::Corrupt("inbox duplicate id").into());
             }
             store.check_arrival(&flight.traveller)?;
