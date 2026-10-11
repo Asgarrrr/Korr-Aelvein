@@ -32,7 +32,7 @@ pub trait Module {
     const CELL_COLUMN: bool = false;
     /// The next value of the module's cell column at one cell, from the previous
     /// round's column; called once per cell and round, only when `CELL_COLUMN`.
-    /// `draws` is the cell's own stream.
+    /// Its draws come from the cell's own stream.
     fn tick(&self, cell: Stencil<'_>, _: Draws) -> u8 {
         cell.value()
     }

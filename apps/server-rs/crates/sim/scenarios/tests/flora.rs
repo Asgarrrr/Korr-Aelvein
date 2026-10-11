@@ -102,6 +102,27 @@ fn a_plant_on_a_wall_withers() {
 }
 
 #[test]
+fn seeds_never_take_on_a_wall() {
+    let game = flora_only();
+    let mut f = floor(game.ruleset(), FLOOR, 8, 8);
+    let wall = |at: Pos| at.x == 4;
+    for at in interior(8) {
+        if wall(at) {
+            f.set_material(at, Material::WALL);
+        } else {
+            f.set_cell_value::<Flora>(game.ruleset(), at, GROWN);
+        }
+    }
+    let mut world = World::new(vec![f]);
+    for round in 0..20 {
+        run(&game, &mut world, 1);
+        for at in interior(8).into_iter().filter(|&at| wall(at)) {
+            assert_eq!(plant(&game, &world, at), 0, "round {round}, {at:?}");
+        }
+    }
+}
+
+#[test]
 fn bare_ground_with_no_plant_near_stays_bare() {
     let game = flora_only();
     let f = floor(game.ruleset(), FLOOR, 8, 8);

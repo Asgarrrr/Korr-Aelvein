@@ -55,7 +55,7 @@ impl Visit for TickVisit<'_> {
             let stream = Stream::new(self.seed, module_key::<M>(), Phase::Tick, time);
             let column = &mut self.columns[self.slot];
             self.grid.stencil(column, self.scratch, |cell| {
-                module.tick(cell, Draws::cell(stream, self.floor, cell.index()))
+                module.tick(cell, Draws::cell(stream, self.floor, cell.pos()))
             });
             mem::swap(column, self.scratch);
             self.slot += 1;

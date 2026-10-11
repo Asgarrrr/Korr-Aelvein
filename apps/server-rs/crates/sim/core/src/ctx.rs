@@ -23,10 +23,10 @@ impl Draws {
     }
 
     /// `stream` is the module's tick stream of one round.
-    pub(crate) fn cell(stream: Stream, floor: FloorId, index: u32) -> Self {
+    pub(crate) fn cell(stream: Stream, floor: FloorId, at: Pos) -> Self {
         Self {
             stream,
-            subject: cell_subject(floor, index),
+            subject: cell_subject(floor, at),
         }
     }
 
@@ -37,8 +37,9 @@ impl Draws {
 }
 
 /// The floor is part of the subject: the same cell of two floors draws differently.
-fn cell_subject(floor: FloorId, index: u32) -> Subject {
-    Subject::Cell((u64::from(floor.0) << 32) | u64::from(index))
+fn cell_subject(floor: FloorId, at: Pos) -> Subject {
+    let (x, y) = (at.x.cast_unsigned(), at.y.cast_unsigned());
+    Subject::Cell((u64::from(floor.0) << 32) | (u64::from(y) << 16) | u64::from(x))
 }
 
 #[derive(Debug)]
@@ -129,6 +130,7 @@ mod tests {
     use alloc::collections::BTreeSet;
 
     use korr_ecs::FloorId;
+    use korr_grid::Pos;
     use korr_random::Subject;
 
     use super::cell_subject;
@@ -136,15 +138,18 @@ mod tests {
     #[test]
     fn cell_subjects_never_alias() {
         let floors = [0, 1, 2, u16::MAX].map(FloorId);
-        let indexes = [0, 1, 255, 256, 65535, 65536, 32767 * 32767 - 1];
+        let coords = [1, 2, 255, 256, 257, i16::MAX - 1];
         let mut seen = BTreeSet::new();
         for floor in floors {
-            for index in indexes {
-                let Subject::Cell(bits) = cell_subject(floor, index) else {
-                    panic!("a cell subject is a cell");
-                };
-                assert!(bits < 1 << 63, "{floor:?} {index}");
-                assert!(seen.insert(bits), "{floor:?} {index} aliases");
+            for y in coords {
+                for x in coords {
+                    let at = Pos { x, y };
+                    let Subject::Cell(bits) = cell_subject(floor, at) else {
+                        panic!("a cell subject is a cell");
+                    };
+                    assert!(bits < 1 << 63, "{floor:?} {at:?}");
+                    assert!(seen.insert(bits), "{floor:?} {at:?} aliases");
+                }
             }
         }
     }

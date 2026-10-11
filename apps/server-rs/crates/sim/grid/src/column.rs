@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use korr_ecs::{ImageError, Reader, Writer};
 
 use crate::grid::Grid;
-use crate::shape::{Interior, Shape};
+use crate::shape::{Interior, Pos, Shape};
 
 /// One `u8` per cell of one floor, padded like the terrain: the ring stays 0.
 #[derive(Debug)]
@@ -70,6 +70,7 @@ pub struct Stencil<'a> {
     at: usize,
     width: usize,
     walkable: bool,
+    pos: Pos,
 }
 
 impl Stencil<'_> {
@@ -105,15 +106,10 @@ impl Stencil<'_> {
         ]
     }
 
-    /// Unique per cell of one floor, ring included.
     #[must_use]
     #[inline]
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a shape side is at most i16::MAX, so a padded index is below 2^30"
-    )]
-    pub fn index(self) -> u32 {
-        self.at as u32
+    pub fn pos(self) -> Pos {
+        self.pos
     }
 }
 
@@ -129,13 +125,19 @@ impl Grid {
         let (width, height) = sides(self.shape());
         let rows = next.cells.chunks_exact_mut(width);
         let materials = self.terrain.materials().chunks_exact(width);
-        for (y, (row, materials)) in rows.zip(materials).enumerate().skip(1).take(height - 2) {
-            for x in 1..width - 1 {
-                row[x] = f(Stencil {
+        let rows = rows.zip(materials).zip(0..self.shape().height());
+        for ((row, materials), y) in rows.skip(1).take(height - 2) {
+            for x in 1..self.shape().width() - 1 {
+                let column = usize::from(x);
+                row[column] = f(Stencil {
                     prev: &prev.cells,
-                    at: y * width + x,
+                    at: usize::from(y) * width + column,
                     width,
-                    walkable: materials[x].walkable(),
+                    walkable: materials[column].walkable(),
+                    pos: Pos {
+                        x: x.cast_signed(),
+                        y: y.cast_signed(),
+                    },
                 });
             }
         }
@@ -196,6 +198,7 @@ mod tests {
                     at: at.cell().index(),
                     width: usize::from(shape.width()),
                     walkable: grid.terrain.material(at.cell()).walkable(),
+                    pos: Pos { x, y },
                 };
                 next.set(at, f(cell));
             }
@@ -222,6 +225,7 @@ mod tests {
                     at: shape.idx(Pos { x, y }).expect("interior").cell().index(),
                     width: usize::from(shape.width()),
                     walkable: true,
+                    pos: Pos { x, y },
                 };
                 let neighbours = cell.neighbours();
                 for (i, dir) in Dir::ALL.into_iter().enumerate() {
