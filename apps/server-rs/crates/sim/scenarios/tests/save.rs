@@ -41,6 +41,24 @@ fn a_save_under_another_seed_is_refused() {
 }
 
 #[test]
+fn a_save_of_another_format_is_refused() {
+    let game = game(TO_B, SEED);
+    let bytes = game.save(&left(&game));
+    let mut foreign = bytes.clone();
+    foreign[0] ^= 1;
+    assert_eq!(
+        game.load(&foreign).err(),
+        Some(LoadError::Image(ImageError::Magic))
+    );
+    let mut newer = bytes;
+    newer[8..10].copy_from_slice(&2u16.to_le_bytes());
+    assert_eq!(
+        game.load(&newer).err(),
+        Some(LoadError::Image(ImageError::Version(2)))
+    );
+}
+
+#[test]
 fn an_id_beyond_its_origin_counter_is_refused() {
     let game = game(TO_B, SEED);
     let ruleset = game.ruleset();
@@ -93,7 +111,9 @@ fn the_lowest_failing_id_decides() {
 
 /// A Save holding `floors`, framed by hand.
 fn framed(seed: Seed, floors: &[Vec<u8>]) -> Vec<u8> {
-    let mut bytes = seed.0.to_le_bytes().to_vec();
+    let mut bytes = b"KORRSAV\0".to_vec();
+    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&seed.0.to_le_bytes());
     bytes.extend_from_slice(&u32::try_from(floors.len()).expect("fits u32").to_le_bytes());
     for image in floors {
         bytes.extend_from_slice(&u32::try_from(image.len()).expect("fits u32").to_le_bytes());

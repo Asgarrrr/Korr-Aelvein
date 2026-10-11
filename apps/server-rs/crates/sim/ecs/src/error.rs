@@ -5,7 +5,7 @@ pub enum ImageError {
     Truncated { at: usize },
     #[error("image checksum mismatch")]
     Checksum,
-    #[error("not a floor image")]
+    #[error("image magic mismatch")]
     Magic,
     #[error("unsupported image version {0}")]
     Version(u16),
