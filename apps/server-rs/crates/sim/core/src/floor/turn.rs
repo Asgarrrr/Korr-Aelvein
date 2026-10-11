@@ -152,6 +152,7 @@ impl RunVisit<'_> {
         let mut action = M::Action::ALL[index];
         let mut target = self.pick.target;
         let floor = self.floor.id();
+        let draws = Draws::new(self.seed, module_key::<M>(), self.now, self.id);
         let mut hops = 0;
         loop {
             let store = &self.floor.store;
@@ -161,7 +162,6 @@ impl RunVisit<'_> {
             {
                 return None;
             }
-            let draws = Draws::new(self.seed, module_key::<M>(), self.now, self.id);
             let prep = PrepCtx {
                 grid: &self.floor.grid,
                 actor: self.actor,
