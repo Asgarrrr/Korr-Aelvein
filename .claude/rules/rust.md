@@ -68,7 +68,8 @@ holds what a lint cannot check. Paths below are relative to `apps/server-rs/`.
   inserting a draw would shift every later one.
 - A replay or save records the engine build (git commit) with the seed and
   the inputs. The server refuses to replay another build: any rule, tuning
-  or RNG change alters the outcome.
+  or RNG change alters the outcome. The server wraps each engine save and
+  replay with the build; the engine save carries only its format version.
 - The cost of a draw is measured in the `core` turn bench, never alone.
 
 ## Dependencies

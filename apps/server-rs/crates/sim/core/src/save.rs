@@ -9,7 +9,7 @@ use crate::module::Mechanics;
 use crate::world::World;
 
 const MAGIC: &[u8; 8] = b"KORRSAV\0";
-/// Versions the framing of the save and of every core image nested in it.
+/// Versions the framing of the save and of every image nested in it, except the store image.
 const VERSION: u16 = 1;
 
 impl<M: Mechanics> Game<M> {

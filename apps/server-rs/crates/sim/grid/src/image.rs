@@ -19,7 +19,7 @@ impl Grid {
     /// interior heights, each one byte per cell in row-major order. Then a
     /// `u32` record count and one record per placed entity in strictly
     /// ascending `EntityId`: `u64` id bits, `u8` layer (0 actor, 1 thing),
-    /// `i16` x, `i16` y.
+    /// `i16` x, `i16` y. A layout change bumps the save `VERSION` of `korr-core`.
     #[expect(
         clippy::cast_possible_truncation,
         reason = "records are indexed by u32 slots, so their count fits u32"

@@ -197,8 +197,9 @@ Its id is the registration index; a name is registered once and is never
 empty. `Schema` is the ordered list of registered components, shared by
 every floor of a world. A `Store` holds one floor: its entities and one
 type-erased column per component, in schema order. A key used on a store
-of another schema panics. Each component has a prefix: FNV-1a 64 over
-the names and `Component::VERSION`s registered up to it. A floor image
+of another schema panics. Each component has a prefix: FNV-1a 64, from
+the standard offset basis, over each component registered up to it as
+`u16` LE name length, name bytes, `u16` LE `Component::VERSION`. A floor image
 writes it per column, so a renamed, reordered or re-versioned component
 fails the load.
 

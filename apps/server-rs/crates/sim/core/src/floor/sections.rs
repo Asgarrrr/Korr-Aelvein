@@ -9,6 +9,7 @@ const CHECKSUM_LEN: usize = 8;
 /// fingerprint, the store, the grid, then a `u32` flight count and per flight
 /// a `u64` round, `i16` x, `i16` y and the traveller. Each section is a `u32`
 /// length then its bytes. A `u64` checksum of every byte before it ends the image.
+/// A layout change bumps the save `VERSION` in `save.rs`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sections {
     pub round: u64,
