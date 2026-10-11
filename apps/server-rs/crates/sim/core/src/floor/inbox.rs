@@ -44,6 +44,12 @@ impl Inbox {
 }
 
 impl Floor {
+    /// # Panics
+    /// When a flight with the same key already waits here.
+    pub(crate) fn receive(&mut self, flight: Flight) {
+        self.inbox.insert(flight);
+    }
+
     /// At the barrier, each flight in order takes the free cell nearest its `at` and
     /// acts next round. A flight with no free cell waits, in order.
     pub(crate) fn land(&mut self, ruleset: &Ruleset) {

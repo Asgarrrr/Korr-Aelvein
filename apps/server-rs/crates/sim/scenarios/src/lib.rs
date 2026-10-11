@@ -5,6 +5,7 @@
 extern crate alloc;
 
 mod leave;
+mod ring;
 mod scripted;
 mod shy;
 
@@ -18,6 +19,7 @@ use korr_ecs::{FloorId, SchemaBuilder};
 use korr_grid::Shape;
 
 pub use leave::Leave;
+pub use ring::Ring;
 pub use scripted::{Act, Answer, Fake, Scripted};
 pub use shy::{Shy, random_step};
 

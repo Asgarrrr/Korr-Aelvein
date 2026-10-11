@@ -39,7 +39,7 @@ pub struct Floor {
     round: Round,
     /// Actors that departed this round, in departure order; empty at the barrier.
     departures: Vec<Departure>,
-    pub(crate) inbox: Inbox,
+    inbox: Inbox,
     /// Scratch of one turn, cleared before every proposal.
     candidates: Candidates,
     /// Scratch of one turn, cleared before every scan.

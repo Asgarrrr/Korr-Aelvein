@@ -1,3 +1,5 @@
+mod barrier;
+
 use alloc::vec::Vec;
 
 use korr_ecs::{EntityId, FloorId, checksum};
@@ -67,11 +69,7 @@ impl World {
         self.floors.binary_search_by_key(&id, Floor::id).ok()
     }
 
-    /// Every floor runs its environment then its actors through `runner`, then
-    /// the barrier: every floor sends, each flight joins its destination's
-    /// inbox, every floor lands, the round ends.
-    /// Arrivals act next round and the inbox is ordered, so the floor order
-    /// never changes a result.
+    /// Every floor runs its environment then its actors through `runner`, then the barrier.
     ///
     /// # Panics
     /// When an actor departs to a floor outside this world.
@@ -87,22 +85,7 @@ impl World {
             floor.run_actors(seed, ruleset, mechanics);
         };
         runner.each(jobs(&mut self.floors, &work));
-        let mut flights = Vec::new();
-        for floor in &mut self.floors {
-            flights.extend(floor.send());
-        }
-        for (to, flight) in flights {
-            let at = self
-                .position(to)
-                .expect("departure to a floor outside this world");
-            self.floors[at].inbox.insert(flight);
-        }
-        for floor in &mut self.floors {
-            floor.land(ruleset);
-        }
-        for floor in &mut self.floors {
-            floor.end_round();
-        }
+        self.barrier(ruleset);
     }
 
     /// In ascending `FloorId`.
