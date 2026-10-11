@@ -88,16 +88,39 @@ fn grid(c: &mut Criterion) {
         });
     });
     let centres: Vec<Pos> = cells.iter().map(|&at| shape.pos(at)).collect();
-    group.bench_function("neighbourhood_actors", |b| {
+    let mut seen = Vec::new();
+    group.bench_function("ring_actors", |b| {
         b.iter(|| {
-            let mut seen = 0_usize;
+            let mut total = 0_usize;
             for &centre in black_box(&centres) {
-                seen += shape
-                    .neighbourhood(centre, SIGHT)
-                    .filter(|at| grid.holds_actor(at.cell()))
-                    .count();
+                seen.clear();
+                seen.extend(
+                    shape
+                        .neighbourhood(centre, SIGHT)
+                        .filter(|at| grid.holds_actor(at.cell()))
+                        .map(|at| shape.pos(at.cell())),
+                );
+                black_box(&seen);
+                total += seen.len();
             }
-            black_box(seen)
+            black_box(total)
+        });
+    });
+    group.bench_function("square_sorted_actors", |b| {
+        b.iter(|| {
+            let mut total = 0_usize;
+            for &centre in black_box(&centres) {
+                seen.clear();
+                shape.scan_square(centre, SIGHT, |p, at| {
+                    if grid.holds_actor(at.cell()) {
+                        seen.push(p);
+                    }
+                });
+                seen.sort_by_key(|p| (p.x - centre.x).abs().max((p.y - centre.y).abs()));
+                black_box(&seen);
+                total += seen.len();
+            }
+            black_box(total)
         });
     });
     group.bench_function("nearest_place", |b| {

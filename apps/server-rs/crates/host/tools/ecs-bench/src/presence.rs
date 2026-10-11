@@ -15,7 +15,7 @@ const NAMES: [&str; COLUMNS] = [
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Field(u32);
+struct Field(u32);
 
 impl Component for Field {
     const VERSION: u16 = 0;
