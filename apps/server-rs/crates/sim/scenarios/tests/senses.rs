@@ -5,7 +5,7 @@
 use std::cell::RefCell;
 
 use korr_core::{
-    host::{Seed, World},
+    host::{SIGHT, Seed, World},
     mechanic::{
         Action, CommitCtx, Module, Pos, PrepCtx, Prepared, Proposals, Seen, Senses, Target,
     },
@@ -64,11 +64,24 @@ const BEYOND_SIGHT: Pos = Pos { x: 9, y: 9 };
 
 /// What every actor is shown in one round. Spawn order is id order and is
 /// not neighbourhood order around `CENTRE`.
+fn shown_in_a_round(perceives: bool) -> Vec<(Pos, Vec<Seen>)> {
+    shown_around(
+        perceives,
+        [
+            Pos { x: 5, y: 2 },
+            BEYOND_SIGHT,
+            Pos { x: 6, y: 5 },
+            CENTRE,
+            Pos { x: 4, y: 4 },
+        ],
+    )
+}
+
 #[expect(
     clippy::disallowed_types,
     reason = "a test observer, not engine state: it only records what propose is shown"
 )]
-fn shown_in_a_round(perceives: bool) -> Vec<(Pos, Vec<Seen>)> {
+fn shown_around(perceives: bool, spawns: impl IntoIterator<Item = Pos>) -> Vec<(Pos, Vec<Seen>)> {
     let game = game(
         Watcher {
             perceives,
@@ -77,13 +90,7 @@ fn shown_in_a_round(perceives: bool) -> Vec<(Pos, Vec<Seen>)> {
         Seed(1),
     );
     let mut f = floor(game.ruleset(), FloorId(0), 11, 11);
-    for at in [
-        Pos { x: 5, y: 2 },
-        BEYOND_SIGHT,
-        Pos { x: 6, y: 5 },
-        CENTRE,
-        Pos { x: 4, y: 4 },
-    ] {
+    for at in spawns {
         f.spawn_actor(game.ruleset(), at);
     }
     let mut world = World::new(vec![f]);
@@ -112,6 +119,26 @@ fn perceiving_mechanics_see_the_others_in_neighbourhood_order() {
         [seen(4, 4, 4), seen(2, 6, 5), seen(0, 5, 2)]
     );
     assert_eq!(seen_by(&shown, BEYOND_SIGHT), []);
+}
+
+/// Ties within a ring outnumber what an unstable sort keeps in order by luck.
+#[test]
+fn a_crowd_is_seen_ring_by_ring_then_row_by_row() {
+    let sight = i16::try_from(SIGHT).expect("sight fits i16");
+    let ring = |p: Pos| (p.x - CENTRE.x).abs().max((p.y - CENTRE.y).abs());
+    let square: Vec<Pos> = (-sight..=sight)
+        .flat_map(|dy| {
+            (-sight..=sight).map(move |dx| Pos {
+                x: CENTRE.x + dx,
+                y: CENTRE.y + dy,
+            })
+        })
+        .collect();
+    let shown = shown_around(true, square.iter().rev().copied());
+    let mut expected: Vec<Pos> = square.into_iter().filter(|&p| p != CENTRE).collect();
+    expected.sort_by_key(|&p| (ring(p), p.y, p.x));
+    let seen: Vec<Pos> = seen_by(&shown, CENTRE).iter().map(|s| s.pos).collect();
+    assert_eq!(seen, expected);
 }
 
 #[test]
