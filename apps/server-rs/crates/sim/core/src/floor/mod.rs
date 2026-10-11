@@ -31,7 +31,8 @@ pub struct Floor {
     /// One per entry of `Ruleset::columns`, in the same order.
     columns: Vec<CellColumn>,
     /// The next values of the column being ticked; swapped with it, never read between ticks.
-    scratch: CellColumn,
+    /// `None` when the ruleset runs no module with a cell column.
+    scratch: Option<CellColumn>,
     /// Fingerprint of the ruleset that built the floor: its column order is the only key to `columns`.
     fingerprint: u64,
     schedule: Schedule,
@@ -56,7 +57,7 @@ impl Floor {
                 .iter()
                 .map(|_| CellColumn::new(shape))
                 .collect(),
-            scratch: CellColumn::new(shape),
+            scratch: scratch(ruleset, shape),
             fingerprint: ruleset.fingerprint(),
             schedule: Schedule::default(),
             round: Round(0),
@@ -196,4 +197,8 @@ impl Floor {
             .position(|&name| name == M::NAME)
             .unwrap_or_else(|| panic!("the ruleset does not run {}", M::NAME))
     }
+}
+
+fn scratch(ruleset: &Ruleset, shape: Shape) -> Option<CellColumn> {
+    (!ruleset.columns.is_empty()).then(|| CellColumn::new(shape))
 }

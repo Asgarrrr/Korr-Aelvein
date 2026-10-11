@@ -5,6 +5,7 @@ use korr_ecs::{ImageError, Reader, Writer};
 
 use crate::grid::Grid;
 use crate::shape::{Interior, Pos, Shape};
+use crate::terrain::Material;
 
 /// One `u8` per cell of one floor, padded like the terrain: the ring stays 0.
 #[derive(Debug)]
@@ -69,7 +70,7 @@ pub struct Stencil<'a> {
     prev: &'a [u8],
     at: usize,
     width: usize,
-    walkable: bool,
+    materials: &'a [Material],
     pos: Pos,
 }
 
@@ -84,7 +85,7 @@ impl Stencil<'_> {
     #[must_use]
     #[inline]
     pub fn walkable(self) -> bool {
-        self.walkable
+        self.materials[self.at].walkable()
     }
 
     /// The eight surrounding cells, previous round, in [`Dir::ALL`](crate::Dir::ALL) order.
@@ -92,18 +93,19 @@ impl Stencil<'_> {
     #[must_use]
     #[inline]
     pub fn neighbours(self) -> [u8; 8] {
+        self.around().map(|i| self.prev[i])
+    }
+
+    /// Whether each surrounding cell is walkable, in the order of [`Stencil::neighbours`].
+    #[must_use]
+    #[inline]
+    pub fn walkable_neighbours(self) -> [bool; 8] {
+        self.around().map(|i| self.materials[i].walkable())
+    }
+
+    fn around(self) -> [usize; 8] {
         let (at, up, down) = (self.at, self.at - self.width, self.at + self.width);
-        let p = self.prev;
-        [
-            p[up - 1],
-            p[up],
-            p[up + 1],
-            p[at - 1],
-            p[at + 1],
-            p[down - 1],
-            p[down],
-            p[down + 1],
-        ]
+        [up - 1, up, up + 1, at - 1, at + 1, down - 1, down, down + 1]
     }
 
     #[must_use]
@@ -124,16 +126,16 @@ impl Grid {
         assert_eq!(next.shape, self.shape(), "cell column of another floor");
         let (width, height) = sides(self.shape());
         let rows = next.cells.chunks_exact_mut(width);
-        let materials = self.terrain.materials().chunks_exact(width);
-        let rows = rows.zip(materials).zip(0..self.shape().height());
-        for ((row, materials), y) in rows.skip(1).take(height - 2) {
+        let materials = self.terrain.materials();
+        let rows = rows.zip(0..self.shape().height());
+        for (row, y) in rows.skip(1).take(height - 2) {
             for x in 1..self.shape().width() - 1 {
                 let column = usize::from(x);
                 row[column] = f(Stencil {
                     prev: &prev.cells,
                     at: usize::from(y) * width + column,
                     width,
-                    walkable: materials[column].walkable(),
+                    materials,
                     pos: Pos {
                         x: x.cast_signed(),
                         y: y.cast_signed(),
@@ -197,7 +199,7 @@ mod tests {
                     prev: &prev.cells,
                     at: at.cell().index(),
                     width: usize::from(shape.width()),
-                    walkable: grid.terrain.material(at.cell()).walkable(),
+                    materials: grid.terrain.materials(),
                     pos: Pos { x, y },
                 };
                 next.set(at, f(cell));
@@ -215,7 +217,7 @@ mod tests {
     }
 
     #[test]
-    fn neighbours_follow_dir_all_in_the_previous_column() {
+    fn neighbours_and_their_ground_follow_dir_all() {
         let (grid, prev) = setup();
         let shape = grid.shape();
         for y in 1..=5 {
@@ -224,10 +226,10 @@ mod tests {
                     prev: &prev.cells,
                     at: shape.idx(Pos { x, y }).expect("interior").cell().index(),
                     width: usize::from(shape.width()),
-                    walkable: true,
+                    materials: grid.terrain.materials(),
                     pos: Pos { x, y },
                 };
-                let neighbours = cell.neighbours();
+                let (neighbours, walkable) = (cell.neighbours(), cell.walkable_neighbours());
                 for (i, dir) in Dir::ALL.into_iter().enumerate() {
                     let (dx, dy) = dir.offset();
                     let around = shape.idx(Pos {
@@ -236,6 +238,8 @@ mod tests {
                     });
                     let expected = around.map_or(0, |n| prev.get(n));
                     assert_eq!(neighbours[i], expected, "({x}, {y}) {dir:?}");
+                    let ground = around.is_some_and(|n| grid.terrain.material(n.cell()).walkable());
+                    assert_eq!(walkable[i], ground, "({x}, {y}) {dir:?}");
                 }
             }
         }

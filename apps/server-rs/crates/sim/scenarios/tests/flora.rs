@@ -250,6 +250,19 @@ fn some_but_not_all_bare_neighbours_sprout_each_round() {
 }
 
 #[test]
+fn a_plant_on_a_wall_never_seeds() {
+    const SIDE: u16 = 64;
+    let game = flora_only();
+    let mut f = sown(&game, SIDE, u8::MAX);
+    for at in lattice(SIDE) {
+        f.set_material(at, Material::WALL);
+    }
+    let mut world = World::new(vec![f]);
+    game.run_round(&mut world);
+    assert_eq!(planted_off(&game, &world, SIDE), 0);
+}
+
+#[test]
 fn a_reload_mid_growth_replays_the_same_world() {
     const SIDE: u16 = 32;
     let game = flora_only();

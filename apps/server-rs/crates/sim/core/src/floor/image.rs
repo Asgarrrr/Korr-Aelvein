@@ -147,7 +147,7 @@ impl Floor {
         }
         Ok(Self {
             store,
-            scratch: CellColumn::new(grid.shape()),
+            scratch: super::scratch(ruleset, grid.shape()),
             grid,
             columns,
             fingerprint: ruleset.fingerprint(),

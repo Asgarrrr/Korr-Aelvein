@@ -43,10 +43,16 @@ impl Module for Flora {
         } else if cell.value() != 0 {
             cell.value().saturating_add(1).min(RIPE)
         } else {
-            let ripe = cell.neighbours().iter().filter(|&&n| n >= RIPE).count();
-            if ripe == 0 {
+            let neighbours = cell.neighbours();
+            if neighbours.iter().all(|&n| n < RIPE) {
                 return 0;
             }
+            // Terrain is read only beside a ripe value: most bare ground has none.
+            let ripe = neighbours
+                .into_iter()
+                .zip(cell.walkable_neighbours())
+                .filter(|&(n, ground)| ground && n >= RIPE)
+                .count();
             // The chances add up per ripe neighbour, so a lone plant spreads slower than a thicket.
             let ripe = u32::try_from(ripe).expect("a cell has eight neighbours");
             u8::from(draws.below(Draw::Sprout, SPROUT_ODDS) < ripe * SPROUT_CHANCE)

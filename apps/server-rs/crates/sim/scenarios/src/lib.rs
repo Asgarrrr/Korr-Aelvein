@@ -21,6 +21,46 @@ pub use leave::Leave;
 pub use scripted::{Act, Answer, Fake, Scripted};
 pub use shy::{Shy, random_step};
 
+/// Declares `$module`, a module named `$name` with no action.
+#[macro_export]
+macro_rules! actionless {
+    ($module:ident, $name:literal $(, CELL_COLUMN = $column:literal)?) => {
+        struct $module;
+
+        impl ::korr_core::mechanic::Module for $module {
+            const NAME: &'static str = $name;
+            $(const CELL_COLUMN: bool = $column;)?
+            type Action = ::core::convert::Infallible;
+            type Plan = ::core::convert::Infallible;
+
+            fn propose(
+                &self,
+                _: &::korr_core::mechanic::Senses<'_>,
+                _: &mut ::korr_core::mechanic::Proposals<'_, ::core::convert::Infallible>,
+            ) {
+            }
+
+            fn prepare(
+                &self,
+                action: ::core::convert::Infallible,
+                _: ::korr_core::mechanic::Target,
+                _: &::korr_core::mechanic::PrepCtx<'_>,
+            ) -> ::korr_core::mechanic::Prepared<::core::convert::Infallible, ::core::convert::Infallible>
+            {
+                match action {}
+            }
+
+            fn commit(
+                &self,
+                plan: ::core::convert::Infallible,
+                _: &mut ::korr_core::mechanic::CommitCtx<'_>,
+            ) {
+                match plan {}
+            }
+        }
+    };
+}
+
 /// # Panics
 /// When a side is outside the bounds of `Shape::new`.
 #[must_use]

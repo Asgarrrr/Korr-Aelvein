@@ -1,12 +1,9 @@
-use core::convert::Infallible;
-
 use korr_core::host::{
     Floor, Game, LoadError, Pos, Round, Ruleset, Sections, Seed, TICKS_PER_ROUND, World,
 };
-use korr_core::mechanic::{CommitCtx, Module, PrepCtx, Prepared, Proposals, Senses, Target};
 use korr_ecs::{Component, FloorId, Handle, ImageError, Reader, SchemaBuilder, Writer, checksum};
 use korr_engine::Registry;
-use korr_scenarios::{Pace, floor, game, run};
+use korr_scenarios::{Pace, actionless, floor, game, run};
 
 const SEED: Seed = Seed(7);
 /// Re-pin on every intended change to the image format or to behaviour.
@@ -108,33 +105,6 @@ fn a_changed_ruleset_refuses_the_save() {
             "{label} loads the save"
         );
     }
-}
-
-macro_rules! actionless {
-    ($module:ident, $name:literal) => {
-        struct $module;
-
-        impl Module for $module {
-            const NAME: &'static str = $name;
-            type Action = Infallible;
-            type Plan = Infallible;
-
-            fn propose(&self, _: &Senses<'_>, _: &mut Proposals<'_, Infallible>) {}
-
-            fn prepare(
-                &self,
-                action: Infallible,
-                _: Target,
-                _: &PrepCtx<'_>,
-            ) -> Prepared<Infallible, Infallible> {
-                match action {}
-            }
-
-            fn commit(&self, plan: Infallible, _: &mut CommitCtx<'_>) {
-                match plan {}
-            }
-        }
-    };
 }
 
 // Names that differ in their bytes but not in their length.

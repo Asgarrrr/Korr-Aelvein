@@ -1,41 +1,10 @@
-use core::convert::Infallible;
-
 use korr_core::host::{Floor, Game, LoadError, Pos, Ruleset, Sections, Seed, World};
-use korr_core::mechanic::{CommitCtx, Module, PrepCtx, Prepared, Proposals, Senses, Target};
 use korr_ecs::{FloorId, ImageError};
 use korr_engine::Registry;
 use korr_flora::Flora;
-use korr_scenarios::{floor, game, reload};
+use korr_scenarios::{actionless, floor, game, reload};
 
 const SEED: Seed = Seed(7);
-
-macro_rules! actionless {
-    ($module:ident, $name:literal $(, CELL_COLUMN = $column:literal)?) => {
-        struct $module;
-
-        impl Module for $module {
-            const NAME: &'static str = $name;
-            $(const CELL_COLUMN: bool = $column;)?
-            type Action = Infallible;
-            type Plan = Infallible;
-
-            fn propose(&self, _: &Senses<'_>, _: &mut Proposals<'_, Infallible>) {}
-
-            fn prepare(
-                &self,
-                action: Infallible,
-                _: Target,
-                _: &PrepCtx<'_>,
-            ) -> Prepared<Infallible, Infallible> {
-                match action {}
-            }
-
-            fn commit(&self, plan: Infallible, _: &mut CommitCtx<'_>) {
-                match plan {}
-            }
-        }
-    };
-}
 
 // One name, with and without a cell column.
 actionless!(Bare, "test.soil");

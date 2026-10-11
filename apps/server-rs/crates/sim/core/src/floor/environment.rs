@@ -22,14 +22,18 @@ impl Floor {
         mechanics: &impl Mechanics,
     ) {
         self.check_ruleset(ruleset);
+        let floor = self.id();
+        let Some(scratch) = &mut self.scratch else {
+            return;
+        };
         mechanics.each(&mut TickVisit {
             seed,
             ruleset,
-            floor: self.id(),
+            floor,
             round: self.round,
             grid: &self.grid,
             columns: &mut self.columns,
-            scratch: &mut self.scratch,
+            scratch,
             slot: 0,
         });
     }
