@@ -92,7 +92,7 @@ example `sim/biology/physiology/hunger/` is `korr-hunger`.
 - Reproduction depends on `genome`. At world build, `engine` compiles the
   expression rows into a table keyed by component id; core spawn takes a
   species reference and a genome. No birth hook.
-- `worldgen` depends on `core` only. It knows niches, not species;
+- `worldgen` depends on `core` and `random` only. It knows niches, not species;
   `engine` maps niches to species.
 - `host/meta` reaches the simulation only as recorded run parameters or
   inputs, so replays and echoes stay deterministic.

@@ -75,7 +75,8 @@ row fits, that is a design question: propose a new row before coding.
     (`scripts/lint/determinism.grit`).
   - `scripts/check-architecture.ts`: the module graph, relative imports
     leaving their package, the file size limit (`.ts` and `.rs`), one sim
-    `clippy.toml`, `deny(clippy::float_arithmetic)` in every sim crate.
+    `clippy.toml`, `deny(clippy::float_arithmetic)` in every sim crate, the
+    Rust crate graph (mechanics, `korr-random` users, foundations).
   - Hooks: `.claude/settings.json` runs the architecture check after every
     `.ts` edit by Claude; `scripts/githooks/pre-commit` runs `verify` before
     every commit (enabled by `bun install`). Never bypass with `--no-verify`.

@@ -186,12 +186,40 @@ const FOUNDATION_DEPS: Record<string, string[]> = {
 	"korr-grid": ["korr-ecs"],
 };
 
+type Dependency = string | { package?: string; workspace?: boolean };
+type Dependencies = Record<string, Dependency>;
+type Manifest = {
+	package?: { name?: string };
+	dependencies?: Dependencies;
+	target?: Record<string, { dependencies?: Dependencies }>;
+};
+
+const workspaceDeps = (
+	Bun.TOML.parse(readFileSync(join(RUST, "Cargo.toml"), "utf8")) as {
+		workspace: { dependencies: Dependencies };
+	}
+).workspace.dependencies;
+
+// Cargo links target-specific and renamed dependencies like plain ones.
+const linkedCrates = (manifest: Manifest) =>
+	[
+		manifest.dependencies,
+		...Object.values(manifest.target ?? {}).map((t) => t.dependencies),
+	]
+		.flatMap((table) => Object.entries(table ?? {}))
+		.map(([key, dep]) => {
+			const spec =
+				typeof dep === "object" && dep.workspace ? workspaceDeps[key] : dep;
+			return (typeof spec === "object" && spec.package) || key;
+		});
+
 const crateViolations = (dir: string, name: string, deps: string[]) => {
-	const found: string[] = [];
 	const workspace = deps.filter((dep) => dep.startsWith("korr-"));
 	if (MECHANICS.some((root) => dir.startsWith(root)))
-		for (const dep of workspace.filter((d) => !MECHANIC_DEPS.has(d)))
-			found.push(`a mechanic depends on ${dep}`);
+		return workspace
+			.filter((dep) => !MECHANIC_DEPS.has(dep))
+			.map((dep) => `a mechanic depends on ${dep}`);
+	const found: string[] = [];
 	if (workspace.includes("korr-random") && !RANDOM_USERS.has(name))
 		found.push("depends on korr-random");
 	const allowed = FOUNDATION_DEPS[name];
@@ -201,15 +229,16 @@ const crateViolations = (dir: string, name: string, deps: string[]) => {
 	return found;
 };
 
-for (const crate of simCrates) {
+const HOST_TOOLS = join(RUST, "crates/host/tools") + sep;
+for (const crate of walk(join(RUST, "crates"), /^Cargo\.toml$/).map(dirname)) {
+	if (crate.startsWith(HOST_TOOLS)) continue;
 	const manifest = Bun.TOML.parse(
 		readFileSync(join(crate, "Cargo.toml"), "utf8"),
-	) as { package?: { name?: string }; dependencies?: object };
-	const name = manifest.package?.name ?? "";
+	) as Manifest;
 	for (const found of crateViolations(
 		crate,
-		name,
-		Object.keys(manifest.dependencies ?? {}),
+		manifest.package?.name ?? "",
+		linkedCrates(manifest),
 	))
 		report(join(crate, "Cargo.toml"), found);
 }
@@ -256,26 +285,29 @@ if (
 )
 	report(SIM, "the float_arithmetic rule misreads a lib.rs header");
 
+const renamed = linkedCrates(
+	Bun.TOML.parse(
+		'[dependencies]\nrng = { package = "korr-random", path = "x" }\n[target."cfg(unix)".dependencies]\nkorr-wander.workspace = true\n',
+	) as Manifest,
+);
+const mechanicProbe = join(SIM, "biology/ethology/probe");
 const crateProbes: [string, string, string[], number][] = [
+	[mechanicProbe, "korr-probe", renamed, 2],
 	[
-		join(SIM, "biology/ethology/probe"),
-		"korr-probe",
-		["korr-core", "korr-wander", "korr-random"],
-		3,
-	],
-	[
-		join(SIM, "biology/ethology/probe"),
+		mechanicProbe,
 		"korr-probe",
 		["korr-core", "korr-contracts", "korr-genome"],
 		0,
 	],
 	[join(SIM, "grid"), "korr-grid", ["korr-ecs", "korr-core", "thiserror"], 1],
 	[join(SIM, "core"), "korr-core", ["korr-ecs", "korr-grid", "korr-random"], 0],
-	[join(SIM, "engine"), "korr-engine", ["korr-random"], 1],
+	[join(RUST, "crates/host/server"), "korr-server", ["korr-random"], 1],
 ];
-for (const [dir, name, deps, expected] of crateProbes)
-	if (crateViolations(dir, name, deps).length !== expected)
-		report(dir, `the crate rule did not fire exactly ${expected} times`);
+for (const [dir, name, deps, expected] of crateProbes) {
+	const fired = crateViolations(dir, name, deps).length;
+	if (fired !== expected)
+		report(dir, `the crate rule fired ${fired} times, expected ${expected}`);
+}
 
 if (errors.length > 0) {
 	console.error(`architecture check failed (${errors.length}):`);
