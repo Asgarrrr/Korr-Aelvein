@@ -45,6 +45,19 @@ fn linking_a_dead_handle_panics() {
 }
 
 #[test]
+#[should_panic(expected = "link of a dead handle")]
+fn linking_a_dead_handle_as_an_actor_panics() {
+    let (mut store, mut grid) = setup();
+    let h = store.spawn();
+    store.despawn(h);
+    let at = grid
+        .shape()
+        .idx(Pos { x: 1, y: 1 })
+        .expect("the centre is inside");
+    grid.link_actor(&store, h, at);
+}
+
+#[test]
 #[should_panic(expected = "slot still linked: unlink before despawn or detach")]
 fn linking_a_linked_handle_panics() {
     let (mut store, mut grid) = setup();

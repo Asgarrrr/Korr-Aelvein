@@ -116,6 +116,14 @@ fn aliasing_cell_can_place_panics() {
 }
 
 #[test]
+#[should_panic(expected = "cell of another floor")]
+fn aliasing_cell_link_panics() {
+    let mut store = store();
+    let h = store.spawn();
+    grid(6, 6).link_thing(&store, h, aliasing());
+}
+
+#[test]
 fn holds_actor_follows_link_and_unlink() {
     let mut store = store();
     let mut grid = grid(5, 5);
