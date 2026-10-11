@@ -3,8 +3,8 @@ use core::num::NonZeroU32;
 use korr_core::{
     host::{Game, Mechanics, Seed, Visit, World},
     mechanic::{
-        Action, Band, CommitCtx, DrawIndex, Module, Pos, PrepCtx, Prepared, Proposals, Senses,
-        Target,
+        Action, Band, CommitCtx, Cost, Dir, DrawIndex, Module, Pos, PrepCtx, Prepared, Proposals,
+        Senses, Target,
     },
 };
 use korr_ecs::{FloorId, Handle};
@@ -78,4 +78,71 @@ fn a_module_added_before_another_leaves_its_draws_unchanged() {
     let alone = paths(&game(Shy, Seed(3)));
     assert!(alone[..2] != START, "shy actors that see each other move");
     assert_eq!(paths(&game(DudThenShy, Seed(3))), alone);
+}
+
+/// Steps in a drawn direction, either at once or after one `Instead` hop.
+#[derive(Debug)]
+struct Roll {
+    hop: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Rolling {
+    Hop,
+    Roll,
+}
+
+impl Action for Rolling {
+    const ALL: &'static [Self] = &[Self::Hop, Self::Roll];
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Hop => "hop",
+            Self::Roll => "roll",
+        }
+    }
+}
+
+impl Module for Roll {
+    const NAME: &'static str = "roll";
+    type Action = Rolling;
+    type Plan = Dir;
+
+    fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, Rolling>) {
+        let first = if self.hop {
+            Rolling::Hop
+        } else {
+            Rolling::Roll
+        };
+        out.push(first, Band::Routine, 1, Target::None);
+    }
+
+    fn prepare(&self, action: Rolling, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Rolling, Dir> {
+        if action == Rolling::Hop {
+            return Prepared::Instead {
+                action: Rolling::Roll,
+                target: Target::None,
+            };
+        }
+        let eight = NonZeroU32::new(8).expect("nonzero");
+        let dir = Dir::ALL[ctx.below(DrawIndex(0), eight) as usize];
+        match ctx.check_step(dir) {
+            Ok(_) => Prepared::Go {
+                cost: Cost::new(100),
+                plan: dir,
+            },
+            Err(_) => Prepared::Blocked,
+        }
+    }
+
+    fn commit(&self, dir: Dir, ctx: &mut CommitCtx<'_>) {
+        ctx.step(dir);
+    }
+}
+
+#[test]
+fn an_instead_hop_draws_what_a_direct_proposal_draws() {
+    let direct = paths(&game(Roll { hop: false }, Seed(5)));
+    assert!(direct[..2] != START, "rollers move");
+    assert_eq!(paths(&game(Roll { hop: true }, Seed(5))), direct);
 }
