@@ -110,7 +110,6 @@ fn a_changed_ruleset_refuses_the_save() {
     }
 }
 
-/// A module with no action, named `$name`.
 macro_rules! actionless {
     ($module:ident, $name:literal) => {
         struct $module;

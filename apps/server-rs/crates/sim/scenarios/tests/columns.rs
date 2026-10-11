@@ -9,7 +9,6 @@ use korr_scenarios::{floor, game, reload};
 
 const SEED: Seed = Seed(7);
 
-/// A module with no action, named `$name`.
 macro_rules! actionless {
     ($module:ident, $name:literal $(, CELL_COLUMN = $column:literal)?) => {
         struct $module;
