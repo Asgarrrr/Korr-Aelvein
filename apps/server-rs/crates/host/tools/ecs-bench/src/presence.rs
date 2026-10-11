@@ -47,6 +47,8 @@ pub trait Backend {
     fn query(&mut self) -> u64;
     /// The value of `column` on the entity spawned `i`-th, followed through churn.
     fn value(&self, i: usize, column: usize) -> Option<u32>;
+    /// Despawns since `populate`, one per churn pick: a skipped pick shows here, not in `value`.
+    fn despawned(&self) -> u64;
 }
 
 #[derive(Debug)]
@@ -140,6 +142,11 @@ impl Backend for Ours {
         self.store
             .get(self.keys[column].read(), self.index[i])
             .map(|f| f.0)
+    }
+
+    fn despawned(&self) -> u64 {
+        self.store.next_counter()
+            - u64::try_from(self.store.len()).expect("fewer than 2^64 entities")
     }
 }
 
@@ -249,5 +256,9 @@ impl Backend for Dense {
 
     fn value(&self, i: usize, column: usize) -> Option<u32> {
         self.columns[column][self.at(self.index[i])].map(|f| f.0)
+    }
+
+    fn despawned(&self) -> u64 {
+        self.generations.iter().map(|&g| u64::from(g)).sum()
     }
 }

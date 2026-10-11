@@ -22,6 +22,8 @@ fn sparse_and_dense_agree_after_every_op() {
     ours.churn(&picks);
     dense.churn(&picks);
     assert_agree(&ours, &dense, "churn");
+    let churned = u64::try_from(picks.len()).expect("few picks");
+    assert_eq!((ours.despawned(), dense.despawned()), (churned, churned));
     assert_eq!(ours.actor_turn(&picks), dense.actor_turn(&picks));
     assert_agree(&ours, &dense, "actor_turn");
     for column in [1, ALWAYS] {
