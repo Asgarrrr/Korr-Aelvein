@@ -2,8 +2,7 @@ use std::collections::BTreeMap;
 use std::num::NonZeroU32;
 
 use korr_ecs::{
-    Component, ComponentKey, EntityId, FloorId, Handle, ImageError, Reader, SchemaBuilder, Store,
-    Writer,
+    Component, EntityId, FloorId, Handle, ImageError, Own, Reader, SchemaBuilder, Store, Writer,
 };
 use korr_random::{DrawIndex, ModuleKey, Phase, Seed, Stream, Subject};
 
@@ -11,6 +10,8 @@ use korr_random::{DrawIndex, ModuleKey, Phase, Seed, Stream, Subject};
 struct A(u32);
 
 impl Component for A {
+    const VERSION: u16 = 0;
+
     fn write(&self, w: &mut Writer) {
         w.write_u32(self.0);
     }
@@ -24,6 +25,8 @@ impl Component for A {
 struct B(u32);
 
 impl Component for B {
+    const VERSION: u16 = 0;
+
     fn write(&self, w: &mut Writer) {
         w.write_u32(self.0);
     }
@@ -37,8 +40,8 @@ type Row = (Option<u32>, Option<u32>);
 
 struct Fixture {
     store: Store,
-    a: ComponentKey<A>,
-    b: ComponentKey<B>,
+    a: Own<A>,
+    b: Own<B>,
     model: BTreeMap<EntityId, Row>,
 }
 
@@ -58,12 +61,12 @@ fn fixture() -> Fixture {
         let mut row: Row = (None, None);
         if i % 2 == 0 {
             let value = stream.below(subject, DrawIndex(0), range);
-            store.insert(a, h, A(value));
+            store.insert(&a, h, A(value));
             row.0 = Some(value);
         }
         if i % 3 == 0 {
             let value = stream.below(subject, DrawIndex(1), range);
-            store.insert(b, h, B(value));
+            store.insert(&b, h, B(value));
             row.1 = Some(value);
         }
         model.insert(id, row);
@@ -73,7 +76,7 @@ fn fixture() -> Fixture {
         if i % 7 == 0 {
             store.despawn(h);
             model.remove(&id);
-        } else if i % 11 == 0 && store.remove(a, h).is_some() {
+        } else if i % 11 == 0 && store.remove(&a, h).is_some() {
             model.get_mut(&id).expect("model holds live rows").0 = None;
         }
     }
@@ -85,42 +88,10 @@ fn id_of(store: &Store, h: Handle) -> EntityId {
 }
 
 #[test]
-fn join_yields_exactly_rows_with_both() {
-    let f = fixture();
-    let joined: BTreeMap<EntityId, (u32, u32)> = f
-        .store
-        .join(f.a, f.b)
-        .map(|(h, a, b)| (id_of(&f.store, h), (a.0, b.0)))
-        .collect();
-    let expected: BTreeMap<EntityId, (u32, u32)> = f
-        .model
-        .iter()
-        .filter_map(|(&id, &(a, b))| Some((id, (a?, b?))))
-        .collect();
-    assert!(expected.len() > 100);
-    assert_eq!(joined.len(), f.store.join(f.a, f.b).count());
-    assert_eq!(joined, expected);
-}
-
-#[test]
-fn join_order_is_the_first_keys_dense_order() {
-    let f = fixture();
-    let expected: Vec<Handle> = f
-        .store
-        .iter(f.a)
-        .map(|(h, _)| h)
-        .filter(|&h| f.store.get(f.b, h).is_some())
-        .collect();
-    let joined: Vec<Handle> = f.store.join(f.a, f.b).map(|(h, _, _)| h).collect();
-    assert!(expected.len() > 100);
-    assert_eq!(joined, expected);
-}
-
-#[test]
 fn join_mut_touches_only_rows_with_both() {
     let mut f = fixture();
     let mut touched = Vec::new();
-    f.store.join_mut(f.a, f.b, |h, a, b| {
+    f.store.join_mut(&f.a, &f.b, |h, a, b| {
         a.0 += b.0;
         touched.push(h);
     });
@@ -128,7 +99,7 @@ fn join_mut_touches_only_rows_with_both() {
     let touched_ids: Vec<EntityId> = touched.iter().map(|&h| id_of(&f.store, h)).collect();
     let expected_ids: Vec<EntityId> = f
         .store
-        .iter(f.a)
+        .iter(f.a.read())
         .map(|(h, _)| id_of(&f.store, h))
         .filter(|id| f.model[id].1.is_some())
         .collect();
@@ -137,7 +108,7 @@ fn join_mut_touches_only_rows_with_both() {
 
     let a_after: BTreeMap<EntityId, u32> = f
         .store
-        .iter(f.a)
+        .iter(f.a.read())
         .map(|(h, v)| (id_of(&f.store, h), v.0))
         .collect();
     for (&id, &(a, b)) in &f.model {
@@ -147,12 +118,12 @@ fn join_mut_touches_only_rows_with_both() {
             "{id:?}"
         );
     }
-    for (h, value) in f.store.iter(f.b) {
+    for (h, value) in f.store.iter(f.b.read()) {
         assert_eq!(Some(value.0), f.model[&id_of(&f.store, h)].1);
     }
 }
 
-fn lone_store() -> (Store, ComponentKey<A>, ComponentKey<B>) {
+fn lone_store() -> (Store, Own<A>, Own<B>) {
     let mut builder = SchemaBuilder::default();
     let a = builder.register::<A>("a");
     let b = builder.register::<B>("b");
@@ -161,21 +132,14 @@ fn lone_store() -> (Store, ComponentKey<A>, ComponentKey<B>) {
 
 #[test]
 #[should_panic(expected = "join of a component with itself")]
-fn join_of_a_key_with_itself_panics() {
-    let (store, a, _) = lone_store();
-    let _ = store.join(a, a);
-}
-
-#[test]
-#[should_panic(expected = "join of a component with itself")]
 fn join_mut_of_a_key_with_itself_panics() {
     let (mut store, a, _) = lone_store();
-    store.join_mut(a, a, |_, _: &mut A, _: &mut A| {});
+    store.join_mut(&a, &a, |_, _: &mut A, _: &mut A| {});
 }
 
 /// Keys 1 and 2 of a three-component schema: the first has the wrong type
 /// for `lone_store`, the second is out of its range.
-fn foreign_keys() -> (ComponentKey<A>, ComponentKey<A>) {
+fn foreign_keys() -> (Own<A>, Own<A>) {
     let mut builder = SchemaBuilder::default();
     builder.register::<A>("x");
     let mismatched = builder.register::<A>("y");
@@ -185,26 +149,10 @@ fn foreign_keys() -> (ComponentKey<A>, ComponentKey<A>) {
 
 #[test]
 #[should_panic(expected = "component key from another schema")]
-fn join_with_an_out_of_range_key_panics() {
-    let (store, a, _) = lone_store();
-    let (_, out_of_range) = foreign_keys();
-    let _ = store.join(a, out_of_range);
-}
-
-#[test]
-#[should_panic(expected = "component key from another schema")]
 fn join_mut_with_an_out_of_range_key_panics() {
     let (mut store, a, _) = lone_store();
     let (_, out_of_range) = foreign_keys();
-    store.join_mut(a, out_of_range, |_, _: &mut A, _: &mut A| {});
-}
-
-#[test]
-#[should_panic(expected = "component key from another schema")]
-fn join_with_a_mismatched_key_panics() {
-    let (store, a, _) = lone_store();
-    let (mismatched, _) = foreign_keys();
-    let _ = store.join(a, mismatched);
+    store.join_mut(&a, &out_of_range, |_, _: &mut A, _: &mut A| {});
 }
 
 #[test]
@@ -212,5 +160,5 @@ fn join_with_a_mismatched_key_panics() {
 fn join_mut_with_a_mismatched_key_panics() {
     let (mut store, a, _) = lone_store();
     let (mismatched, _) = foreign_keys();
-    store.join_mut(a, mismatched, |_, _: &mut A, _: &mut A| {});
+    store.join_mut(&a, &mismatched, |_, _: &mut A, _: &mut A| {});
 }

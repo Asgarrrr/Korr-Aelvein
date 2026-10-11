@@ -6,8 +6,9 @@ use alloc::vec::Vec;
 
 use crate::codec::{Reader, Writer};
 use crate::column::ErasedColumn;
+use crate::entities::Arrival;
 use crate::error::ImageError;
-use crate::id::{EntityId, Handle};
+use crate::id::{EntityId, Handle, SlotIdx};
 use crate::store::Store;
 
 /// An entity off every floor: its id and its row, encoded per column.
@@ -51,14 +52,10 @@ impl Store {
     /// # Panics
     /// When `h` is dead.
     #[must_use]
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "register caps the component count at u32"
-    )]
     pub fn detach(&mut self, h: Handle) -> Traveller {
         let id = self.entities.id(h).expect("detach of a dead handle");
         let mut w = Writer::new();
-        w.write_u32(self.columns.len() as u32);
+        w.write_u64(self.fingerprint);
         for column in &mut self.columns {
             column.detach_row(h.slot, &mut w);
         }
@@ -78,20 +75,11 @@ impl Store {
     /// When the id is beyond this floor's counter or the row does not
     /// match the schema.
     #[expect(
-        clippy::cast_possible_truncation,
-        reason = "register caps the component count at u32"
-    )]
-    #[expect(
         clippy::needless_pass_by_value,
         reason = "taking the traveller keeps one value from attaching twice"
     )]
     pub fn attach(&mut self, t: Traveller) -> Result<Handle, ImageError> {
-        let arrival = self.entities.admit(t.id)?;
-        let mut r = Reader::new(&t.row);
-        let count = r.read_u32()?;
-        if count != self.columns.len() as u32 {
-            return Err(ImageError::Schema { index: count });
-        }
+        let (arrival, r) = self.open(&t)?;
         let slot = arrival.slot();
         if let Err(error) = attach_columns(&mut self.columns, slot, r) {
             for column in &mut self.columns {
@@ -101,11 +89,37 @@ impl Store {
         }
         Ok(self.entities.arrive(arrival))
     }
+
+    /// Runs the checks of [`Store::attach`] and writes nothing: on the same
+    /// store, it is `Ok` exactly when `attach` would be.
+    ///
+    /// # Errors
+    /// The error `attach` would return.
+    pub fn check_arrival(&self, t: &Traveller) -> Result<(), ImageError> {
+        let (_, mut r) = self.open(t)?;
+        for column in &self.columns {
+            column.check_row(&mut r)?;
+        }
+        r.finish()
+    }
+
+    fn open<'t>(&self, t: &'t Traveller) -> Result<(Arrival, Reader<'t>), ImageError> {
+        let arrival = self.entities.admit(t.id)?;
+        let mut r = Reader::new(&t.row);
+        let saved = r.read_u64()?;
+        if saved != self.fingerprint {
+            return Err(ImageError::Fingerprint {
+                saved,
+                running: self.fingerprint,
+            });
+        }
+        Ok((arrival, r))
+    }
 }
 
 fn attach_columns(
     columns: &mut [Box<dyn ErasedColumn>],
-    slot: u32,
+    slot: SlotIdx,
     mut r: Reader<'_>,
 ) -> Result<(), ImageError> {
     for column in columns {

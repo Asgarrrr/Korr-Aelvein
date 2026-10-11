@@ -11,6 +11,7 @@ pub mod bevy_world;
 pub mod dense;
 pub mod hecs_world;
 pub mod ours;
+pub mod presence;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, bevy_ecs::component::Component)]
 pub struct Pos {
@@ -28,6 +29,8 @@ pub struct Vel {
 pub struct Hunger(pub u16);
 
 impl Component for Pos {
+    const VERSION: u16 = 0;
+
     fn write(&self, w: &mut Writer) {
         w.write_i32(self.x);
         w.write_i32(self.y);
@@ -42,6 +45,8 @@ impl Component for Pos {
 }
 
 impl Component for Vel {
+    const VERSION: u16 = 0;
+
     fn write(&self, w: &mut Writer) {
         w.write_i32(self.dx);
         w.write_i32(self.dy);
@@ -56,6 +61,8 @@ impl Component for Vel {
 }
 
 impl Component for Hunger {
+    const VERSION: u16 = 0;
+
     fn write(&self, w: &mut Writer) {
         w.write_u16(self.0);
     }

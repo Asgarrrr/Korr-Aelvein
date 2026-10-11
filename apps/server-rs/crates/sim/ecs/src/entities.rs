@@ -8,7 +8,7 @@ use core::mem;
 
 use crate::codec::{Reader, Writer};
 use crate::error::ImageError;
-use crate::id::{COUNTER_MASK, EntityId, FloorId, Handle};
+use crate::id::{COUNTER_MASK, EntityId, FloorId, Handle, SlotIdx};
 
 const DEAD: u8 = 0;
 const ALIVE: u8 = 1;
@@ -23,19 +23,19 @@ pub(crate) struct Entities {
     floor: FloorId,
     next_counter: u64,
     metas: Vec<Meta>,
-    free: Vec<u32>,
+    free: Vec<SlotIdx>,
     alive: usize,
 }
 
 /// Only `admit` builds one, so `arrive` never skips the counter check.
 pub(crate) struct Arrival {
     id: EntityId,
-    slot: u32,
+    slot: SlotIdx,
 }
 
 impl Arrival {
     #[inline]
-    pub(crate) const fn slot(&self) -> u32 {
+    pub(crate) const fn slot(&self) -> SlotIdx {
         self.slot
     }
 }
@@ -54,6 +54,10 @@ impl Entities {
     #[inline]
     pub(crate) const fn floor(&self) -> FloorId {
         self.floor
+    }
+
+    pub(crate) const fn next_counter(&self) -> u64 {
+        self.next_counter
     }
 
     pub(crate) fn spawn(&mut self) -> Handle {
@@ -87,10 +91,12 @@ impl Entities {
         Ok(())
     }
 
-    fn next_slot(&self) -> u32 {
+    fn next_slot(&self) -> SlotIdx {
         match self.free.last() {
             Some(&slot) => slot,
-            None => u32::try_from(self.metas.len()).expect("slot space exhausted on this floor"),
+            None => SlotIdx::new(
+                u32::try_from(self.metas.len()).expect("slot space exhausted on this floor"),
+            ),
         }
     }
 
@@ -98,7 +104,7 @@ impl Entities {
         self.alive += 1;
         let slot = self.next_slot();
         if self.free.pop().is_some() {
-            let meta = &mut self.metas[slot as usize];
+            let meta = &mut self.metas[slot.index()];
             assert!(meta.id.is_none(), "free list held a live slot");
             meta.id = Some(id);
             return Handle {
@@ -118,7 +124,7 @@ impl Entities {
 
     pub(crate) fn free(&mut self, h: Handle) -> EntityId {
         let id = self.id(h).expect("despawn of a dead handle");
-        let meta = &mut self.metas[h.slot as usize];
+        let meta = &mut self.metas[h.slot.index()];
         meta.id = None;
         self.alive -= 1;
         // A wrapped generation would revive every stale handle to this slot.
@@ -137,25 +143,38 @@ impl Entities {
     #[inline]
     pub(crate) fn id(&self, h: Handle) -> Option<EntityId> {
         self.metas
-            .get(h.slot as usize)
+            .get(h.slot.index())
             .filter(|meta| meta.generation == h.generation)
             .and_then(|meta| meta.id)
     }
 
-    pub(crate) fn is_slot_alive(&self, slot: u32) -> bool {
+    pub(crate) fn is_slot_alive(&self, slot: SlotIdx) -> bool {
         self.metas
-            .get(slot as usize)
+            .get(slot.index())
             .is_some_and(|meta| meta.id.is_some())
     }
 
     #[inline]
-    pub(crate) fn handle_at(&self, slot: u32) -> Handle {
-        let meta = &self.metas[slot as usize];
-        assert!(meta.id.is_some(), "column owner is dead");
+    pub(crate) fn handle_at(&self, slot: SlotIdx) -> Handle {
+        let meta = &self.metas[slot.index()];
+        // Despawn and detach clear every column, and a load checks each owner.
+        debug_assert!(meta.id.is_some(), "column owner is dead");
         Handle {
             slot,
             generation: meta.generation,
         }
+    }
+
+    pub(crate) fn handles(&self) -> impl Iterator<Item = Handle> + '_ {
+        (0..)
+            .map(SlotIdx::new)
+            .zip(&self.metas)
+            .filter_map(|(slot, meta)| {
+                meta.id.map(|_| Handle {
+                    slot,
+                    generation: meta.generation,
+                })
+            })
     }
 
     #[inline]
@@ -179,7 +198,7 @@ impl Entities {
         }
         w.write_u32(u32::try_from(self.free.len()).expect("slots fit u32"));
         for &slot in &self.free {
-            w.write_u32(slot);
+            w.write_u32(slot.get());
         }
     }
 
@@ -211,8 +230,8 @@ impl Entities {
         let reusable = |meta: &Meta| meta.id.is_none() && meta.generation != u32::MAX;
         let mut listed = vec![false; entities.metas.len()];
         for _ in 0..r.read_u32()? {
-            let slot = r.read_u32()?;
-            let index = slot as usize;
+            let slot = SlotIdx::new(r.read_u32()?);
+            let index = slot.index();
             if !entities.metas.get(index).is_some_and(reusable)
                 || mem::replace(&mut listed[index], true)
             {
@@ -238,7 +257,7 @@ impl Entities {
 #[cfg(test)]
 mod tests {
     use super::Entities;
-    use crate::id::FloorId;
+    use crate::id::{FloorId, SlotIdx};
 
     #[test]
     fn slot_retires_at_max_generation() {
@@ -250,11 +269,11 @@ mod tests {
         let before_last = entities.spawn();
         entities.free(before_last);
         let last = entities.spawn();
-        assert_eq!((last.slot, last.generation), (0, u32::MAX));
+        assert_eq!((last.slot, last.generation), (SlotIdx::new(0), u32::MAX));
         entities.free(last);
 
         let next = entities.spawn();
-        assert_eq!(next.slot, 1);
+        assert_eq!(next.slot, SlotIdx::new(1));
         assert!(!entities.is_alive(last));
     }
 }

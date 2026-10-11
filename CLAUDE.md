@@ -59,7 +59,7 @@ row fits, that is a design question: propose a new row before coding.
 | Repository tooling | `scripts/` |
 | Rust simulation crates, during the rewrite (layout: `docs/plans/rust-structure.md`) | `apps/server-rs/crates/sim/<crate>/` |
 | Rust entity storage: ids, handles, columns, floor images, travellers (imports no workspace crate) | `apps/server-rs/crates/sim/ecs/` |
-| Rust storage benchmarks: korr-ecs against hecs and bevy_ecs, korr-grid occupancy (cargo bench, not part of verify) | `apps/server-rs/crates/host/tools/ecs-bench/` |
+| Rust benchmarks: korr-ecs against hecs and bevy_ecs, korr-grid occupancy, korr-core rounds (cargo bench, not part of verify) | `apps/server-rs/crates/host/tools/ecs-bench/` |
 | Rust server, during the rewrite | `apps/server-rs/crates/host/server/` |
 | Rust tooling: toolchain pin, workspace lints | `apps/server-rs/` root files |
 
@@ -74,7 +74,10 @@ row fits, that is a design question: propose a new row before coding.
     Node modules, magic numbers and nondeterministic calls
     (`scripts/lint/determinism.grit`).
   - `scripts/check-architecture.ts`: the module graph, relative imports
-    leaving their package, the file size limit.
+    leaving their package, the file size limit (`.ts` and `.rs`), one sim
+    `clippy.toml`, `deny(clippy::float_arithmetic)` in every sim crate, the
+    Rust crate graph (mechanics, `korr-random` users, foundations), and
+    mechanics naming `korr_core` only through `korr_core::mechanic`.
   - Hooks: `.claude/settings.json` runs the architecture check after every
     `.ts` edit by Claude; `scripts/githooks/pre-commit` runs `verify` before
     every commit (enabled by `bun install`). Never bypass with `--no-verify`.

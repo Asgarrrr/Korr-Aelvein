@@ -13,7 +13,10 @@ korr-random.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
+korr-core.workspace = true
+korr-engine.workspace = true
 korr-grid.workspace = true
+korr-scenarios.workspace = true
 
 [[bench]]
 name = "ecs"
@@ -25,6 +28,10 @@ harness = false
 
 [[bench]]
 name = "grid"
+harness = false
+
+[[bench]]
+name = "core"
 harness = false
 
 [lints]

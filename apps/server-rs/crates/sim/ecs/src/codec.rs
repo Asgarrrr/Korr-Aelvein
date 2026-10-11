@@ -5,12 +5,15 @@ use alloc::vec::Vec;
 
 use crate::error::ImageError;
 
-const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+pub(crate) const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 const FNV_PRIME: u64 = 0x100_0000_01b3;
 
 /// A value stored in a column. `read` is a pure function of the bytes and
 /// consumes exactly what `write` produced.
 pub trait Component: Sized + Send + 'static {
+    /// Bump on every change to `write` or `read`: an image saved under another version fails with `ImageError::Schema`.
+    const VERSION: u16;
+
     fn write(&self, w: &mut Writer);
 
     /// # Errors
@@ -82,11 +85,6 @@ impl<'a> Reader<'a> {
     #[must_use]
     pub const fn new(bytes: &'a [u8]) -> Self {
         Self { bytes, at: 0 }
-    }
-
-    #[must_use]
-    pub const fn position(&self) -> usize {
-        self.at
     }
 
     /// # Errors
@@ -167,7 +165,11 @@ impl<'a> Reader<'a> {
 /// FNV-1a 64.
 #[must_use]
 pub fn checksum(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(FNV_OFFSET, |hash, &byte| {
+    absorb(FNV_OFFSET, bytes)
+}
+
+pub(crate) fn absorb(hash: u64, bytes: &[u8]) -> u64 {
+    bytes.iter().fold(hash, |hash, &byte| {
         (hash ^ u64::from(byte)).wrapping_mul(FNV_PRIME)
     })
 }
@@ -205,7 +207,6 @@ mod tests {
         assert_eq!(r.read_u16(), Ok(0xB2C3));
         assert_eq!(r.read_u32(), Ok(0xD4E5_F607));
         assert_eq!(r.read_u64(), Ok(0x1829_3A4B_5C6D_7E8F));
-        assert_eq!(r.position(), 15);
         assert_eq!(r.read_i8(), Ok(-2));
         assert_eq!(r.read_i16(), Ok(-3));
         assert_eq!(r.read_i32(), Ok(-4));
@@ -224,7 +225,6 @@ mod tests {
             r.read_bytes(usize::MAX),
             Err(ImageError::Truncated { at: 1 })
         );
-        assert_eq!(r.position(), 1);
         assert_eq!(r.finish(), Err(ImageError::Trailing(2)));
     }
 }

@@ -4,7 +4,7 @@ use core::iter;
 
 use korr_ecs::{EntityId, Handle};
 
-use crate::shape::{CellIdx, Interior, Shape};
+use crate::shape::{CellIdx, Interior, PackedCell, Shape};
 
 pub(crate) const EMPTY: u32 = u32::MAX;
 
@@ -18,16 +18,41 @@ pub enum Layer {
 #[derive(Debug)]
 struct Link {
     handle: Handle,
-    cell: Interior,
+    at: PackedCell,
     id: EntityId,
-    /// Neighbour slots in the cell's thing list, `EMPTY` at the ends and on an actor.
-    next: u32,
-    prev: u32,
+    place: Place,
 }
 
-/// A derived index of who stands where.
+const _: () = assert!(
+    size_of::<Option<Link>>() == 32,
+    "a 40-byte link slowed actor_at by 26% in the grid bench"
+);
+
+impl Link {
+    /// The next slot in the cell's thing list.
+    fn next(&self) -> u32 {
+        match self.place {
+            Place::Thing { next, .. } => next,
+            Place::Actor => unreachable!("a listed slot is a thing"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Place {
+    Actor,
+    /// Neighbour slots in the cell's thing list, `EMPTY` at the ends.
+    Thing {
+        next: u32,
+        prev: u32,
+    },
+}
+
+/// Who stands where. The links are the placement records, the source of
+/// position saved in the floor image; the cell indexes derive from them.
 #[derive(Debug)]
 pub(crate) struct Occupancy {
+    shape: Shape,
     /// Per padded cell, the actor's slot or `EMPTY`: one 4-byte load for the blocking test.
     actor: Vec<u32>,
     /// Per padded cell, the first thing's slot or `EMPTY`: the list ascends by `EntityId`.
@@ -39,6 +64,7 @@ pub(crate) struct Occupancy {
 impl Occupancy {
     pub(crate) fn new(shape: Shape) -> Self {
         Self {
+            shape,
             actor: vec![EMPTY; shape.cell_count()],
             head: vec![EMPTY; shape.cell_count()],
             links: Vec::new(),
@@ -50,10 +76,9 @@ impl Occupancy {
         assert!(!self.holds_actor(at.cell()), "cell already holds an actor");
         self.links[slot as usize] = Some(Link {
             handle: h,
-            cell: at,
+            at: at.pack(),
             id,
-            next: EMPTY,
-            prev: EMPTY,
+            place: Place::Actor,
         });
         self.actor[at.cell().index()] = slot;
     }
@@ -64,19 +89,17 @@ impl Occupancy {
         let mut prev = EMPTY;
         let mut next = self.head[at.cell().index()];
         while next != EMPTY {
-            let link = self.link(next);
-            if link.id > id {
+            if self.link(next).id > id {
                 break;
             }
             prev = next;
-            next = link.next;
+            next = self.link(next).next();
         }
         self.links[slot as usize] = Some(Link {
             handle: h,
-            cell: at,
+            at: at.pack(),
             id,
-            next,
-            prev,
+            place: Place::Thing { next, prev },
         });
         self.point_forward(at.cell(), prev, slot);
         self.point_back(next, slot);
@@ -103,23 +126,27 @@ impl Occupancy {
             .expect("a listed slot has a link")
     }
 
-    fn link_mut(&mut self, slot: u32) -> &mut Link {
-        self.links[slot as usize]
+    fn thing_mut(&mut self, slot: u32) -> (&mut u32, &mut u32) {
+        let link = self.links[slot as usize]
             .as_mut()
-            .expect("a listed slot has a link")
+            .expect("a listed slot has a link");
+        match &mut link.place {
+            Place::Thing { next, prev } => (next, prev),
+            Place::Actor => unreachable!("a listed slot is a thing"),
+        }
     }
 
     /// Sets the `next` of `prev`, or the cell's head when `prev` is `EMPTY`.
     fn point_forward(&mut self, cell: CellIdx, prev: u32, to: u32) {
         match prev {
             EMPTY => self.head[cell.index()] = to,
-            prev => self.link_mut(prev).next = to,
+            prev => *self.thing_mut(prev).0 = to,
         }
     }
 
     fn point_back(&mut self, next: u32, to: u32) {
         if next != EMPTY {
-            self.link_mut(next).prev = to;
+            *self.thing_mut(next).1 = to;
         }
     }
 
@@ -132,13 +159,25 @@ impl Occupancy {
             .filter(|link| link.as_ref().is_some_and(|link| link.handle == h))
             .and_then(Option::take)
             .expect("entity not linked on this grid");
-        let cell = link.cell.cell();
-        if self.actor[cell.index()] == h.slot().get() {
-            self.actor[cell.index()] = EMPTY;
-        } else {
-            self.point_forward(cell, link.prev, link.next);
-            self.point_back(link.next, link.prev);
+        let cell = self.shape.unpack(link.at).cell();
+        match link.place {
+            Place::Actor => self.actor[cell.index()] = EMPTY,
+            Place::Thing { next, prev } => {
+                self.point_forward(cell, prev, next);
+                self.point_back(next, prev);
+            }
         }
+    }
+
+    /// One placement record per link, in ascending slot.
+    pub(crate) fn records(&self) -> impl Iterator<Item = (EntityId, Layer, Interior)> + '_ {
+        self.links.iter().flatten().map(|link| {
+            let layer = match link.place {
+                Place::Actor => Layer::Actor,
+                Place::Thing { .. } => Layer::Thing,
+            };
+            (link.id, layer, self.shape.unpack(link.at))
+        })
     }
 
     #[inline]
@@ -161,20 +200,30 @@ impl Occupancy {
 
     /// `None` when `h` is not a linked actor.
     pub(crate) fn cell_of(&self, h: Handle) -> Option<Interior> {
+        self.linked(h)
+            .filter(|link| matches!(link.place, Place::Actor))
+            .map(|link| self.shape.unpack(link.at))
+    }
+
+    /// Any layer. `None` when `h` is not linked.
+    pub(crate) fn linked_cell(&self, h: Handle) -> Option<Interior> {
+        self.linked(h).map(|link| self.shape.unpack(link.at))
+    }
+
+    fn linked(&self, h: Handle) -> Option<&Link> {
         self.links
             .get(h.slot().get() as usize)?
             .as_ref()
-            .filter(|link| {
-                link.handle == h && self.actor[link.cell.cell().index()] == h.slot().get()
-            })
-            .map(|link| link.cell)
+            .filter(|link| link.handle == h)
     }
 
     /// Ascending `EntityId`.
     pub(crate) fn things(&self, at: CellIdx) -> impl Iterator<Item = Handle> + '_ {
-        let listed = |slot: u32| (slot != EMPTY).then(|| self.link(slot));
-        iter::successors(listed(self.head[at.index()]), move |link| listed(link.next))
-            .map(|link| link.handle)
+        let listed = move |slot: u32| (slot != EMPTY).then(|| self.link(slot));
+        iter::successors(listed(self.head[at.index()]), move |link| {
+            listed(link.next())
+        })
+        .map(|link| link.handle)
     }
 
     /// # Panics
@@ -183,10 +232,10 @@ impl Occupancy {
         let slot = h.slot().get();
         let link = self.links[slot as usize]
             .as_mut()
-            .filter(|link| link.handle == h)
+            .filter(|link| link.handle == h && matches!(link.place, Place::Actor))
             .expect("move of an entity that is not a linked actor");
-        self.actor[link.cell.cell().index()] = EMPTY;
+        self.actor[self.shape.unpack(link.at).cell().index()] = EMPTY;
         self.actor[to.cell().index()] = slot;
-        link.cell = to;
+        link.at = to.pack();
     }
 }

@@ -78,6 +78,11 @@ example `sim/biology/physiology/hunger/` is `korr-hunger`.
   `contracts` and `genome` only. Only `core`, `genome`, `worldgen` and
   host tools depend on `random`: a mechanic draws through its `core` context, so it
   cannot forge another module's stream.
+- `core` exposes two surfaces: `korr_core::mechanic`, the module seam and
+  the values it trades in, and `korr_core::host`, the game, floors, saves
+  and the registry seam. A mechanic names only `korr_core::mechanic`, and
+  links `korr-core` under its own name so the check can read the path. It
+  cannot reach a floor or another module's world state.
 - A mechanic about a creature, its actions or its components, goes in
   `biology/`, even when it also owns cell fields (fear owns `danger`,
   `alarm`, `presence`). A mechanic that only owns cell fields goes in
@@ -92,7 +97,7 @@ example `sim/biology/physiology/hunger/` is `korr-hunger`.
 - Reproduction depends on `genome`. At world build, `engine` compiles the
   expression rows into a table keyed by component id; core spawn takes a
   species reference and a genome. No birth hook.
-- `worldgen` depends on `core` only. It knows niches, not species;
+- `worldgen` depends on `core` and `random` only. It knows niches, not species;
   `engine` maps niches to species.
 - `host/meta` reaches the simulation only as recorded run parameters or
   inputs, so replays and echoes stay deterministic.
@@ -197,7 +202,11 @@ Its id is the registration index; a name is registered once and is never
 empty. `Schema` is the ordered list of registered components, shared by
 every floor of a world. A `Store` holds one floor: its entities and one
 type-erased column per component, in schema order. A key used on a store
-of another schema panics.
+of another schema panics. Each component has a prefix: FNV-1a 64, from
+the standard offset basis, over each component registered up to it as
+`u16` LE name length, name bytes, `u16` LE `Component::VERSION`. A floor image
+writes it per column, so a renamed, reordered or re-versioned component
+fails the load.
 
 ### Column
 
@@ -215,17 +224,16 @@ value.
 
 ### Join
 
-`Store::join(a, b)` yields `(Handle, &A, &B)` for each holder of both
-components. `Store::join_mut(a, b, f)` calls `f(Handle, &mut A, &mut B)`
-on the same rows. Both walk the dense order of `a`, the first key, so the
-order is predictable from one column: put the rarer component first. The
+`Store::join_mut(a, b, f)` calls `f(Handle, &mut A, &mut B)` for each
+holder of both components. It walks the dense order of `a`, the first key,
+so the order is predictable from one column: put the rarer component first. The
 same key on both sides, or a key from another schema, panics.
 
 `join_mut` borrows the two columns through `<[T]>::get_disjoint_mut`
 (std, stable since 1.86), so it needs no `unsafe`. `f` cannot reach the
 `Store`, so the borrow checker rules out structural changes during a join:
 a caller collects the handles to kill and applies them afterwards. There
-is no N-ary query until a mechanic needs one.
+is no read-only join and no N-ary query until a caller needs one.
 
 ### Views (not exported)
 
@@ -279,22 +287,22 @@ function of the bytes and consumes exactly what `write` produced. The
 codec is hand-written little-endian; the checksum is FNV-1a 64.
 
 There is no derive or macro codec. Generated field-order code ties the
-v1 layout to the declaration order of the fields, so swapping two fields
+layout to the declaration order of the fields, so swapping two fields
 writes a valid-checksum image with swapped values. `codec.rs` keeps
 hand-written little-endian code by decision.
 
-Image v1, little-endian:
+Image v2, little-endian:
 
 ```
 magic         8 bytes   b"KORRFLR\0"
-version       u16       1
+version       u16       2
 floor         u16
 next_counter  u64
 slot count    u32, then per slot:
                 generation u32, state u8 (0 dead, 1 alive), id u64 when alive
 free count    u32, then each slot u32, bottom of the stack first
 column count  u32, then per column in ComponentId order:
-                name length u16, name bytes, row count u32,
+                prefix u64, row count u32,
                 then per row in dense order: owner slot u32, T::write
 checksum      u64, FNV-1a 64 over every preceding byte
 ```
@@ -311,7 +319,7 @@ checksum      u64, FNV-1a 64 over every preceding byte
    `Corrupt("id beyond the floor counter")`.
 8. A free entry out of range, alive, retired or repeated, or a dead
    non-retired slot missing from the free stack: `Corrupt("free list")`.
-9. A column count or name that differs from the schema: `Schema`.
+9. A column count or prefix that differs from the schema: `Schema`.
 10. A row owner out of range, dead, or repeated in its column:
     `Corrupt("column owner")`.
 11. Errors from `T::read`, propagated.
@@ -342,7 +350,7 @@ A traveller encodes for the inbox korr-engine saves, little-endian:
 ```
 id         u64
 row length u32, then the row:
-  column count u32, then per column in ComponentId order:
+  schema fingerprint u64, then per column in ComponentId order:
     0u8 when absent, or 1u8 followed by T::write
 ```
 
@@ -352,7 +360,9 @@ It checks, in this order:
 
 1. An id from this floor whose counter is not below `next_counter`:
    `Corrupt("id beyond the floor counter")`.
-2. A column count that differs from the schema: `Schema { index: count }`.
+2. A schema fingerprint that differs from the floor's, so a renamed,
+   reordered, added or re-versioned component fails:
+   `Fingerprint { saved, running }`.
 3. A presence byte other than 0 or 1: `Corrupt("presence")`.
 4. Errors from `T::read`, propagated; the values are dropped.
 5. Bytes left over: `Trailing`.

@@ -667,6 +667,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "korr-core"
+version = "0.0.0"
+dependencies = [
+ "korr-ecs",
+ "korr-grid",
+ "korr-random",
+ "thiserror",
+]
+
+[[package]]
 name = "korr-ecs"
 version = "0.0.0"
 dependencies = [
@@ -681,14 +691,21 @@ dependencies = [
  "bevy_ecs",
  "criterion",
  "hecs",
+ "korr-core",
  "korr-ecs",
+ "korr-engine",
  "korr-grid",
  "korr-random",
+ "korr-scenarios",
 ]
 
 [[package]]
 name = "korr-engine"
 version = "0.0.0"
+dependencies = [
+ "korr-core",
+ "korr-wander",
+]
 
 [[package]]
 name = "korr-grid"
@@ -704,6 +721,16 @@ name = "korr-random"
 version = "0.0.0"
 
 [[package]]
+name = "korr-scenarios"
+version = "0.0.0"
+dependencies = [
+ "korr-core",
+ "korr-ecs",
+ "korr-engine",
+ "korr-grid",
+]
+
+[[package]]
 name = "korr-server"
 version = "0.0.0"
 dependencies = [
@@ -715,6 +742,13 @@ name = "korr-sim-cli"
 version = "0.0.0"
 dependencies = [
  "korr-random",
+]
+
+[[package]]
+name = "korr-wander"
+version = "0.0.0"
+dependencies = [
+ "korr-core",
 ]
 
 [[package]]

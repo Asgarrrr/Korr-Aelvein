@@ -164,8 +164,8 @@ fn known_answers() {
         0x9b70_1654_a95d_c11e
     );
     assert_eq!(
-        draw(3, "wander", Phase::Propose, 2, Subject::Entity(8), 1),
-        0x81fd_6e3d_d2ec_2107
+        draw(3, "wander", Phase::Tick, 2, Subject::Entity(8), 1),
+        0x9ef9_011d_68a8_002c
     );
     let last = Subject::Entity((1 << 63) - 1);
     assert_eq!(

@@ -170,3 +170,31 @@ fn occupied_by_another_actor() {
     assert_eq!(actor_at(&grid, A), Some(a));
     assert_eq!(actor_at(&grid, EAST_OF_A), Some(b));
 }
+
+/// The stepper at the centre of 3x3 open ground: a wall to the north-west,
+/// a cliff to the north, an actor to the north-east.
+fn surrounded() -> (Grid, Handle) {
+    let from = Pos { x: 2, y: 2 };
+    let (mut grid, actors) = place_all(shape(5, 5), &[from, Pos { x: 3, y: 1 }]);
+    set_material(&mut grid, Pos { x: 1, y: 1 }, Material::WALL);
+    set_height(&mut grid, Pos { x: 2, y: 1 }, max_step() + 1);
+    (grid, actors[0])
+}
+
+fn occupants(grid: &Grid) -> Vec<Option<Handle>> {
+    (1..=3)
+        .flat_map(|y| (1..=3).map(move |x| Pos { x, y }))
+        .map(|p| actor_at(grid, p))
+        .collect()
+}
+
+#[test]
+fn check_step_matches_step_without_moving() {
+    for dir in Dir::ALL {
+        let (mut grid, h) = surrounded();
+        let before = occupants(&grid);
+        let checked = grid.check_step(h, dir);
+        assert_eq!(occupants(&grid), before, "{dir:?}");
+        assert_eq!(checked, grid.step(h, dir), "{dir:?}");
+    }
+}

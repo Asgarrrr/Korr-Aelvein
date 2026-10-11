@@ -3,7 +3,7 @@ const MIN_SIDE: u16 = 3;
 /// Every position of the shape fits `i16`.
 const MAX_SIDE: u16 = i16::MAX.unsigned_abs();
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Pos {
     pub x: i16,
     pub y: i16,
@@ -29,7 +29,16 @@ impl CellIdx {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Interior(CellIdx);
 
+/// An [`Interior`] without its width, for a record that knows its shape.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PackedCell(u32);
+
 impl Interior {
+    #[inline]
+    pub(crate) const fn pack(self) -> PackedCell {
+        PackedCell(self.0.at)
+    }
+
     /// The ring is never walkable, so a walkable cell is interior.
     #[inline]
     pub(crate) const fn of_walkable(cell: CellIdx) -> Self {
@@ -85,6 +94,14 @@ impl Shape {
             return None;
         }
         Some(Interior(self.cell(u32::from(y), u32::from(x))))
+    }
+
+    #[inline]
+    pub(crate) const fn unpack(self, at: PackedCell) -> Interior {
+        Interior(CellIdx {
+            at: at.0,
+            width: self.width,
+        })
     }
 
     #[inline]
@@ -166,9 +183,56 @@ impl Shape {
             .map(move |(x, y)| Interior(self.cell(y.unsigned_abs(), x.unsigned_abs())))
     }
 
+    /// Calls `f` on the cells of [`Self::neighbourhood`], in the same order. A
+    /// plain loop: perception walks it for every actor, every turn.
+    #[inline]
+    pub fn scan_rings(self, centre: Pos, radius: u16, mut f: impl FnMut(Pos, Interior)) {
+        let (cx, cy) = (i32::from(centre.x), i32::from(centre.y));
+        let (last_x, last_y) = (i32::from(self.width) - 2, i32::from(self.height) - 2);
+        let mut visit = |x: i32, y: i32| {
+            let at = Interior(self.cell(y.unsigned_abs(), x.unsigned_abs()));
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "interior coordinates fit i16"
+            )]
+            f(
+                Pos {
+                    x: x as i16,
+                    y: y as i16,
+                },
+                at,
+            );
+        };
+        let inside_x = |x: i32| (1..=last_x).contains(&x);
+        let inside_y = |y: i32| (1..=last_y).contains(&y);
+        for d in 0..=i32::from(radius) {
+            let (left, right) = ((cx - d).max(1), (cx + d).min(last_x));
+            let (top, bottom) = (cy - d, cy + d);
+            if inside_y(top) {
+                for x in left..=right {
+                    visit(x, top);
+                }
+            }
+            let (west, east) = (inside_x(cx - d), inside_x(cx + d));
+            for y in (top + 1).max(1)..=(bottom - 1).min(last_y) {
+                if west {
+                    visit(cx - d, y);
+                }
+                if east {
+                    visit(cx + d, y);
+                }
+            }
+            if d > 0 && inside_y(bottom) {
+                for x in left..=right {
+                    visit(x, bottom);
+                }
+            }
+        }
+    }
+
     #[must_use]
     #[inline]
-    pub fn neighbour(self, at: Interior, dir: Dir) -> CellIdx {
+    pub(crate) fn neighbour(self, at: Interior, dir: Dir) -> CellIdx {
         let (dx, dy) = dir.offset();
         let delta = i32::from(dy) * i32::from(self.width) + i32::from(dx);
         // The wall ring keeps every neighbour of an interior cell in bounds: no wrap.

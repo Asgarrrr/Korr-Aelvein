@@ -58,6 +58,9 @@ a second name anywhere.
 - **Thing**: an entity linked to a cell that is not an actor: an item, a
   plant, a corpse, stairs. Many share a cell, in ascending EntityId order; a
   thing never blocks a step.
+- **Placement record**: the grid's record of one placed entity: its
+  EntityId, Layer and cell. In Rust (korr-grid), the source of position:
+  saved in the floor image, and the cell indexes are rebuilt from the records.
 
 ## Decisions
 
@@ -79,6 +82,10 @@ a second name anywhere.
   food, flee this threat). It reaches `core.step` through `instead`.
 - **Intent**: the cached (action key, target) of an actor's last decision.
   A matching candidate gets inertia; a FAIL clears it.
+- **Senses**: the actor-wide snapshot the core builds once per turn, before
+  any proposal: the other actors within `SIGHT` of the actor, in
+  Neighbourhood order. Every proposer reads the same facts, whatever the
+  registry order. A floor whose mechanics read no perception skips the scan.
 - **Period (P)**: how often an actor re-decides. Set per floor by distance
   to the nearest player; between decisions the actor repeats its intent.
 - **Alarm**: a u8 cell field a module sets only on the turn an eater first
@@ -87,7 +94,9 @@ a second name anywhere.
   Intent, unless that Intent is an action of the same module. Every action
   of the declaring module revalidates the alarm's condition when it replays.
 - **Requires**: the components an action needs on its actor. Without them
-  the action is a FAIL.
+  the action is a FAIL. In Rust (korr-core): `Module::requires` names them
+  by schema name; the ruleset resolves the names at build, and an
+  unregistered name panics. The core checks them before every `prepare`.
 - **Harm**: buffered health loss, applied by the core after each callback.
 - **Event**: a fact for clients. Events never drive behaviour.
 
@@ -99,14 +108,26 @@ a second name anywhere.
 - **Inbox**: entities on their way to a floor, sorted by (time, id) and
   saved with that floor.
 - **Floor membership**: an entity being on a floor: its slot, grid link,
-  schedule entry and player count. Changed only by `attach` and `detach`.
+  schedule entry and player count. In Rust (korr-core), only
+  `floor/membership.rs` changes it: spawn or attach, then link, then clock,
+  then schedule; unlink before detach.
 - **Image**: one floor's saved bytes: header, sections, inbox entries,
   checksum. The Rust floor image also keeps the slot table, free stack and
-  dense order.
-- **Save**: the world header plus every floor image.
+  dense order. In Rust (korr-core), the store, grid and inbox go through
+  `Sections`: `parse` checks the checksum and framing, `seal` writes them.
+- **Save**: the world header plus every floor image. In Rust (korr-core),
+  `Game::save` and `Game::load`: the seed, the floor count, then each image
+  framed by its length, in ascending FloorId. A load refuses another seed,
+  any bad image, and any world `World::try_new` refuses: an id from an absent
+  floor, beyond its origin floor's counter, or on two floors.
 - **Fingerprint**: a hash of the core schema, each module's name, schema,
   cells and config in registry order, and the species. A save only loads
-  into a world with the same fingerprint.
+  into a world with the same fingerprint. The Rust form hashes the component
+  names and format versions, then the action keys.
+- **Ruleset**: what every floor of a Rust world shares: the schema, the
+  core's component keys, the module table (each module's key and action
+  keys, in visit order) and a fingerprint of the schema and the action
+  keys. A floor image loads only under a ruleset with the same fingerprint.
 - **Traffic**: a per-floor running hash of the departures that leave or
   head for the floor. A single floor restores only when its traffic matches.
 - **Fast / full check**: the two load tiers. Fast is for the server's own
@@ -116,6 +137,11 @@ a second name anywhere.
 
 - **Mechanic**: one module folder (`modules/<name>/`) adding needs,
   components and systems. Removing it leaves a running game.
+  In Rust (korr-core): a `Module`, named by `NAME`, with a closed `Action`
+  enum. Its random stream derives from `NAME` alone.
+- **Mechanics**: in Rust (korr-core), what a world runs: every enabled
+  `Module`, visited in one fixed order. A single module is Mechanics; the
+  registry and test composites visit several.
 - **Domain**: a folder grouping Mechanics by subject in the Rust engine:
   `biology`, `milieu`, `combat`. Filing only: it holds no shared code.
 - **Contract**: a component or cell field read by a second module, typed
@@ -127,6 +153,8 @@ a second name anywhere.
 - **Game**: the registry plus the species table: what the server runs.
   Code: `game` (`packages/engine/src/game.ts`). `createGame` / `loadGame`
   build a World running the Game.
+  In Rust (korr-core): `Game`, the ruleset, the mechanics and the seed,
+  bound at build.
 
 ## Server and client
 

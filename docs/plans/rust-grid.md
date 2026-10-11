@@ -38,7 +38,7 @@ only. `korr-core` later assembles it into `Floor`.
 | `Interior(CellIdx)` | An interior cell. Only `Shape::idx(Pos) -> Option<Interior>` and the neighbourhood scan mint one. Writers and stencil centres take it. |
 | `Material(u8)` | Material id. Its properties (walkable, opaque, liquid) are a table in `config.rs`. Material 0 is the ring wall. |
 | `Terrain` | Two SoA layers: `material: Vec<Material>`, `height: Vec<i8>`. |
-| `Occupancy` | `actor: Vec<u32>` (slot or a `u32::MAX` sentinel, 4 bytes per cell) for a one-load blocking test, plus an intrusive list for non-actors. |
+| `Occupancy` | The placement records, one link per placed slot, and the cell indexes derived from them: `actor: Vec<u32>` (slot or a `u32::MAX` sentinel, 4 bytes per cell) for a one-load blocking test, plus an intrusive list for non-actors. |
 | `Grid` | `Shape`, `Terrain` and `Occupancy` of one floor. |
 
 Invariants:
@@ -55,8 +55,10 @@ Invariants:
 - Items, plants and corpses occupy exactly one cell.
 - Order inside a cell is ascending `EntityId`, never slot order: slots are
   recycled and change when an entity travels.
-- `Position` is the source of truth. Occupancy is a derived index: never
-  saved, rebuilt on load and on a traveller's arrival.
+- The placement records are the source of position: one per placed
+  entity (slot, `Layer`, cell), saved in the floor image and validated on
+  load. The cell indexes derive from them: never saved, rebuilt from the
+  records on load and on a traveller's arrival.
 - A step is legal when the target material is walkable, |Δh| ≤ `MAX_STEP`
   (config), and no other actor holds the target cell.
 
@@ -68,8 +70,9 @@ Invariants:
   ring, then row-major within the ring, then in-cell order.
 - `korr-ecs` exposes a read-only `SlotIdx` (`Handle::slot()`), which never
   leaves a core callback. The grid owns its link arrays, indexed by slot
-  and grown on demand. Links are not ECS columns: every column is saved and
-  travels, and occupancy must do neither.
+  and grown on demand. Links are not ECS columns: every column travels,
+  and a placement must not. The grid saves its links itself, as placement
+  records.
 - Each link keeps the full `Handle` and the `EntityId`. A stale handle on a
   recycled slot never touches the newer entity, and in-cell order compares
   ids, never handles (`Handle` orders by slot).
@@ -77,8 +80,8 @@ Invariants:
   and no actor for `Layer::Actor`; height is not a placement rule) and
   `nearest_place(from, Layer)` over the neighbourhood scan. A traveller
   stays queued while its destination has no place.
-- Shape and terrain persist through the `korr-ecs` codec. The core's floor
-  image carries the header and checksum.
+- Shape, terrain and placement records persist through the `korr-ecs`
+  codec. The core's floor image carries the header and checksum.
 - Whether a version counter is still needed depends on how `wander` caches
   perceptions: decide when `wander` lands, not here.
 

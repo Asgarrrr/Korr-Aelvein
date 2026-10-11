@@ -27,51 +27,6 @@ fn link_actor(grid: &mut Grid, store: &mut Store, x: i16, y: i16) {
 const CENTRE: Pos = Pos { x: 3, y: 3 };
 
 #[test]
-fn neighbourhood_scans_ring_by_ring_row_major() {
-    let shape = Shape::new(7, 7).expect("7x7 fits the bounds");
-    let scan = |radius| -> Vec<(i16, i16)> {
-        shape
-            .neighbourhood(CENTRE, radius)
-            .map(|at| shape.pos(at.cell()))
-            .map(|p| (p.x, p.y))
-            .collect()
-    };
-    let ring_1 = [
-        (3, 3),
-        (2, 2),
-        (3, 2),
-        (4, 2),
-        (2, 3),
-        (4, 3),
-        (2, 4),
-        (3, 4),
-        (4, 4),
-    ];
-    assert_eq!(scan(1), ring_1);
-    assert_eq!(scan(2)[..ring_1.len()], ring_1);
-}
-
-#[test]
-fn neighbourhood_clips_at_the_ring() {
-    let shape = Shape::new(12, 9).expect("12x9 fits the bounds");
-    let cells: Vec<Pos> = shape
-        .neighbourhood(Pos { x: 1, y: 1 }, 4)
-        .map(|at| shape.pos(at.cell()))
-        .collect();
-    let mut sorted: Vec<(i16, i16)> = cells.iter().map(|p| (p.y, p.x)).collect();
-    sorted.sort_unstable();
-    let square: Vec<(i16, i16)> = (1..=5).flat_map(|y| (1..=5).map(move |x| (y, x))).collect();
-    assert_eq!(sorted, square);
-    let distance = |p: &Pos| (p.x - 1).max(p.y - 1);
-    assert!(
-        cells
-            .windows(2)
-            .all(|pair| distance(&pair[0]) <= distance(&pair[1])),
-        "{cells:?}"
-    );
-}
-
-#[test]
 fn off_floor_centre_is_clamped() {
     let grid = grid(12, 9);
     assert_eq!(
@@ -155,6 +110,20 @@ fn aliasing_cell_pos_panics() {
 }
 
 #[test]
+#[should_panic(expected = "cell of another floor")]
+fn aliasing_cell_can_place_panics() {
+    let _ = grid(6, 6).can_place(aliasing(), Layer::Actor);
+}
+
+#[test]
+#[should_panic(expected = "cell of another floor")]
+fn aliasing_cell_link_panics() {
+    let mut store = store();
+    let h = store.spawn();
+    grid(6, 6).link_thing(&store, h, aliasing());
+}
+
+#[test]
 fn holds_actor_follows_link_and_unlink() {
     let mut store = store();
     let mut grid = grid(5, 5);
@@ -165,4 +134,70 @@ fn holds_actor_follows_link_and_unlink() {
     assert!(grid.holds_actor(cell.cell()));
     grid.unlink(h);
     assert!(!grid.holds_actor(cell.cell()));
+}
+
+#[test]
+fn neighbourhood_is_the_interior_sorted_by_ring_then_row() {
+    let shape = Shape::new(9, 7).expect("9x7 fits the bounds");
+    for (cx, cy) in [(4, 3), (1, 1), (7, 5), (0, 9), (-3, -2), (12, 3)] {
+        let centre = Pos { x: cx, y: cy };
+        let ring = |p: Pos| (p.x - cx).abs().max((p.y - cy).abs());
+        for radius in 0..12_u16 {
+            let mut expected: Vec<Pos> = (1..6)
+                .flat_map(|y| (1..8).map(move |x| Pos { x, y }))
+                .filter(|&p| ring(p) <= i16::try_from(radius).expect("small"))
+                .collect();
+            expected.sort_unstable_by_key(|&p| (ring(p), p.y, p.x));
+            let found: Vec<Pos> = shape
+                .neighbourhood(centre, radius)
+                .map(|at| shape.pos(at.cell()))
+                .collect();
+            assert_eq!(found, expected, "centre {centre:?}, radius {radius}");
+        }
+    }
+}
+
+#[test]
+fn rings_scan_the_neighbourhood_in_order() {
+    let shape = Shape::new(9, 7).expect("9x7 fits the bounds");
+    for (cx, cy) in [(4, 3), (1, 1), (7, 5), (0, 9), (-3, -2), (12, 3)] {
+        let centre = Pos { x: cx, y: cy };
+        for radius in 0..12_u16 {
+            let expected: Vec<Pos> = shape
+                .neighbourhood(centre, radius)
+                .map(|at| shape.pos(at.cell()))
+                .collect();
+            let mut found = Vec::new();
+            shape.scan_rings(centre, radius, |p, at| {
+                assert_eq!(shape.pos(at.cell()), p);
+                found.push(p);
+            });
+            assert_eq!(found, expected, "centre {centre:?}, radius {radius}");
+        }
+    }
+}
+
+#[test]
+fn extreme_centres_and_radii_cover_the_interior() {
+    let shape = Shape::new(5, 4).expect("5x4 fits the bounds");
+    let interior: Vec<Pos> = (1..3)
+        .flat_map(|y| (1..4).map(move |x| Pos { x, y }))
+        .collect();
+    for (x, y) in [
+        (i16::MIN, i16::MIN),
+        (i16::MAX, i16::MAX),
+        (i16::MIN, i16::MAX),
+    ] {
+        let centre = Pos { x, y };
+        let mut scanned = Vec::new();
+        shape.scan_rings(centre, u16::MAX, |p, _| scanned.push(p));
+        scanned.sort_unstable_by_key(|&p| (p.y, p.x));
+        assert_eq!(scanned, interior, "centre {centre:?}");
+        let mut ring: Vec<Pos> = shape
+            .neighbourhood(centre, u16::MAX)
+            .map(|at| shape.pos(at.cell()))
+            .collect();
+        ring.sort_unstable_by_key(|&p| (p.y, p.x));
+        assert_eq!(ring, interior, "centre {centre:?}");
+    }
 }

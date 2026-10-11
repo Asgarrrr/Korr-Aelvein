@@ -1,10 +1,9 @@
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::num::NonZeroU32;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use korr_ecs::{
-    ComponentKey, EntityId, FloorId, Handle, Reader, Schema, SchemaBuilder, Store, Traveller,
-    Writer,
+    EntityId, FloorId, Handle, Own, Reader, Schema, SchemaBuilder, Store, Traveller, Writer,
 };
 use korr_grid::{CellIdx, Dir, Grid, Interior, Layer, MAX_STEP, Material, Pos, Shape, StepError};
 use korr_random::{DrawIndex, ModuleKey, Phase, Seed, Stream, Subject};
@@ -42,7 +41,7 @@ pub(crate) struct World {
     seed: u64,
     step: u64,
     schema: Schema,
-    spot: ComponentKey<Spot>,
+    spot: Own<Spot>,
     floors: Vec<Floor>,
     reference: Reference,
     alive: Vec<Placed>,
@@ -159,13 +158,15 @@ impl World {
         } else {
             Layer::Actor
         };
-        if !self.reference.can_place((floor, at.cell()), layer) {
+        let fits = self.reference.can_place((floor, at.cell()), layer);
+        assert_eq!(self.floors[floor].grid.can_place(at, layer), fits);
+        if !fits {
             return;
         }
         let Floor { store, grid } = &mut self.floors[floor];
         let h = store.spawn();
         let pos = shape.pos(at.cell());
-        store.insert(self.spot, h, Spot { pos, layer });
+        store.insert(&self.spot, h, Spot { pos, layer });
         link(grid, store, h, at, layer);
         self.placed(floor, h, at, layer);
     }
@@ -254,7 +255,7 @@ impl World {
             .attach(flight.traveller)
             .expect("a detached row attaches");
         store
-            .get_mut(self.spot, h)
+            .get_mut(&self.spot, h)
             .expect("a traveller keeps its spot")
             .pos = shape.pos(at.cell());
         link(grid, store, h, at, flight.layer);
@@ -294,7 +295,7 @@ impl World {
             self.reference.place((floor, cell), Layer::Actor, id);
             self.alive[index].cell = cell;
             store
-                .get_mut(self.spot, h)
+                .get_mut(&self.spot, h)
                 .expect("a placed entity has a spot")
                 .pos = to;
         }
@@ -308,14 +309,12 @@ impl World {
             grid.write(&mut w);
             let bytes = w.into_bytes();
             let mut reader = Reader::new(&bytes);
-            *grid = Grid::read(
-                &mut reader,
-                store,
-                store
-                    .iter(self.spot)
-                    .map(|(h, spot)| (h, spot.pos, spot.layer)),
-            )
-            .expect("own grid rebuilds");
+            let handles: BTreeMap<EntityId, Handle> = store
+                .handles()
+                .map(|h| (store.id(h).expect("a listed handle is alive"), h))
+                .collect();
+            *grid = Grid::read(&mut reader, store, |id| handles.get(&id).copied())
+                .expect("own grid rebuilds");
             reader.finish().expect("the grid reads every byte it wrote");
         }
     }
