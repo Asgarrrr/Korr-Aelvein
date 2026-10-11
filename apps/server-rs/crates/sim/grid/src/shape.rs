@@ -23,18 +23,22 @@ impl CellIdx {
     pub(crate) const fn index(self) -> usize {
         self.at as usize
     }
-
-    #[inline]
-    pub(crate) const fn raw(self) -> u32 {
-        self.at
-    }
 }
 
 /// A cell inside the wall ring: its 8 neighbours are in bounds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Interior(CellIdx);
 
+/// An [`Interior`] without its width, for a record that knows its shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PackedCell(u32);
+
 impl Interior {
+    #[inline]
+    pub(crate) const fn pack(self) -> PackedCell {
+        PackedCell(self.0.at)
+    }
+
     /// The ring is never walkable, so a walkable cell is interior.
     #[inline]
     pub(crate) const fn of_walkable(cell: CellIdx) -> Self {
@@ -92,11 +96,10 @@ impl Shape {
         Some(Interior(self.cell(u32::from(y), u32::from(x))))
     }
 
-    /// Rebuilds a cell from the index a placement record keeps.
     #[inline]
-    pub(crate) const fn interior_at(self, at: u32) -> Interior {
+    pub(crate) const fn unpack(self, at: PackedCell) -> Interior {
         Interior(CellIdx {
-            at,
+            at: at.0,
             width: self.width,
         })
     }
