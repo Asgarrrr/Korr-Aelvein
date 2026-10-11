@@ -22,8 +22,7 @@ impl<M: Mechanics> Game<M> {
     /// than `u32::MAX` floors.
     #[must_use]
     pub fn save(&self, world: &World) -> Vec<u8> {
-        let mut floors: Vec<&Floor> = world.floors().iter().collect();
-        floors.sort_unstable_by_key(|floor| floor.id());
+        let floors = world.floors();
         let mut w = Writer::new();
         w.write_bytes(MAGIC);
         w.write_u16(VERSION);

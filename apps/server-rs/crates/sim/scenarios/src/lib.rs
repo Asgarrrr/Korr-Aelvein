@@ -5,6 +5,7 @@
 extern crate alloc;
 
 mod leave;
+mod ring;
 mod scripted;
 mod shy;
 
@@ -18,6 +19,7 @@ use korr_ecs::{FloorId, SchemaBuilder};
 use korr_grid::Shape;
 
 pub use leave::Leave;
+pub use ring::Ring;
 pub use scripted::{Act, Answer, Fake, Scripted};
 pub use shy::{Shy, random_step};
 
@@ -108,6 +110,25 @@ pub fn tower(ruleset: &Ruleset) -> World {
             })
             .collect(),
     )
+}
+
+/// `tower` after three rounds of `TO_GROUND` under `Seed(5)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Grounded {
+    pub hash: u64,
+    /// Travellers waiting in floor 0's inbox.
+    pub waiting: usize,
+}
+
+#[must_use]
+pub fn grounded(runner: &impl Runner) -> Grounded {
+    let game = game(TO_GROUND, Seed(5));
+    let mut world = tower(game.ruleset());
+    run_on(&game, &mut world, 3, runner);
+    Grounded {
+        hash: game.hash(&world),
+        waiting: world.floor(FloorId(0)).inbox_len(),
+    }
 }
 
 /// # Panics
