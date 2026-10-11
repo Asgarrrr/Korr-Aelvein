@@ -128,14 +128,41 @@ fn full_floor_refuses_actors_but_takes_things() {
     assert_eq!(place(&grid, from, Layer::Thing), Some(Pos { x: 3, y: 1 }));
 }
 
-#[test]
-#[should_panic(expected = "cell outside this floor's interior")]
-fn foreign_cell_index_panics() {
-    let foreign = Shape::new(10, 10)
+/// (1, 2) on 10x10 is index 21, which is the interior cell (3, 3) on 6x6.
+fn aliasing() -> Interior {
+    Shape::new(10, 10)
         .expect("10x10 fits the bounds")
-        .idx(Pos { x: 5, y: 1 })
-        .expect("(5, 1) is inside 10x10");
+        .idx(Pos { x: 1, y: 2 })
+        .expect("(1, 2) is inside 10x10")
+}
+
+#[test]
+#[should_panic(expected = "cell of another floor")]
+fn aliasing_cell_write_panics() {
+    grid(6, 6).set_material(aliasing(), Material::WALL);
+}
+
+#[test]
+#[should_panic(expected = "cell of another floor")]
+fn aliasing_cell_read_panics() {
+    let _ = grid(6, 6).actor_at(aliasing().cell());
+}
+
+#[test]
+#[should_panic(expected = "cell of another floor")]
+fn aliasing_cell_pos_panics() {
+    let _ = grid(6, 6).shape().pos(aliasing().cell());
+}
+
+#[test]
+fn holds_actor_follows_link_and_unlink() {
+    let mut store = store();
     let mut grid = grid(5, 5);
-    assert_eq!(grid.shape().pos(foreign.cell()), Pos { x: 0, y: 3 });
-    grid.set_material(foreign, Material::GROUND);
+    let cell = at(&grid, 2, 2);
+    let h = store.spawn();
+    assert!(!grid.holds_actor(cell.cell()));
+    grid.link_actor(&store, h, cell);
+    assert!(grid.holds_actor(cell.cell()));
+    grid.unlink(h);
+    assert!(!grid.holds_actor(cell.cell()));
 }

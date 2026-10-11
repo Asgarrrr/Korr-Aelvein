@@ -1,16 +1,19 @@
-//! Occupancy of one 66x66 floor: the "actor here?" probe and a step there and back.
+//! Occupancy of one 66x66 floor: the "actor here?" probes, a step there and back,
+//! a perception scan and an arrival search.
 
 use std::hint::black_box;
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use korr_ecs::{FloorId, Handle, SchemaBuilder, Store};
 use korr_ecs_bench::picks;
-use korr_grid::{CellIdx, Dir, Grid, Interior, Pos, Shape};
+use korr_grid::{CellIdx, Dir, Grid, Interior, Layer, Pos, Shape};
 
 const SIDE: u16 = 66;
 const INSIDE: u32 = 64;
 const ACTORS: u32 = 1024;
 const K: u32 = 4096;
+/// The widest neighbourhood the TS engine perceives.
+const PERCEPTION: u16 = 4;
 
 fn interior(shape: Shape, pick: u32) -> Interior {
     let coord = |v: u32| i16::try_from(v + 1).expect("an interior coordinate fits i16");
@@ -62,6 +65,16 @@ fn grid(c: &mut Criterion) {
             )
         });
     });
+    group.bench_function("holds_actor", |b| {
+        b.iter(|| {
+            black_box(
+                black_box(&cells)
+                    .iter()
+                    .filter(|&&at| grid.holds_actor(at))
+                    .count(),
+            )
+        });
+    });
     group.bench_function("step", |b| {
         b.iter(|| {
             let mut moved = 0_u32;
@@ -73,6 +86,29 @@ fn grid(c: &mut Criterion) {
                 }
             }
             black_box(moved)
+        });
+    });
+    let centres: Vec<Pos> = cells.iter().map(|&at| shape.pos(at)).collect();
+    group.bench_function("neighbourhood_actors", |b| {
+        b.iter(|| {
+            let mut seen = 0_usize;
+            for &centre in black_box(&centres) {
+                seen += shape
+                    .neighbourhood(centre, PERCEPTION)
+                    .filter(|at| grid.holds_actor(at.cell()))
+                    .count();
+            }
+            black_box(seen)
+        });
+    });
+    group.bench_function("nearest_place", |b| {
+        b.iter(|| {
+            black_box(
+                black_box(&centres)
+                    .iter()
+                    .filter(|&&from| grid.nearest_place(from, Layer::Actor).is_some())
+                    .count(),
+            )
         });
     });
     group.finish();
