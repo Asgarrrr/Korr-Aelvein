@@ -22,6 +22,11 @@ pub trait Module {
     fn perceives(&self) -> bool {
         false
     }
+    /// The components the actor must hold, by schema name; without one the run fails.
+    #[must_use]
+    fn requires(_: Self::Action) -> &'static [&'static str] {
+        &[]
+    }
     fn propose(&self, senses: &Senses<'_>, out: &mut Proposals<'_, Self::Action>);
     fn prepare(
         &self,
@@ -45,6 +50,15 @@ impl<M: Module> Mechanics for M {
     fn each<V: Visit>(&self, v: &mut V) {
         v.module(self);
     }
+}
+
+/// # Panics
+/// When `action` is missing from `A::ALL`.
+pub(crate) fn index_of<A: Action>(action: A) -> usize {
+    A::ALL
+        .iter()
+        .position(|&a| a == action)
+        .unwrap_or_else(|| panic!("action missing from its module's ALL: {action:?}"))
 }
 
 /// A hash of `module/name`: the stable identity of an action.
@@ -106,10 +120,7 @@ impl<A: Action> Proposals<'_, A> {
     /// # Panics
     /// When `action` is missing from `A::ALL`.
     pub fn push(&mut self, action: A, band: Band, weight: u16, target: Target) {
-        let index = A::ALL
-            .iter()
-            .position(|&a| a == action)
-            .unwrap_or_else(|| panic!("action missing from its module's ALL: {action:?}"));
+        let index = index_of(action);
         self.out.push(Candidate {
             action: ActionRef {
                 module: self.module,

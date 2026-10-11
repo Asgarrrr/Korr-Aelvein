@@ -27,6 +27,11 @@ impl Draws {
     }
 }
 
+/// Departures are pushed in turn order, so only the last can be this actor's.
+pub(crate) fn departed(departures: &[(Handle, FloorId, Pos)], actor: Handle) -> bool {
+    departures.last().is_some_and(|d| d.0 == actor)
+}
+
 #[derive(Debug)]
 pub struct PrepCtx<'a> {
     pub(crate) grid: &'a Grid,
@@ -88,7 +93,7 @@ impl CommitCtx<'_> {
     /// When the actor already departed this turn.
     pub fn depart(&mut self, to: FloorId, at: Pos) {
         assert!(
-            self.departures.last().map(|d| d.0) != Some(self.actor),
+            !departed(self.departures, self.actor),
             "one departure per turn"
         );
         self.departures.push((self.actor, to, at));

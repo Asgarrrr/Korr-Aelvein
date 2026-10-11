@@ -8,6 +8,7 @@ use core::mem;
 use crate::codec::{Component, Reader, Writer};
 use crate::entities::Entities;
 use crate::error::ImageError;
+use crate::id::Handle;
 
 pub(crate) const FOREIGN_KEY: &str = "component key from another schema";
 
@@ -17,6 +18,8 @@ const ROW_PRESENT: u8 = 1;
 
 pub(crate) trait ErasedColumn: Any + Send {
     fn clear_slot(&mut self, slot: u32);
+
+    fn contains(&self, h: Handle) -> bool;
 
     fn write(&self, w: &mut Writer);
 
@@ -135,6 +138,10 @@ impl<T: Component> Column<T> {
 impl<T: Component> ErasedColumn for Column<T> {
     fn clear_slot(&mut self, slot: u32) {
         self.remove(slot);
+    }
+
+    fn contains(&self, h: Handle) -> bool {
+        self.index(h.slot).is_some()
     }
 
     fn write(&self, w: &mut Writer) {

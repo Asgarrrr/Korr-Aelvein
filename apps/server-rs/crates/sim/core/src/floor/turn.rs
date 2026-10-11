@@ -3,10 +3,10 @@ use korr_grid::Pos;
 use korr_random::Seed;
 
 use crate::config::{IDLE, MAX_INSTEAD, SIGHT};
-use crate::ctx::{CommitCtx, Draws, PrepCtx};
+use crate::ctx::{CommitCtx, Draws, PrepCtx, departed};
 use crate::decision::{Candidate, Candidates, Intent};
 use crate::floor::Floor;
-use crate::module::{Action, Mechanics, Module, Prepared, Proposals, Visit, module_key};
+use crate::module::{Action, Mechanics, Module, Prepared, Proposals, Visit, index_of, module_key};
 use crate::ruleset::Ruleset;
 use crate::senses::{Seen, Senses};
 use crate::time::{Cost, Tick};
@@ -18,7 +18,7 @@ impl Floor {
         let end = Tick::start_of(self.round + 1);
         while let Some((now, id, actor)) = self.schedule.pop_before(end) {
             let cost = self.turn(seed, ruleset, mechanics, now, id, actor);
-            if self.departures.last().map(|d| d.0) == Some(actor) {
+            if departed(&self.departures, actor) {
                 continue;
             }
             let next = now.after(cost);
@@ -54,6 +54,7 @@ impl Floor {
         while let Some(pick) = self.candidates.pick(intent, excluded) {
             let mut run = RunVisit {
                 floor: self,
+                ruleset,
                 seed,
                 now,
                 id,
@@ -122,6 +123,7 @@ impl Visit for ProposeVisit<'_> {
 /// Runs the picked candidate in the module whose ordinal it carries.
 struct RunVisit<'a> {
     floor: &'a mut Floor,
+    ruleset: &'a Ruleset,
     seed: Seed,
     now: Tick,
     id: EntityId,
@@ -145,11 +147,20 @@ impl Visit for RunVisit<'_> {
 
 impl RunVisit<'_> {
     fn run<M: Module>(&mut self, module: &M) -> Option<Cost> {
-        let mut action = M::Action::ALL[usize::from(self.pick.action.index)];
+        let requires = &self.ruleset.modules[self.ordinal].requires;
+        let mut index = usize::from(self.pick.action.index);
+        let mut action = M::Action::ALL[index];
         let mut target = self.pick.target;
         let floor = self.floor.id();
         let mut hops = 0;
         loop {
+            let store = &self.floor.store;
+            if !requires[index]
+                .iter()
+                .all(|&key| store.has(key, self.actor))
+            {
+                return None;
+            }
             let draws = Draws::new(self.seed, module_key::<M>(), self.now, self.id);
             let prep = PrepCtx {
                 grid: &self.floor.grid,
@@ -179,6 +190,7 @@ impl RunVisit<'_> {
                     if hops > MAX_INSTEAD {
                         return None;
                     }
+                    index = index_of(next);
                     action = next;
                     target = next_target;
                 }

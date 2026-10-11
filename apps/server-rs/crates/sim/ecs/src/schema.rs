@@ -6,7 +6,7 @@ use core::marker::PhantomData;
 use crate::codec::{Component, FNV_OFFSET, absorb};
 use crate::column::{Column, ErasedColumn};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ComponentId(pub(crate) u32);
 
 #[derive(Debug)]
@@ -48,6 +48,13 @@ impl<T> fmt::Debug for Read<T> {
             .field("prefix", &self.prefix)
             .finish()
     }
+}
+
+/// A component key without its type: enough to test presence, never to read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AnyRead {
+    pub(crate) id: ComponentId,
+    pub(crate) prefix: u64,
 }
 
 /// The write half of a component key, minted once by `register`. It is not
@@ -200,6 +207,17 @@ impl Schema {
         self.components
             .last()
             .map_or(FNV_OFFSET, |info| info.prefix)
+    }
+
+    #[must_use]
+    pub fn find(&self, name: &str) -> Option<AnyRead> {
+        (0..)
+            .zip(&self.components)
+            .find(|(_, info)| info.name == name)
+            .map(|(id, info)| AnyRead {
+                id: ComponentId(id),
+                prefix: info.prefix,
+            })
     }
 }
 

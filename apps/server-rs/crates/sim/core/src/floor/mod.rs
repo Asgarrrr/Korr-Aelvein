@@ -5,7 +5,7 @@ mod turn;
 
 use alloc::vec::Vec;
 
-use korr_ecs::{EntityId, FloorId, Handle, Store};
+use korr_ecs::{Component, EntityId, FloorId, Handle, Own, Store};
 use korr_grid::{Grid, Interior, Layer, Material, Pos, Shape};
 
 use crate::decision::Candidates;
@@ -78,6 +78,14 @@ impl Floor {
         let h = self.store.spawn();
         self.grid.link_thing(&self.store, h, at);
         h
+    }
+
+    /// For setup and content: a turn never calls it. Returns the value `h` held before.
+    ///
+    /// # Panics
+    /// When `h` is dead, or `key` comes from another schema.
+    pub fn insert<T: Component>(&mut self, key: &Own<T>, h: Handle, value: T) -> Option<T> {
+        self.store.insert(key, h, value)
     }
 
     #[must_use]

@@ -47,7 +47,7 @@ the spec is updated to include it.
 - Decision LOD (P above 1) in the Rust core, only if the bench at target scale exceeds the budget, and then behind season-bench fidelity checks. The `perceiving` case of `round_8k_2k` measured 366 ns per entity against a budget of about 200, with a proposer that does nothing but step. The full decision at P = 1 stays unverified until hunger gives a real proposer.
 - Snapshot-decision turns (every actor decides on the round's start state, then all act), if the bench fails.
 - The floor stopping in phase 2 when a player is due (D13), with the server supplying the input.
-- The two-phase build test of the core design (a reader registered before its owner resolves; a missing required owner fails the build), once `Module` exists.
+- The two-phase build test of the core design: a reader registered before its owner resolves. It waits for the first cross-module `Read<T>` (hunger).
 - `korr-random` hard-codes the `Phase` list: a mechanic with a phase of its own edits the RNG crate. Derive the phase key from a name, like `ModuleKey`, once a module needs its own phase.
 - `Subject::Cell` packing the floor, so two floors never share a cell subject.
 - Split `korr-grid` `tests/model/driver.rs` by subject.

@@ -94,7 +94,9 @@ a second name anywhere.
   Intent, unless that Intent is an action of the same module. Every action
   of the declaring module revalidates the alarm's condition when it replays.
 - **Requires**: the components an action needs on its actor. Without them
-  the action is a FAIL.
+  the action is a FAIL. In Rust (korr-core): `Module::requires` names them
+  by schema name; the ruleset resolves the names at build, and an
+  unregistered name panics. The core checks them before every `prepare`.
 - **Harm**: buffered health loss, applied by the core after each callback.
 - **Event**: a fact for clients. Events never drive behaviour.
 

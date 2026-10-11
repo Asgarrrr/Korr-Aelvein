@@ -6,7 +6,7 @@ use crate::codec::Component;
 use crate::column::{Column, ErasedColumn, FOREIGN_KEY, typed, typed_mut};
 use crate::entities::Entities;
 use crate::id::{EntityId, FloorId, Handle};
-use crate::schema::{Own, Read, Schema};
+use crate::schema::{AnyRead, ComponentId, Own, Read, Schema};
 
 /// The entities and component columns of one floor.
 pub struct Store {
@@ -108,6 +108,16 @@ impl Store {
         column.get(h.slot)
     }
 
+    /// Whether `h` holds `key`: false for a dead handle.
+    ///
+    /// # Panics
+    /// When `key` comes from another schema.
+    #[must_use]
+    pub fn has(&self, key: AnyRead, h: Handle) -> bool {
+        let column = &self.columns[self.checked(key.id, key.prefix)];
+        self.is_alive(h) && column.contains(h)
+    }
+
     /// # Panics
     /// When `key` comes from another schema.
     pub fn get_mut<T: Component>(&mut self, key: &Own<T>, h: Handle) -> Option<&mut T> {
@@ -171,11 +181,12 @@ impl Store {
     /// The prefix check runs before any downcast: a key of another schema
     /// may name a column of the same type.
     pub(crate) fn index<T>(&self, key: Read<T>) -> usize {
-        let index = key.id.0 as usize;
-        assert!(
-            self.prefixes.get(index) == Some(&key.prefix),
-            "{FOREIGN_KEY}"
-        );
+        self.checked(key.id, key.prefix)
+    }
+
+    fn checked(&self, id: ComponentId, prefix: u64) -> usize {
+        let index = id.0 as usize;
+        assert!(self.prefixes.get(index) == Some(&prefix), "{FOREIGN_KEY}");
         index
     }
 }

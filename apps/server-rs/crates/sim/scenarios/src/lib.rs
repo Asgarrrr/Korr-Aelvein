@@ -28,7 +28,8 @@ pub fn floor(ruleset: &Ruleset, id: u16, width: u16, height: u16) -> Floor {
 }
 
 /// # Panics
-/// When two modules share a name or two actions share an `ActionKey`.
+/// When two modules share a name, two actions share an `ActionKey`, or
+/// an action requires a component the schema does not register.
 #[must_use]
 pub fn game<M: Mechanics>(mechanics: M, seed: Seed) -> Game<M> {
     Game::new(SchemaBuilder::default(), mechanics, seed)
