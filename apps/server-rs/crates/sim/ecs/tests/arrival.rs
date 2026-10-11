@@ -44,6 +44,7 @@ fn check_arrival_agrees_with_attach() {
         bytes[8..12].copy_from_slice(&row.to_le_bytes());
     });
     let foreign = reread(&leave(), |bytes| bytes[12] ^= 1);
+    let foreign_high = reread(&leave(), |bytes| bytes[19] ^= 1);
 
     for (t, expected) in [
         (truncated, ImageError::Truncated { at: 9 }),
@@ -51,6 +52,13 @@ fn check_arrival_agrees_with_attach() {
             foreign,
             ImageError::Fingerprint {
                 saved: schema.fingerprint() ^ 1,
+                running: schema.fingerprint(),
+            },
+        ),
+        (
+            foreign_high,
+            ImageError::Fingerprint {
+                saved: schema.fingerprint() ^ (1 << 56),
                 running: schema.fingerprint(),
             },
         ),

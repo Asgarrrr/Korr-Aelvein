@@ -157,14 +157,12 @@ fn attach_rejects_a_row_of_an_older_component_version() {
     source.insert(&keys.hunger, h, Hunger(9));
     let traveller = source.detach(h);
     let mut destination = Store::new(&new, FloorId(1));
-    assert_eq!(
-        destination.check_arrival(&traveller),
-        Err(ImageError::Fingerprint {
-            saved: old.fingerprint(),
-            running: new.fingerprint(),
-        })
-    );
-    assert!(destination.attach(traveller).is_err());
+    let expected = ImageError::Fingerprint {
+        saved: old.fingerprint(),
+        running: new.fingerprint(),
+    };
+    assert_eq!(destination.check_arrival(&traveller), Err(expected.clone()));
+    assert_eq!(destination.attach(traveller).err(), Some(expected));
     assert!(destination.is_empty());
 }
 
