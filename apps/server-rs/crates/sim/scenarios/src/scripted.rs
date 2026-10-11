@@ -41,7 +41,8 @@ pub enum Answer {
     Go(Dir),
     Instead(Fake),
     Fail,
-    FailBefore(Tick, Dir),
+    /// Fails on ticks in `[first, second)`, goes `Dir` outside.
+    FailBetween(Tick, Tick, Dir),
 }
 
 impl Scripted {
@@ -70,8 +71,10 @@ impl Module for Scripted {
                 action: next,
                 target: Target::None,
             },
-            Answer::FailBefore(at, _) if ctx.now() < at => Prepared::Fail,
-            Answer::Go(dir) | Answer::FailBefore(_, dir) => match ctx.check_step(dir) {
+            Answer::FailBetween(from, until, _) if (from..until).contains(&ctx.now()) => {
+                Prepared::Fail
+            }
+            Answer::Go(dir) | Answer::FailBetween(_, _, dir) => match ctx.check_step(dir) {
                 Ok(_) => Prepared::Go {
                     cost: Cost::new(100),
                     plan: dir,

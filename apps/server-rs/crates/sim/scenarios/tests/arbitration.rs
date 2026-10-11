@@ -104,10 +104,28 @@ fn inertia_keeps_the_current_intent_on_a_tie() {
         (Fake::Y, Fake::X)
     };
     let acts = vec![
-        act(low, 10, Answer::FailBefore(Tick(100), Dir::East)),
+        act(low, 10, Answer::FailBetween(Tick(0), Tick(100), Dir::East)),
         act(high, 10, Answer::Go(Dir::West)),
     ];
     assert_eq!(run(acts, 2).x, 2);
+}
+
+#[test]
+fn an_idle_turn_drops_the_intent() {
+    let (low, high) = if ActionKey::of::<Scripted>(Fake::X) < ActionKey::of::<Scripted>(Fake::Y) {
+        (Fake::X, Fake::Y)
+    } else {
+        (Fake::Y, Fake::X)
+    };
+    let acts = vec![
+        act(low, 10, Answer::FailBetween(Tick(0), Tick(200), Dir::East)),
+        act(
+            high,
+            10,
+            Answer::FailBetween(Tick(100), Tick(200), Dir::West),
+        ),
+    ];
+    assert_eq!(run(acts, 3), START);
 }
 
 /// A module whose two actions share one name, so one key.
