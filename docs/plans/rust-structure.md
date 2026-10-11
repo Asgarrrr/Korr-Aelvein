@@ -80,7 +80,8 @@ example `sim/biology/physiology/hunger/` is `korr-hunger`.
   cannot forge another module's stream.
 - `core` exposes two surfaces: `korr_core::mechanic`, the module seam and
   the values it trades in, and `korr_core::host`, the game, floors, saves
-  and the registry seam. A mechanic names only `korr_core::mechanic`, so it
+  and the registry seam. A mechanic names only `korr_core::mechanic`, and
+  links `korr-core` under its own name so the check can read the path. It
   cannot reach a floor or another module's world state.
 - A mechanic about a creature, its actions or its components, goes in
   `biology/`, even when it also owns cell fields (fear owns `danger`,

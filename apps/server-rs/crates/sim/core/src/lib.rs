@@ -38,6 +38,6 @@ pub mod host {
     pub use crate::ruleset::Ruleset;
     pub use crate::time::Round;
     pub use crate::world::World;
-    pub use korr_grid::{Dir, Pos};
+    pub use korr_grid::Pos;
     pub use korr_random::Seed;
 }

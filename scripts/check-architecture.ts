@@ -201,7 +201,7 @@ const workspaceDeps = (
 ).workspace.dependencies;
 
 // Cargo links target-specific and renamed dependencies like plain ones.
-const linkedCrates = (manifest: Manifest, shared = workspaceDeps) =>
+const linkedDeps = (manifest: Manifest, shared = workspaceDeps) =>
 	[
 		manifest.dependencies,
 		...Object.values(manifest.target ?? {}).map((t) => t.dependencies),
@@ -209,8 +209,15 @@ const linkedCrates = (manifest: Manifest, shared = workspaceDeps) =>
 		.flatMap((table) => Object.entries(table ?? {}))
 		.map(([key, dep]) => {
 			const spec = typeof dep === "object" && dep.workspace ? shared[key] : dep;
-			return (typeof spec === "object" && spec.package) || key;
+			return { key, crate: (typeof spec === "object" && spec.package) || key };
 		});
+const linkedCrates = (manifest: Manifest, shared = workspaceDeps) =>
+	linkedDeps(manifest, shared).map((dep) => dep.crate);
+// The mechanic path rule reads a crate by its own name, which a rename would hide.
+const mechanicRenames = (manifest: Manifest, shared = workspaceDeps) =>
+	linkedDeps(manifest, shared)
+		.filter(({ key, crate }) => crate.startsWith("korr-") && key !== crate)
+		.map(({ key, crate }) => `a mechanic links ${crate} as ${key}`);
 
 const crateViolations = (dir: string, name: string, deps: string[]) => {
 	const workspace = deps.filter((dep) => dep.startsWith("korr-"));
@@ -243,10 +250,13 @@ for (const crate of walk(join(RUST, "crates"), /^Cargo\.toml$/).map(dirname)) {
 		linkedCrates(manifest),
 	))
 		report(join(crate, "Cargo.toml"), found);
+	if (MECHANICS.some((root) => crate.startsWith(root)))
+		for (const found of mechanicRenames(manifest))
+			report(join(crate, "Cargo.toml"), found);
 }
 
 // A mechanic sees the module seam only: the host path would hand it the world.
-const HOST_PATH = /\bkorr_core\s*(?:::\s*(?!mechanic\b)|as\b)/;
+const HOST_PATH = /\bkorr_core\s*(?:::(?!\s*mechanic\b)|as\b)/;
 let mechanicSources = 0;
 for (const root of MECHANICS)
 	for (const file of walk(root, /\.rs$/)) {
@@ -258,6 +268,7 @@ if (mechanicSources === 0)
 	report(SIM, "the mechanic path rule checked no source");
 for (const [sample, fires] of [
 	["use korr_core::mechanic::{Cost, Module};", false],
+	["use korr_core::\n    mechanic::Cost;", false],
 	["use korr_core::host::World;", true],
 	["use korr_core::{mechanic::Cost, host::World};", true],
 	["use korr_core as core;", true],
@@ -317,6 +328,15 @@ const renamed = linkedCrates(
 	{ rng: { package: "korr-random" } },
 );
 const mechanicProbe = join(SIM, "biology/ethology/probe");
+if (
+	mechanicRenames(
+		Bun.TOML.parse(
+			'[dependencies]\nkc = { package = "korr-core", path = "x" }\nkorr-genome.workspace = true\nshared.workspace = true\n',
+		) as Manifest,
+		{ "korr-genome": {}, shared: { package: "korr-core" } },
+	).length !== 2
+)
+	report(mechanicProbe, "the mechanic rename rule did not fire exactly twice");
 const crateProbes: [string, string, string[], number][] = [
 	[mechanicProbe, "korr-probe", renamed, 2],
 	[
