@@ -23,6 +23,11 @@ impl CellIdx {
     pub(crate) const fn index(self) -> usize {
         self.at as usize
     }
+
+    #[inline]
+    pub(crate) const fn raw(self) -> u32 {
+        self.at
+    }
 }
 
 /// A cell inside the wall ring: its 8 neighbours are in bounds.
@@ -85,6 +90,15 @@ impl Shape {
             return None;
         }
         Some(Interior(self.cell(u32::from(y), u32::from(x))))
+    }
+
+    /// Rebuilds a cell from the index a placement record keeps.
+    #[inline]
+    pub(crate) const fn interior_at(self, at: u32) -> Interior {
+        Interior(CellIdx {
+            at,
+            width: self.width,
+        })
     }
 
     #[inline]
