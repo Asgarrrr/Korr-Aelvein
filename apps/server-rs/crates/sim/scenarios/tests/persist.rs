@@ -5,7 +5,7 @@ use korr_scenarios::{Pace, floor, game, run};
 
 const SEED: Seed = Seed(7);
 /// Re-pin on every intended change to the image format or to behaviour.
-const PINNED: u64 = 0x7c1e_0864_12fe_9f93;
+const PINNED: u64 = 0x7578_8f3d_d870_71e3;
 
 /// 40 actors, two per row. The fast even id starts at x = 3: blocked by the
 /// wall from tick 570, its clock stays off the round boundary. The slow odd
@@ -49,7 +49,7 @@ fn save_load_replay_matches_the_pinned_run() {
 
 /// Pace draws nothing: this world pins draw addressing. Re-pin on every
 /// intended change to a draw or to wander.
-const PINNED_WANDER: u64 = 0x2099_4ae8_512c_07a8;
+const PINNED_WANDER: u64 = 0x9167_fe17_3efe_8045;
 
 #[test]
 fn wander_world_hash_pins_the_draws() {
@@ -141,13 +141,6 @@ fn forged_round_is_corrupt_not_a_panic() {
     );
 }
 
-fn position_of(haystack: &[u8], needle: &[u8]) -> usize {
-    haystack
-        .windows(needle.len())
-        .position(|w| w == needle)
-        .expect("needle is in the image")
-}
-
 /// Rewrites the store image inside a saved floor and seals both checksums.
 fn forge_store(bytes: &[u8], edit: impl FnOnce(&mut Vec<u8>)) -> Vec<u8> {
     let mut sections = Sections::parse(bytes).expect("own save parses");
@@ -158,9 +151,17 @@ fn forge_store(bytes: &[u8], edit: impl FnOnce(&mut Vec<u8>)) -> Vec<u8> {
     sections.seal()
 }
 
-/// The offset of the clock column's row count in a store image.
+/// The offset of the clock column's row count in a store image that holds one
+/// clock. Core registers the clock last, so its one row of owner slot (4 bytes)
+/// and tick (8 bytes) ends the image, before the checksum.
 fn clock_count_at(store: &[u8]) -> usize {
-    position_of(store, b"core.clock") + b"core.clock".len()
+    let at = store.len() - 8 - 12 - 4;
+    assert_eq!(
+        store[at..at + 4],
+        1u32.to_le_bytes(),
+        "one clock row ends the image"
+    );
+    at
 }
 
 fn corrupt(what: &'static str) -> LoadError {
@@ -175,8 +176,6 @@ fn placed_actor_without_a_clock_is_corrupt() {
     f.spawn_actor(ruleset, Pos { x: 1, y: 1 });
     let forged = forge_store(&f.save(ruleset), |store| {
         let count_at = clock_count_at(store);
-        assert_eq!(store[count_at..count_at + 4], 1u32.to_le_bytes());
-        // The count, then one row: owner slot (4 bytes) and tick (8 bytes).
         store[count_at..count_at + 4].copy_from_slice(&0u32.to_le_bytes());
         store.drain(count_at + 4..count_at + 16);
     });

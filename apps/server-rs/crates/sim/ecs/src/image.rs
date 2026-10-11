@@ -1,4 +1,4 @@
-//! Floor image v1. The byte layout and the order of the checks are in
+//! Floor image v2. The byte layout and the order of the checks are in
 //! `docs/plans/rust-structure.md`, section 7.
 
 use alloc::vec::Vec;
@@ -10,7 +10,7 @@ use crate::schema::Schema;
 use crate::store::Store;
 
 const MAGIC: &[u8; 8] = b"KORRFLR\0";
-const VERSION: u16 = 1;
+const VERSION: u16 = 2;
 const CHECKSUM_LEN: usize = 8;
 /// Magic, version, floor, counter and checksum: the bytes before any count.
 const MIN_LEN: usize = 28;
@@ -21,7 +21,7 @@ impl Store {
     #[must_use]
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "register caps the component count at u32 and each name at u16 bytes"
+        reason = "register caps the component count at u32"
     )]
     pub fn save(&self) -> Vec<u8> {
         let mut w = Writer::new();
@@ -29,9 +29,8 @@ impl Store {
         w.write_u16(VERSION);
         self.entities.write(&mut w);
         w.write_u32(self.columns.len() as u32);
-        for (name, column) in self.names.iter().zip(&self.columns) {
-            w.write_u16(name.len() as u16);
-            w.write_bytes(name.as_bytes());
+        for (&prefix, column) in self.prefixes.iter().zip(&self.columns) {
+            w.write_u64(prefix);
             column.write(&mut w);
         }
         let mut bytes = w.into_bytes();
@@ -76,9 +75,8 @@ impl Store {
                 index: count.min(expected),
             });
         }
-        for (index, (name, column)) in (0..).zip(store.names.iter().zip(&mut store.columns)) {
-            let len = r.read_u16()?;
-            if r.read_bytes(usize::from(len))? != name.as_bytes() {
+        for (index, (&prefix, column)) in (0..).zip(store.prefixes.iter().zip(&mut store.columns)) {
+            if r.read_u64()? != prefix {
                 return Err(ImageError::Schema { index });
             }
             column.read(&mut r, &store.entities)?;

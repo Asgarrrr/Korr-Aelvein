@@ -12,8 +12,7 @@ use crate::schema::{AnyRead, ComponentId, Own, Read, Schema};
 pub struct Store {
     pub(crate) entities: Entities,
     pub(crate) columns: Vec<Box<dyn ErasedColumn>>,
-    pub(crate) names: Vec<&'static str>,
-    prefixes: Vec<u64>,
+    pub(crate) prefixes: Vec<u64>,
 }
 
 impl Store {
@@ -26,7 +25,6 @@ impl Store {
                 .iter()
                 .map(|info| (info.new_column)())
                 .collect(),
-            names: schema.components.iter().map(|info| info.name).collect(),
             prefixes: schema.components.iter().map(|info| info.prefix).collect(),
         }
     }

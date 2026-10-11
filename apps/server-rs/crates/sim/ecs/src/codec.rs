@@ -11,7 +11,7 @@ const FNV_PRIME: u64 = 0x100_0000_01b3;
 /// A value stored in a column. `read` is a pure function of the bytes and
 /// consumes exactly what `write` produced.
 pub trait Component: Sized + Send + 'static {
-    /// Bump on every change to `write` or `read`: a save made under another version fails with `LoadError::Ruleset`.
+    /// Bump on every change to `write` or `read`: an image saved under another version fails with `ImageError::Schema`.
     const VERSION: u16;
 
     fn write(&self, w: &mut Writer);

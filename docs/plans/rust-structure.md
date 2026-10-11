@@ -197,7 +197,10 @@ Its id is the registration index; a name is registered once and is never
 empty. `Schema` is the ordered list of registered components, shared by
 every floor of a world. A `Store` holds one floor: its entities and one
 type-erased column per component, in schema order. A key used on a store
-of another schema panics.
+of another schema panics. Each component has a prefix: FNV-1a 64 over
+the names and `Component::VERSION`s registered up to it. A floor image
+writes it per column, so a renamed, reordered or re-versioned component
+fails the load.
 
 ### Column
 
@@ -279,22 +282,22 @@ function of the bytes and consumes exactly what `write` produced. The
 codec is hand-written little-endian; the checksum is FNV-1a 64.
 
 There is no derive or macro codec. Generated field-order code ties the
-v1 layout to the declaration order of the fields, so swapping two fields
+layout to the declaration order of the fields, so swapping two fields
 writes a valid-checksum image with swapped values. `codec.rs` keeps
 hand-written little-endian code by decision.
 
-Image v1, little-endian:
+Image v2, little-endian:
 
 ```
 magic         8 bytes   b"KORRFLR\0"
-version       u16       1
+version       u16       2
 floor         u16
 next_counter  u64
 slot count    u32, then per slot:
                 generation u32, state u8 (0 dead, 1 alive), id u64 when alive
 free count    u32, then each slot u32, bottom of the stack first
 column count  u32, then per column in ComponentId order:
-                name length u16, name bytes, row count u32,
+                prefix u64, row count u32,
                 then per row in dense order: owner slot u32, T::write
 checksum      u64, FNV-1a 64 over every preceding byte
 ```
@@ -311,7 +314,7 @@ checksum      u64, FNV-1a 64 over every preceding byte
    `Corrupt("id beyond the floor counter")`.
 8. A free entry out of range, alive, retired or repeated, or a dead
    non-retired slot missing from the free stack: `Corrupt("free list")`.
-9. A column count or name that differs from the schema: `Schema`.
+9. A column count or prefix that differs from the schema: `Schema`.
 10. A row owner out of range, dead, or repeated in its column:
     `Corrupt("column owner")`.
 11. Errors from `T::read`, propagated.

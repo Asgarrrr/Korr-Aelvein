@@ -165,7 +165,7 @@ fn empty_name_panics() {
 
 #[test]
 #[should_panic(expected = "component name longer than u16::MAX bytes")]
-fn register_rejects_a_name_the_image_cannot_hold() {
+fn register_rejects_a_name_longer_than_u16_max_bytes() {
     let name = "n".repeat(usize::from(u16::MAX) + 1).leak();
     SchemaBuilder::default().register::<Satiety>(name);
 }

@@ -1,5 +1,5 @@
 use korr_ecs::{
-    Component, EntityId, FloorId, Handle, ImageError, Schema, SchemaBuilder, Store, Writer,
+    Component, EntityId, FloorId, Handle, ImageError, Reader, Schema, SchemaBuilder, Store, Writer,
     checksum,
 };
 
@@ -159,6 +159,32 @@ fn schema_mismatch_is_rejected() {
     }
 }
 
+/// The format of `Hunger` after a change to its encoding.
+struct HungerV1(u16);
+
+impl Component for HungerV1 {
+    const VERSION: u16 = 1;
+
+    fn write(&self, w: &mut Writer) {
+        w.write_u16(self.0);
+    }
+
+    fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> {
+        r.read_u16().map(Self)
+    }
+}
+
+#[test]
+fn image_of_an_older_component_version_is_rejected() {
+    let mut builder = SchemaBuilder::default();
+    builder.register::<Pos>("pos");
+    builder.register::<HungerV1>("hunger");
+    assert_eq!(
+        Store::load(&builder.build(), &image_after(1, 300)).err(),
+        Some(ImageError::Schema { index: 1 })
+    );
+}
+
 #[test]
 fn empty_floor_round_trips() {
     let schema = schema().0;
@@ -198,7 +224,7 @@ impl Floor {
     fn seal(&self) -> Vec<u8> {
         let mut w = Writer::new();
         w.write_bytes(b"KORRFLR\0");
-        w.write_u16(1);
+        w.write_u16(2);
         w.write_u16(0);
         w.write_u64(3);
         w.write_u32(self.slots.len() as u32);
@@ -224,15 +250,13 @@ impl Floor {
             w.write_u32(slot);
         }
         w.write_u32(2);
-        w.write_u16(3);
-        w.write_bytes(b"pos");
+        w.write_u64(schema_of(&["pos"]).fingerprint());
         w.write_u32(self.pos_owners.len() as u32);
         for &slot in &self.pos_owners {
             w.write_u32(slot);
             Pos { x: 1, y: -1 }.write(&mut w);
         }
-        w.write_u16(6);
-        w.write_bytes(b"hunger");
+        w.write_u64(schema().0.fingerprint());
         w.write_u32(0);
         let mut bytes = w.into_bytes();
         let sum = checksum(&bytes);
