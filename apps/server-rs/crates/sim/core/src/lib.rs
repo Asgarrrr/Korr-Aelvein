@@ -37,7 +37,7 @@ pub mod host {
     pub use crate::game::Game;
     pub use crate::module::{ActionKey, Mechanics, Visit};
     pub use crate::ruleset::Ruleset;
-    pub use crate::runner::{Runner, Sequential};
+    pub use crate::runner::{Job, Runner, Sequential};
     pub use crate::time::Round;
     pub use crate::world::World;
     pub use korr_grid::Pos;

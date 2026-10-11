@@ -7,7 +7,7 @@ use crate::error::WorldError;
 use crate::floor::Floor;
 use crate::module::Mechanics;
 use crate::ruleset::Ruleset;
-use crate::runner::Runner;
+use crate::runner::{Runner, jobs};
 
 #[derive(Debug)]
 pub struct World {
@@ -68,8 +68,7 @@ impl World {
     /// never changes a result.
     ///
     /// # Panics
-    /// When an actor departs to a floor outside this world. In debug builds,
-    /// also when `runner` changes the floors' ids, order or rounds.
+    /// When an actor departs to a floor outside this world.
     pub(crate) fn run_round(
         &mut self,
         seed: Seed,
@@ -77,20 +76,11 @@ impl World {
         mechanics: &(impl Mechanics + Sync),
         runner: &impl Runner,
     ) {
-        #[cfg(debug_assertions)]
-        let before: Vec<_> = self.floors.iter().map(|f| (f.id(), f.round())).collect();
-        runner.each(&mut self.floors, |floor| {
+        let work = |floor: &mut Floor| {
             floor.run_environment(seed, ruleset, mechanics);
             floor.run_actors(seed, ruleset, mechanics);
-        });
-        #[cfg(debug_assertions)]
-        debug_assert!(
-            before
-                .iter()
-                .copied()
-                .eq(self.floors.iter().map(|f| (f.id(), f.round()))),
-            "a Runner replaced, reordered or dropped floors"
-        );
+        };
+        runner.each(jobs(&mut self.floors, &work));
         let mut flights = Vec::new();
         for floor in &mut self.floors {
             flights.extend(floor.send());

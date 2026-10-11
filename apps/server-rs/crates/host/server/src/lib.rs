@@ -2,11 +2,11 @@
 
 use core::num::NonZeroUsize;
 
-use korr_core::host::{Floor, Runner};
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+use korr_core::host::{Floor, Job, Runner};
+use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use rayon::{ThreadPool, ThreadPoolBuildError, ThreadPoolBuilder};
 
-/// Runs phase 1 with each floor as its own stealable job on an owned pool, never rayon's global one.
+/// Runs phase 1 with each floor's job stealable on its own, on an owned pool, never rayon's global one.
 /// A floor's panic reaches the caller with the world half-advanced: that world is lost, and the server reloads a save.
 #[derive(Debug)]
 pub struct Threads {
@@ -25,13 +25,12 @@ impl Threads {
 }
 
 impl Runner for Threads {
-    fn each<F: Fn(&mut Floor) + Sync + Send>(&self, floors: &mut [Floor], f: F) {
+    fn each<F: Fn(&mut Floor) + Sync>(&self, jobs: Vec<Job<'_, F>>) {
         self.pool.install(|| {
-            floors
-                .par_iter_mut()
+            jobs.into_par_iter()
                 .with_max_len(1)
                 .panic_fuse()
-                .for_each(f);
+                .for_each(Job::run);
         });
     }
 }

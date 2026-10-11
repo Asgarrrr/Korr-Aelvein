@@ -13,13 +13,13 @@
 //! mechanic departs, so this share carries no flights.
 
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use korr_core::host::{Floor, Game, Mechanics, Pos, Ruleset, Runner, Seed, World};
+use korr_core::host::{Floor, Game, Job, Mechanics, Pos, Ruleset, Runner, Seed, World};
 use korr_ecs::FloorId;
 use korr_engine::Registry;
 use korr_flora::Flora;
 use korr_scenarios::{Shy, actionless, floor, game};
 use korr_server::Threads;
-use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::cell::Cell;
 use std::num::NonZeroUsize;
@@ -79,8 +79,8 @@ impl Layout {
 struct Split(ThreadPool);
 
 impl Runner for Split {
-    fn each<F: Fn(&mut Floor) + Sync + Send>(&self, floors: &mut [Floor], f: F) {
-        self.0.install(|| floors.par_iter_mut().for_each(f));
+    fn each<F: Fn(&mut Floor) + Sync>(&self, jobs: Vec<Job<'_, F>>) {
+        self.0.install(|| jobs.into_par_iter().for_each(Job::run));
     }
 }
 
@@ -91,9 +91,9 @@ struct Timed<'a, R> {
 }
 
 impl<R: Runner> Runner for Timed<'_, R> {
-    fn each<F: Fn(&mut Floor) + Sync + Send>(&self, floors: &mut [Floor], f: F) {
+    fn each<F: Fn(&mut Floor) + Sync>(&self, jobs: Vec<Job<'_, F>>) {
         let start = Instant::now();
-        self.runner.each(floors, f);
+        self.runner.each(jobs);
         self.phase.set(self.phase.get() + start.elapsed());
     }
 }

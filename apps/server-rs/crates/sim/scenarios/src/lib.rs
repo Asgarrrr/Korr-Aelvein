@@ -110,6 +110,25 @@ pub fn tower(ruleset: &Ruleset) -> World {
     )
 }
 
+/// `tower` after three rounds of `TO_GROUND` under `Seed(5)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Grounded {
+    pub hash: u64,
+    /// Travellers waiting in floor 0's inbox.
+    pub waiting: usize,
+}
+
+#[must_use]
+pub fn grounded(runner: &impl Runner) -> Grounded {
+    let game = game(TO_GROUND, Seed(5));
+    let mut world = tower(game.ruleset());
+    run_on(&game, &mut world, 3, runner);
+    Grounded {
+        hash: game.hash(&world),
+        waiting: world.floor(FloorId(0)).inbox_len(),
+    }
+}
+
 /// # Panics
 /// When an actor departs to a floor outside `world`.
 pub fn run_on<M: Mechanics + Sync>(

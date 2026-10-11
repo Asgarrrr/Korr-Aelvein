@@ -1,28 +1,20 @@
 use core::num::NonZeroUsize;
 
-use korr_core::host::{Runner, Seed, Sequential, World};
+use korr_core::host::{Seed, Sequential, World};
 use korr_ecs::FloorId;
-use korr_scenarios::{Pace, TO_GROUND, floor, game, run_on, tower};
+use korr_scenarios::{Pace, TO_GROUND, floor, game, grounded};
 use korr_server::Threads;
 
 const SEED: Seed = Seed(5);
-const ROUNDS: u64 = 3;
-
-fn hash_after(runner: &impl Runner) -> u64 {
-    let game = game(TO_GROUND, SEED);
-    let mut world = tower(game.ruleset());
-    run_on(&game, &mut world, ROUNDS, runner);
-    game.hash(&world)
-}
 
 #[test]
 fn every_thread_count_gives_the_sequential_hash() {
-    let expected = hash_after(&Sequential);
+    let expected = grounded(&Sequential);
     let host = std::thread::available_parallelism().expect("the host reports its parallelism");
     let counts = [1, 2, 3].map(|n| NonZeroUsize::new(n).expect("a positive count"));
     for n in counts.into_iter().chain([host]) {
         let threads = Threads::new(n).expect("the pool builds");
-        assert_eq!(hash_after(&threads), expected, "{n} threads");
+        assert_eq!(grounded(&threads), expected, "{n} threads");
     }
 }
 
