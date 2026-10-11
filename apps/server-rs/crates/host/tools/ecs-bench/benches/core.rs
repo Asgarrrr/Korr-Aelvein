@@ -70,7 +70,7 @@ fn spread(side: u16, k: u32, n: u32) -> Pos {
 
 type Group<'a> = criterion::BenchmarkGroup<'a, criterion::measurement::WallTime>;
 
-fn round(group: &mut Group<'_>, id: BenchmarkId, layout: Layout, mechanics: impl Mechanics) {
+fn round(group: &mut Group<'_>, id: BenchmarkId, layout: Layout, mechanics: impl Mechanics + Sync) {
     let (mut world, game) = layout.world(mechanics);
     group.throughput(Throughput::Elements(layout.entities()));
     group.bench_function(id, |b| b.iter(|| game.run_round(&mut world)));

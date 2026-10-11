@@ -8,6 +8,8 @@ disallowed-types = [
   { path = "core::cell::OnceCell", reason = "no state outside columns: callbacks take &self" },
   { path = "core::cell::UnsafeCell", reason = "no state outside columns: callbacks take &self" },
   { path = "core::cell::LazyCell", reason = "no state outside columns: callbacks take &self" },
+  { path = "std::sync::Mutex", reason = "no state outside columns: callbacks take &self" },
+  { path = "std::sync::RwLock", reason = "no state outside columns: callbacks take &self" },
   { path = "core::sync::atomic::AtomicBool", reason = "no state outside columns: callbacks take &self" },
   { path = "core::sync::atomic::AtomicU8", reason = "no state outside columns: callbacks take &self" },
   { path = "core::sync::atomic::AtomicU16", reason = "no state outside columns: callbacks take &self" },

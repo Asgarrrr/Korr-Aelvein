@@ -7,6 +7,7 @@ use crate::error::WorldError;
 use crate::floor::Floor;
 use crate::module::Mechanics;
 use crate::ruleset::Ruleset;
+use crate::runner::Runner;
 
 #[derive(Debug)]
 pub struct World {
@@ -60,19 +61,25 @@ impl World {
         Ok(Self { floors })
     }
 
-    /// Every floor runs its environment then its actors, then the barrier:
-    /// every floor sends, each flight joins its destination's inbox, every
-    /// floor lands, the round ends.
+    /// Every floor runs its environment then its actors through `runner`, then
+    /// the barrier: every floor sends, each flight joins its destination's
+    /// inbox, every floor lands, the round ends.
     /// Arrivals act next round and the inbox is ordered, so the floor order
     /// never changes a result.
     ///
     /// # Panics
     /// When an actor departs to a floor outside this world.
-    pub(crate) fn run_round(&mut self, seed: Seed, ruleset: &Ruleset, mechanics: &impl Mechanics) {
-        for floor in &mut self.floors {
+    pub(crate) fn run_round(
+        &mut self,
+        seed: Seed,
+        ruleset: &Ruleset,
+        mechanics: &(impl Mechanics + Sync),
+        runner: &impl Runner,
+    ) {
+        runner.each(&mut self.floors, |floor| {
             floor.run_environment(seed, ruleset, mechanics);
             floor.run_actors(seed, ruleset, mechanics);
-        }
+        });
         let mut flights = Vec::new();
         for floor in &mut self.floors {
             flights.extend(floor.send());

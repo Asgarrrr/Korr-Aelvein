@@ -12,6 +12,7 @@ mod floor;
 mod game;
 mod module;
 mod ruleset;
+mod runner;
 mod save;
 mod senses;
 mod time;
@@ -36,6 +37,7 @@ pub mod host {
     pub use crate::game::Game;
     pub use crate::module::{ActionKey, Mechanics, Visit};
     pub use crate::ruleset::Ruleset;
+    pub use crate::runner::{Runner, Sequential};
     pub use crate::time::Round;
     pub use crate::world::World;
     pub use korr_grid::Pos;

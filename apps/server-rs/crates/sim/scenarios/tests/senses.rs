@@ -2,7 +2,7 @@
     clippy::disallowed_types,
     reason = "a test observer, not engine state: it only records what propose is shown"
 )]
-use std::cell::RefCell;
+use std::sync::Mutex;
 
 use korr_core::{
     host::{SIGHT, Seed, World},
@@ -21,7 +21,7 @@ use korr_scenarios::{Shy, floor, game};
 )]
 struct Watcher {
     perceives: bool,
-    shown: RefCell<Vec<(Pos, Vec<Seen>)>>,
+    shown: Mutex<Vec<(Pos, Vec<Seen>)>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,7 +46,8 @@ impl Module for Watcher {
 
     fn propose(&self, senses: &Senses<'_>, _: &mut Proposals<'_, Nothing>) {
         self.shown
-            .borrow_mut()
+            .lock()
+            .expect("no propose panicked while holding the lock")
             .push((senses.pos(), senses.seen().to_vec()));
     }
 
@@ -85,7 +86,7 @@ fn shown_around(perceives: bool, spawns: impl IntoIterator<Item = Pos>) -> Vec<(
     let game = game(
         Watcher {
             perceives,
-            shown: RefCell::default(),
+            shown: Mutex::default(),
         },
         Seed(1),
     );
@@ -95,7 +96,13 @@ fn shown_around(perceives: bool, spawns: impl IntoIterator<Item = Pos>) -> Vec<(
     }
     let mut world = World::new(vec![f]);
     game.run_round(&mut world);
-    game.mechanics().shown.take()
+    std::mem::take(
+        &mut *game
+            .mechanics()
+            .shown
+            .lock()
+            .expect("no propose panicked while holding the lock"),
+    )
 }
 
 fn seen_by(shown: &[(Pos, Vec<Seen>)], at: Pos) -> &[Seen] {
