@@ -49,20 +49,8 @@ fn save_load_replay_matches_the_pinned_run() {
     assert_eq!(game.hash(&world), PINNED);
 }
 
-/// Pace draws nothing: this world pins draw addressing. Re-pin on every
-/// intended change to a draw or to wander.
-const PINNED_WANDER: u64 = 0x9167_fe17_3efe_8045;
-
-#[test]
-fn wander_world_hash_pins_the_draws() {
-    let game = game(Registry::default(), SEED);
-    let mut world = World::new(vec![populated(game.ruleset()).0]);
-    run(&game, &mut world, 20);
-    assert_eq!(game.hash(&world), PINNED_WANDER);
-}
-
-/// Positions alone, outside any image: survives a change to the image format.
-/// Never re-pin.
+/// Pace draws nothing, so wander pins draw addressing. Positions alone, outside
+/// any image: re-pin on an intended change to a draw or to wander, never to the format.
 const PINNED_DRAWS: u64 = 0xe258_a413_e4ea_1633;
 
 #[test]
