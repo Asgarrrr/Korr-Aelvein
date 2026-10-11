@@ -27,9 +27,16 @@ impl Draws {
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct Departure {
+    pub(crate) actor: Handle,
+    pub(crate) to: FloorId,
+    pub(crate) at: Pos,
+}
+
 /// Departures are pushed in turn order, so only the last can be this actor's.
-pub(crate) fn departed(departures: &[(Handle, FloorId, Pos)], actor: Handle) -> bool {
-    departures.last().is_some_and(|d| d.0 == actor)
+pub(crate) fn departed(departures: &[Departure], actor: Handle) -> bool {
+    departures.last().is_some_and(|d| d.actor == actor)
 }
 
 #[derive(Debug)]
@@ -74,7 +81,7 @@ impl PrepCtx<'_> {
 pub struct CommitCtx<'a> {
     pub(crate) grid: &'a mut Grid,
     pub(crate) actor: Handle,
-    pub(crate) departures: &'a mut Vec<(Handle, FloorId, Pos)>,
+    pub(crate) departures: &'a mut Vec<Departure>,
 }
 
 impl CommitCtx<'_> {
@@ -95,6 +102,10 @@ impl CommitCtx<'_> {
             !departed(self.departures, self.actor),
             "one departure per turn"
         );
-        self.departures.push((self.actor, to, at));
+        self.departures.push(Departure {
+            actor: self.actor,
+            to,
+            at,
+        });
     }
 }

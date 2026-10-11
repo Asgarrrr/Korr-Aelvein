@@ -11,6 +11,7 @@ use core::mem;
 use korr_ecs::{Component, EntityId, FloorId, Handle, Own, Store};
 use korr_grid::{Grid, Interior, Layer, Material, Pos, Shape};
 
+use crate::ctx::Departure;
 use crate::decision::Candidates;
 use crate::floor::inbox::{Flight, Inbox};
 use crate::floor::membership::Joiner;
@@ -28,7 +29,7 @@ pub struct Floor {
     schedule: Schedule,
     round: u64,
     /// Actors that departed this round, in departure order; empty at the barrier.
-    departures: Vec<(Handle, FloorId, Pos)>,
+    departures: Vec<Departure>,
     pub(crate) inbox: Inbox,
     /// Scratch of one turn, cleared before every proposal.
     candidates: Candidates,
@@ -122,8 +123,8 @@ impl Floor {
         let round = self.round;
         mem::take(&mut self.departures)
             .into_iter()
-            .map(|(h, to, at)| {
-                let traveller = self.leave(h);
+            .map(|Departure { actor, to, at }| {
+                let traveller = self.leave(actor);
                 (
                     to,
                     Flight {
