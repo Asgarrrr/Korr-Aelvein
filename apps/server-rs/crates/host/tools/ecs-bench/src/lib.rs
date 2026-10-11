@@ -11,6 +11,7 @@ pub mod bevy_world;
 pub mod dense;
 pub mod hecs_world;
 pub mod ours;
+pub mod presence;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, bevy_ecs::component::Component)]
 pub struct Pos {
