@@ -22,7 +22,7 @@ fn act(action: Fake, weight: u16, answer: Answer) -> Act {
 
 fn run(acts: Vec<Act>, rounds: u64) -> Pos {
     let game = game(Scripted(acts), Seed(1));
-    let mut f = floor(game.ruleset(), 0, 9, 9);
+    let mut f = floor(game.ruleset(), FloorId(0), 9, 9);
     let actor = f.spawn_actor(game.ruleset(), START);
     let mut world = World::new(vec![f]);
     korr_scenarios::run(&game, &mut world, rounds);

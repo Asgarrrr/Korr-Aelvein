@@ -99,13 +99,13 @@ fn has_room(ruleset: &Ruleset, floor: &Floor, at: Pos) -> bool {
 
 /// A and B hold 3 actors each; C holds 8 and one free cell. Returns C's actors.
 fn build(ruleset: &Ruleset, reversed: bool) -> (World, Vec<Handle>) {
-    let mut a = floor(ruleset, A.0, 7, 7);
-    let mut b = floor(ruleset, B.0, 7, 7);
+    let mut a = floor(ruleset, A, 7, 7);
+    let mut b = floor(ruleset, B, 7, 7);
     for x in 1..=3 {
         a.spawn_actor(ruleset, Pos { x, y: 1 });
         b.spawn_actor(ruleset, Pos { x, y: 1 });
     }
-    let mut c = floor(ruleset, C.0, 5, 5);
+    let mut c = floor(ruleset, C, 5, 5);
     let natives = (1..=3)
         .flat_map(|y| (1..=3).map(move |x| Pos { x, y }))
         .filter(|&p| p != FREE)
@@ -187,10 +187,10 @@ fn equal_ticks_break_on_entity_id_not_slot() {
         SEED,
     );
     let ruleset = game.ruleset();
-    let mut a = floor(ruleset, A.0, 9, 5);
+    let mut a = floor(ruleset, A, 9, 5);
     let leaver = a.spawn_actor(ruleset, Pos { x: 1, y: 1 });
     let older = a.spawn_actor(ruleset, Pos { x: 1, y: 2 });
-    let mut world = World::new(vec![a, floor(ruleset, B.0, 5, 5)]);
+    let mut world = World::new(vec![a, floor(ruleset, B, 5, 5)]);
     run(&game, &mut world, 1);
     assert_eq!(world.floor(A).pos(older), Some(Pos { x: 2, y: 2 }));
 
@@ -208,10 +208,10 @@ fn equal_ticks_break_on_entity_id_not_slot() {
 #[test]
 fn floors_at_different_rounds_are_refused() {
     let game = game(TO_C, SEED);
-    let mut world = World::new(vec![floor(game.ruleset(), A.0, 5, 5)]);
+    let mut world = World::new(vec![floor(game.ruleset(), A, 5, 5)]);
     run(&game, &mut world, 1);
     let mut floors = reload(game.ruleset(), &world);
-    floors.push(floor(game.ruleset(), C.0, 5, 5));
+    floors.push(floor(game.ruleset(), C, 5, 5));
     assert_eq!(World::try_new(floors).err(), Some(WorldError::Rounds));
 }
 
@@ -232,9 +232,9 @@ fn histories(c_full: bool) -> [Vec<Floor>; 2] {
             SEED,
         );
         let ruleset = game.ruleset();
-        let mut a = floor(ruleset, A.0, 5, 5);
+        let mut a = floor(ruleset, A, 5, 5);
         a.spawn_actor(ruleset, Pos { x: 1, y: 1 });
-        let mut c = floor(ruleset, C.0, 5, 5);
+        let mut c = floor(ruleset, C, 5, 5);
         if c_full {
             for y in 1..=3 {
                 for x in 1..=3 {

@@ -76,7 +76,7 @@ fn shown_in_a_round(perceives: bool) -> Vec<(Pos, Vec<Seen>)> {
         },
         Seed(1),
     );
-    let mut f = floor(game.ruleset(), 0, 11, 11);
+    let mut f = floor(game.ruleset(), FloorId(0), 11, 11);
     for at in [
         Pos { x: 5, y: 8 },
         BEYOND_SIGHT,
@@ -125,7 +125,7 @@ fn non_perceiving_mechanics_are_shown_nobody() {
 fn sight_bounds_perception() {
     let game = game(Shy, Seed(1));
     let ruleset = game.ruleset();
-    let mut f = floor(ruleset, 0, 30, 7);
+    let mut f = floor(ruleset, FloorId(0), 30, 7);
     let at = |x| Pos { x, y: 3 };
     // Pairs a sight apart see each other; pairs one cell farther do not.
     let lone = f.spawn_actor(ruleset, at(3));

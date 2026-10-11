@@ -14,11 +14,11 @@ const TO_B: Leave = Leave {
 /// A's 3 actors leave for B in round 0: after it, B holds A:0..2.
 fn left(game: &Game<Leave>) -> World {
     let ruleset = game.ruleset();
-    let mut a = floor(ruleset, A.0, 7, 7);
+    let mut a = floor(ruleset, A, 7, 7);
     for x in 1..=3 {
         a.spawn_actor(ruleset, Pos { x, y: 1 });
     }
-    let mut world = World::new(vec![a, floor(ruleset, B.0, 7, 7)]);
+    let mut world = World::new(vec![a, floor(ruleset, B, 7, 7)]);
     run(game, &mut world, 1);
     world
 }
@@ -62,7 +62,7 @@ fn a_save_of_another_format_is_refused() {
 fn an_id_beyond_its_origin_counter_is_refused() {
     let game = game(TO_B, SEED);
     let ruleset = game.ruleset();
-    let mut fresh = World::new(vec![floor(ruleset, A.0, 7, 7)]);
+    let mut fresh = World::new(vec![floor(ruleset, A, 7, 7)]);
     run(&game, &mut fresh, 1);
     let floors = vec![
         reload(ruleset, fresh.floor(A)),
@@ -89,15 +89,15 @@ fn an_id_from_an_absent_floor_is_refused() {
 fn the_lowest_failing_id_decides() {
     let game = game(TO_B, SEED);
     let ruleset = game.ruleset();
-    let mut a = floor(ruleset, A.0, 7, 7);
+    let mut a = floor(ruleset, A, 7, 7);
     for x in 1..=3 {
         a.spawn_actor(ruleset, Pos { x, y: 1 });
     }
-    let mut c = floor(ruleset, C.0, 7, 7);
+    let mut c = floor(ruleset, C, 7, 7);
     c.spawn_actor(ruleset, Pos { x: 1, y: 1 });
-    let mut world = World::new(vec![a, floor(ruleset, B.0, 7, 7), c]);
+    let mut world = World::new(vec![a, floor(ruleset, B, 7, 7), c]);
     run(&game, &mut world, 1);
-    let mut fresh = World::new(vec![floor(ruleset, A.0, 7, 7)]);
+    let mut fresh = World::new(vec![floor(ruleset, A, 7, 7)]);
     run(&game, &mut fresh, 1);
     let floors = vec![
         reload(ruleset, world.floor(B)),
@@ -164,10 +164,10 @@ fn trailing_bytes_are_refused() {
 fn floors_are_saved_in_ascending_id() {
     let game = game(TO_B, SEED);
     let ruleset = game.ruleset();
-    let world = World::new(vec![floor(ruleset, B.0, 7, 7), floor(ruleset, A.0, 7, 7)]);
+    let world = World::new(vec![floor(ruleset, B, 7, 7), floor(ruleset, A, 7, 7)]);
     let images = [
-        floor(ruleset, A.0, 7, 7).save(ruleset),
-        floor(ruleset, B.0, 7, 7).save(ruleset),
+        floor(ruleset, A, 7, 7).save(ruleset),
+        floor(ruleset, B, 7, 7).save(ruleset),
     ];
     assert_eq!(game.save(&world), framed(SEED, &images));
 }
@@ -177,8 +177,8 @@ fn floors_out_of_ascending_order_are_refused() {
     let game = game(TO_B, SEED);
     let ruleset = game.ruleset();
     let images = [
-        floor(ruleset, B.0, 7, 7).save(ruleset),
-        floor(ruleset, A.0, 7, 7).save(ruleset),
+        floor(ruleset, B, 7, 7).save(ruleset),
+        floor(ruleset, A, 7, 7).save(ruleset),
     ];
     assert_eq!(
         game.load(&framed(SEED, &images)).err(),
@@ -189,7 +189,7 @@ fn floors_out_of_ascending_order_are_refused() {
 /// The fast even id is blocked by the wall from tick 570, its clock off the
 /// round boundary. The slow odd id takes its last step after round 20.
 fn paced(ruleset: &Ruleset) -> World {
-    let mut f = floor(ruleset, A.0, 24, 24);
+    let mut f = floor(ruleset, A, 24, 24);
     for x in [3, 1] {
         f.spawn_actor(ruleset, Pos { x, y: 1 });
     }

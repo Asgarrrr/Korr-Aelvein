@@ -24,9 +24,9 @@ pub use shy::{Shy, random_step};
 /// # Panics
 /// When a side is outside the bounds of `Shape::new`.
 #[must_use]
-pub fn floor(ruleset: &Ruleset, id: u16, width: u16, height: u16) -> Floor {
+pub fn floor(ruleset: &Ruleset, id: FloorId, width: u16, height: u16) -> Floor {
     let shape = Shape::new(width, height).expect("scenario shapes fit the bounds");
-    Floor::new(ruleset, FloorId(id), shape)
+    Floor::new(ruleset, id, shape)
 }
 
 /// # Panics

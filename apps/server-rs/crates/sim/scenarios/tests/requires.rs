@@ -87,7 +87,7 @@ fn a_missing_requirement_fails_the_action() {
     let mut schema = SchemaBuilder::default();
     let mark = schema.register::<Mark>("test.mark");
     let game = Game::new(schema, Marked, Seed(1));
-    let mut f = floor(game.ruleset(), 0, 9, 9);
+    let mut f = floor(game.ruleset(), FloorId(0), 9, 9);
     let m = f.spawn_actor(game.ruleset(), Pos { x: 4, y: 4 });
     f.insert(&mark, m, Mark);
     let u = f.spawn_actor(game.ruleset(), Pos { x: 4, y: 6 });
@@ -167,7 +167,7 @@ fn a_redirect_to_an_action_the_actor_lacks_the_component_for_fails() {
     let mut schema = SchemaBuilder::default();
     let mark = schema.register::<Mark>("test.mark");
     let game = Game::new(schema, Hop, Seed(1));
-    let mut f = floor(game.ruleset(), 0, 9, 9);
+    let mut f = floor(game.ruleset(), FloorId(0), 9, 9);
     let m = f.spawn_actor(game.ruleset(), Pos { x: 4, y: 4 });
     f.insert(&mark, m, Mark);
     let u = f.spawn_actor(game.ruleset(), Pos { x: 4, y: 6 });

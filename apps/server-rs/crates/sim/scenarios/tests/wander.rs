@@ -28,7 +28,7 @@ fn in_block(p: Pos) -> bool {
 #[test]
 fn wanderers_spread_and_never_share_a_cell() {
     let game = game(Registry::default(), Seed(1));
-    let mut f = floor(game.ruleset(), 0, 16, 16);
+    let mut f = floor(game.ruleset(), FloorId(0), 16, 16);
     let block: Vec<Pos> = (6..10)
         .flat_map(|y| (6..10).map(move |x| Pos { x, y }))
         .collect();
@@ -52,7 +52,7 @@ fn wanderers_spread_and_never_share_a_cell() {
 fn walled_in_wanderer_still_ends_the_round() {
     let centre = Pos { x: 2, y: 2 };
     let game = game(Registry::default(), Seed(1));
-    let mut f = floor(game.ruleset(), 0, 5, 5);
+    let mut f = floor(game.ruleset(), FloorId(0), 5, 5);
     for y in 1..=3 {
         for x in 1..=3 {
             let p = Pos { x, y };
@@ -71,7 +71,7 @@ fn walled_in_wanderer_still_ends_the_round() {
 #[test]
 fn wander_disabled_creatures_idle() {
     let game = game(Registry { wander: None }, Seed(1));
-    let mut f = floor(game.ruleset(), 0, 6, 4);
+    let mut f = floor(game.ruleset(), FloorId(0), 6, 4);
     let cells: Vec<Pos> = (1..=2)
         .flat_map(|y| (1..=4).map(move |x| Pos { x, y }))
         .collect();
@@ -85,7 +85,7 @@ fn wander_disabled_creatures_idle() {
 #[test]
 fn cheap_actions_take_several_turns_per_round() {
     let game = game(Pace, Seed(1));
-    let mut f = floor(game.ruleset(), 0, 12, 4);
+    let mut f = floor(game.ruleset(), FloorId(0), 12, 4);
     // Spawn order sets the ids: the first actor's id is even, so it pays 30.
     let actors = spawn_all(
         &mut f,
@@ -104,8 +104,8 @@ fn cheap_actions_take_several_turns_per_round() {
 fn duplicate_floor_ids_are_refused() {
     let game = game(Pace, Seed(1));
     let floors = vec![
-        floor(game.ruleset(), 0, 5, 5),
-        floor(game.ruleset(), 0, 5, 5),
+        floor(game.ruleset(), FloorId(0), 5, 5),
+        floor(game.ruleset(), FloorId(0), 5, 5),
     ];
     assert_eq!(
         World::try_new(floors).err(),

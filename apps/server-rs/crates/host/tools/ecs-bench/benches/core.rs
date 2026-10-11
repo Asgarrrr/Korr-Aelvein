@@ -3,6 +3,7 @@
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use korr_core::host::{Game, Mechanics, Pos, Seed, World};
+use korr_ecs::FloorId;
 use korr_engine::Registry;
 use korr_scenarios::{Shy, floor, game};
 
@@ -23,7 +24,7 @@ fn spread(k: u32, n: u32) -> Pos {
 
 fn world<M: Mechanics>(mechanics: M) -> (World, Game<M>) {
     let game = game(mechanics, Seed(1));
-    let mut f = floor(game.ruleset(), 0, SIDE, SIDE);
+    let mut f = floor(game.ruleset(), FloorId(0), SIDE, SIDE);
     for k in 0..ACTORS {
         f.spawn_actor(game.ruleset(), spread(k, ACTORS));
     }

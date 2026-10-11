@@ -58,7 +58,7 @@ impl Mechanics for DudThenShy {
 const START: [Pos; 2] = [Pos { x: 5, y: 5 }, Pos { x: 6, y: 5 }];
 
 fn paths<M: Mechanics>(game: &Game<M>) -> Vec<Pos> {
-    let mut f = floor(game.ruleset(), 0, 12, 12);
+    let mut f = floor(game.ruleset(), FloorId(0), 12, 12);
     let actors: Vec<Handle> = START
         .iter()
         .map(|&p| f.spawn_actor(game.ruleset(), p))

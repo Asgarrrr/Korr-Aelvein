@@ -13,7 +13,7 @@ const PINNED: u64 = 0x7578_8f3d_d870_71e3;
 /// wall from tick 570, its clock stays off the round boundary. The slow odd
 /// id starts at x = 1: it takes its last step after round 20.
 fn populated(ruleset: &Ruleset) -> (Floor, Vec<Handle>) {
-    let mut f = floor(ruleset, 0, 24, 24);
+    let mut f = floor(ruleset, FloorId(0), 24, 24);
     let mut actors = Vec::new();
     for y in 1..=20 {
         for x in [3, 1] {
@@ -162,7 +162,7 @@ fn corrupt(what: &'static str) -> LoadError {
 fn placed_actor_without_a_clock_is_corrupt() {
     let game = game(Pace, SEED);
     let ruleset = game.ruleset();
-    let mut f = floor(ruleset, 0, 8, 4);
+    let mut f = floor(ruleset, FloorId(0), 8, 4);
     f.spawn_actor(ruleset, Pos { x: 1, y: 1 });
     let forged = forge_store(&f.save(ruleset), |store| {
         let count_at = clock_count_at(store);
@@ -179,7 +179,7 @@ fn placed_actor_without_a_clock_is_corrupt() {
 fn clock_of_a_thing_is_corrupt() {
     let game = game(Pace, SEED);
     let ruleset = game.ruleset();
-    let mut f = floor(ruleset, 0, 8, 4);
+    let mut f = floor(ruleset, FloorId(0), 8, 4);
     f.spawn_actor(ruleset, Pos { x: 1, y: 1 });
     f.spawn_thing(Pos { x: 2, y: 1 });
     let forged = forge_store(&f.save(ruleset), |store| {
@@ -197,7 +197,7 @@ fn clock_of_a_thing_is_corrupt() {
 fn load_with_clock(tick: u64) -> Option<LoadError> {
     let game = game(Pace, SEED);
     let ruleset = game.ruleset();
-    let mut f = floor(ruleset, 0, 8, 4);
+    let mut f = floor(ruleset, FloorId(0), 8, 4);
     f.spawn_actor(ruleset, Pos { x: 1, y: 1 });
     let mut world = World::new(vec![f]);
     run(&game, &mut world, 1);
