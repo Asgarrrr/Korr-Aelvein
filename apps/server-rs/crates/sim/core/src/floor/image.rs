@@ -18,10 +18,12 @@ impl Floor {
     /// barrier: no `&Floor` exists mid-round.
     ///
     /// # Panics
-    /// When the store image, the grid image, the columns, a traveller or the inbox exceeds
-    /// `u32::MAX` bytes or flights.
+    /// When `ruleset` is not the one that built this floor, or the store image,
+    /// the grid image, the columns, a traveller or the inbox exceeds `u32::MAX`
+    /// bytes or flights.
     #[must_use]
     pub fn save(&self, ruleset: &Ruleset) -> Vec<u8> {
+        self.check_ruleset(ruleset);
         let mut grid = Writer::new();
         self.grid.write(&mut grid);
         let mut columns = Writer::new();
@@ -145,6 +147,7 @@ impl Floor {
         }
         Ok(Self {
             store,
+            scratch: CellColumn::new(grid.shape()),
             grid,
             columns,
             fingerprint: ruleset.fingerprint(),

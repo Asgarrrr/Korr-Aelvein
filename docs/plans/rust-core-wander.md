@@ -70,8 +70,13 @@ pub trait Module: Sync + Sized {
   `Option<M>` so a scenario disables a module. Core functions are generic
   over `impl Mechanics`; data types never are.
 - The trait was extracted at wander, without `declare`, `resolve` and
-  `tick`: they wait for flora. The sketch above is the target shape, not a
-  frozen API.
+  `tick`. The sketch above is the target shape, not a frozen API.
+- `tick` arrived with flora as a per-cell hook, `tick(&self, Stencil, Draws) -> u8`:
+  the core walks the module's cell column, reads the previous round's
+  values and the eight neighbours through the `Stencil`, and writes what the
+  hook returns into a scratch column swapped in after the walk. `Draws` is
+  the cell's own stream (`Phase::Tick`, subject = floor and cell).
+  `declare` and `resolve` wait for hunger.
 
 ### Access in types
 

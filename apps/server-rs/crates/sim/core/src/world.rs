@@ -60,8 +60,9 @@ impl World {
         Ok(Self { floors })
     }
 
-    /// Every floor runs its actors, then the barrier: every floor sends, each
-    /// flight joins its destination's inbox, every floor lands, the round ends.
+    /// Every floor runs its environment then its actors, then the barrier:
+    /// every floor sends, each flight joins its destination's inbox, every
+    /// floor lands, the round ends.
     /// Arrivals act next round and the inbox is ordered, so the floor order
     /// never changes a result.
     ///
@@ -69,6 +70,7 @@ impl World {
     /// When an actor departs to a floor outside this world.
     pub(crate) fn run_round(&mut self, seed: Seed, ruleset: &Ruleset, mechanics: &impl Mechanics) {
         for floor in &mut self.floors {
+            floor.run_environment(seed, ruleset, mechanics);
             floor.run_actors(seed, ruleset, mechanics);
         }
         let mut flights = Vec::new();

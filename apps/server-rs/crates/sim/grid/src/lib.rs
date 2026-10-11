@@ -13,7 +13,7 @@ mod occupancy;
 mod shape;
 mod terrain;
 
-pub use column::CellColumn;
+pub use column::{CellColumn, Stencil};
 pub use config::MAX_STEP;
 pub use error::StepError;
 pub use grid::Grid;

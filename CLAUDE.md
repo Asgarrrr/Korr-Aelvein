@@ -180,8 +180,8 @@ the code around it: every needless comment breeds more.
   turns, P set by distance to the nearest player; otherwise they repeat
   their cached action. No separate aggregate model unless measurement
   proves it necessary.
-- Hot bulk ticks are monomorphic inline loops over columns, never a shared
-  per-row callback.
+- Hot bulk ticks are monomorphic: a core walk generic over the module's
+  closure is fine, a dynamic (dyn/fn-pointer) call per row is not.
 
 ## Testing
 

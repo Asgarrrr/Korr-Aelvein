@@ -3,6 +3,7 @@ use alloc::vec::Vec;
 
 use korr_ecs::{ImageError, Reader, Writer};
 
+use crate::grid::Grid;
 use crate::shape::{Interior, Shape};
 
 /// One `u8` per cell of one floor, padded like the terrain: the ring stays 0.
@@ -62,6 +63,177 @@ impl CellColumn {
     }
 }
 
+/// What a cell walk reads at one cell: the previous round's column and the terrain.
+#[derive(Debug, Clone, Copy)]
+pub struct Stencil<'a> {
+    prev: &'a [u8],
+    at: usize,
+    width: usize,
+    walkable: bool,
+}
+
+impl Stencil<'_> {
+    #[must_use]
+    #[inline]
+    pub fn value(self) -> u8 {
+        self.prev[self.at]
+    }
+
+    /// The material alone: an actor on the cell does not change it.
+    #[must_use]
+    #[inline]
+    pub fn walkable(self) -> bool {
+        self.walkable
+    }
+
+    /// The eight surrounding cells, previous round, in [`Dir::ALL`](crate::Dir::ALL) order.
+    /// The ring is 0, so an edge cell needs no check.
+    #[must_use]
+    #[inline]
+    pub fn neighbours(self) -> [u8; 8] {
+        let (at, up, down) = (self.at, self.at - self.width, self.at + self.width);
+        let p = self.prev;
+        [
+            p[up - 1],
+            p[up],
+            p[up + 1],
+            p[at - 1],
+            p[at + 1],
+            p[down - 1],
+            p[down],
+            p[down + 1],
+        ]
+    }
+
+    /// Unique per cell of one floor, ring included.
+    #[must_use]
+    #[inline]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a shape side is at most i16::MAX, so a padded index is below 2^30"
+    )]
+    pub fn index(self) -> u32 {
+        self.at as u32
+    }
+}
+
+impl Grid {
+    /// Fills every interior cell of `next` with `f` of that cell in `prev`; the ring stays 0.
+    ///
+    /// # Panics
+    /// When `prev` or `next` has another shape than this grid.
+    #[inline]
+    pub fn stencil(&self, prev: &CellColumn, next: &mut CellColumn, f: impl Fn(Stencil<'_>) -> u8) {
+        assert_eq!(prev.shape, self.shape(), "cell column of another floor");
+        assert_eq!(next.shape, self.shape(), "cell column of another floor");
+        let (width, height) = sides(self.shape());
+        let rows = next.cells.chunks_exact_mut(width);
+        let materials = self.terrain.materials().chunks_exact(width);
+        for (y, (row, materials)) in rows.zip(materials).enumerate().skip(1).take(height - 2) {
+            for x in 1..width - 1 {
+                row[x] = f(Stencil {
+                    prev: &prev.cells,
+                    at: y * width + x,
+                    width,
+                    walkable: materials[x].walkable(),
+                });
+            }
+        }
+    }
+}
+
 fn sides(shape: Shape) -> (usize, usize) {
     (usize::from(shape.width()), usize::from(shape.height()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CellColumn, Stencil};
+    use crate::grid::Grid;
+    use crate::shape::{Dir, Pos, Shape};
+    use crate::terrain::Material;
+
+    /// Not square, with walls: a walk that pairs a value with the wrong cell differs.
+    fn setup() -> (Grid, CellColumn) {
+        let shape = Shape::new(10, 7).expect("fits the bounds");
+        let mut grid = Grid::new(shape);
+        let mut column = CellColumn::new(shape);
+        for y in 1..6 {
+            for x in 1..9 {
+                let at = shape.idx(Pos { x, y }).expect("interior");
+                column.set(at, u8::try_from(x * 16 + y).expect("fits u8"));
+                if (x + 2 * y) % 3 == 0 {
+                    grid.set_material(at, Material::WALL);
+                }
+            }
+        }
+        (grid, column)
+    }
+
+    fn rule(cell: Stencil<'_>) -> u8 {
+        let around = cell
+            .neighbours()
+            .iter()
+            .fold(0u8, |a, &n| a.wrapping_add(n));
+        if cell.walkable() {
+            cell.value().wrapping_mul(3).wrapping_add(around)
+        } else {
+            (cell.value() / 2 + 1) ^ around
+        }
+    }
+
+    /// Cell by cell, from the last interior cell to the first, each from the
+    /// pairs of `prev` that `Pos` names.
+    fn reversed(grid: &Grid, prev: &CellColumn, f: impl Fn(Stencil<'_>) -> u8) -> CellColumn {
+        let shape = grid.shape();
+        let mut next = CellColumn::new(shape);
+        let last = |side: u16| side.cast_signed() - 2;
+        for y in (1..=last(shape.height())).rev() {
+            for x in (1..=last(shape.width())).rev() {
+                let at = shape.idx(Pos { x, y }).expect("interior");
+                let cell = Stencil {
+                    prev: &prev.cells,
+                    at: at.cell().index(),
+                    width: usize::from(shape.width()),
+                    walkable: grid.terrain.material(at.cell()).walkable(),
+                };
+                next.set(at, f(cell));
+            }
+        }
+        next
+    }
+
+    #[test]
+    fn the_walk_order_never_changes_the_column() {
+        let (grid, prev) = setup();
+        let mut forward = CellColumn::new(grid.shape());
+        grid.stencil(&prev, &mut forward, rule);
+        assert_eq!(forward.cells, reversed(&grid, &prev, rule).cells);
+    }
+
+    #[test]
+    fn neighbours_follow_dir_all_in_the_previous_column() {
+        let (grid, prev) = setup();
+        let shape = grid.shape();
+        for y in 1..=5 {
+            for x in 1..=8 {
+                let cell = Stencil {
+                    prev: &prev.cells,
+                    at: shape.idx(Pos { x, y }).expect("interior").cell().index(),
+                    width: usize::from(shape.width()),
+                    walkable: true,
+                };
+                let neighbours = cell.neighbours();
+                for (i, dir) in Dir::ALL.into_iter().enumerate() {
+                    let (dx, dy) = dir.offset();
+                    let around = shape.idx(Pos {
+                        x: x + dx,
+                        y: y + dy,
+                    });
+                    let expected = around.map_or(0, |n| prev.get(n));
+                    assert_eq!(neighbours[i], expected, "({x}, {y}) {dir:?}");
+                }
+            }
+        }
+    }
 }

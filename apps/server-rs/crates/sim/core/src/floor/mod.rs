@@ -1,3 +1,4 @@
+mod environment;
 mod image;
 mod inbox;
 mod membership;
@@ -29,6 +30,8 @@ pub struct Floor {
     grid: Grid,
     /// One per entry of `Ruleset::columns`, in the same order.
     columns: Vec<CellColumn>,
+    /// The next values of the column being ticked; swapped with it, never read between ticks.
+    scratch: CellColumn,
     /// Fingerprint of the ruleset that built the floor: its column order is the only key to `columns`.
     fingerprint: u64,
     schedule: Schedule,
@@ -53,6 +56,7 @@ impl Floor {
                 .iter()
                 .map(|_| CellColumn::new(shape))
                 .collect(),
+            scratch: CellColumn::new(shape),
             fingerprint: ruleset.fingerprint(),
             schedule: Schedule::default(),
             round: Round(0),
@@ -175,13 +179,17 @@ impl Floor {
         self.grid.shape().idx(at).expect("cell off the floor")
     }
 
-    fn column_of<M: Module>(&self, ruleset: &Ruleset) -> usize {
-        const { assert!(M::CELL_COLUMN, "the module owns no cell column") };
+    fn check_ruleset(&self, ruleset: &Ruleset) {
         assert_eq!(
             self.fingerprint,
             ruleset.fingerprint(),
             "ruleset is not the one that built this floor"
         );
+    }
+
+    fn column_of<M: Module>(&self, ruleset: &Ruleset) -> usize {
+        const { assert!(M::CELL_COLUMN, "the module owns no cell column") };
+        self.check_ruleset(ruleset);
         ruleset
             .columns
             .iter()

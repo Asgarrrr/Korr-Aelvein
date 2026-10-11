@@ -54,6 +54,11 @@ impl Terrain {
     }
 
     #[inline]
+    pub(crate) fn materials(&self) -> &[Material] {
+        &self.material
+    }
+
+    #[inline]
     pub(crate) fn material(&self, at: CellIdx) -> Material {
         self.material[at.index()]
     }

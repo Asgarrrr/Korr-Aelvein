@@ -56,8 +56,11 @@ a second name anywhere.
 - **Actor**: an entity the scheduler runs. A **player** is an actor whose
   decision comes from a recorded input.
 - **Thing**: an entity linked to a cell that is not an actor: an item, a
-  plant, a corpse, stairs. Many share a cell, in ascending EntityId order; a
-  thing never blocks a step.
+  corpse, stairs. Many share a cell, in ascending EntityId order; a thing
+  never blocks a step.
+- **Plant**: flora's value in one cell, not an entity. 0 is bare ground; a
+  plant grows one step per round until ripe. From the next round, a ripe
+  plant seeds bare walkable neighbouring ground, by chance.
 - **Placement record**: the grid's record of one placed entity: its
   EntityId, Layer and cell. In Rust (korr-grid), the source of position:
   saved in the floor image, and the cell indexes are rebuilt from the records.
