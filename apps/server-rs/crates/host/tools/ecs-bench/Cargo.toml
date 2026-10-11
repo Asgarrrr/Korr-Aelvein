@@ -18,6 +18,8 @@ korr-engine.workspace = true
 korr-flora.workspace = true
 korr-grid.workspace = true
 korr-scenarios.workspace = true
+korr-server.workspace = true
+rayon.workspace = true
 
 [[bench]]
 name = "ecs"

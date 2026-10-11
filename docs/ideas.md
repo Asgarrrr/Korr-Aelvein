@@ -62,6 +62,10 @@ the spec is updated to include it.
   one: about 2 ns per cell. At low actor density this dominates the round
   (128x128 with 1.6k actors: +52%). Skip all-zero rows, or keep a list of
   active cells, once a cell budget for many columns is set.
+- A parallel barrier: `send` and `land` work per floor and can go through
+  the same `Runner`, once flight routing finds a floor by an index on
+  `FloorId` instead of a linear `find`. Only if the `barrier` bench, with
+  travellers, shows the serial barrier takes a real share of the round.
 
 ## Visuals
 

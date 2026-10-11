@@ -9,7 +9,7 @@ mod scripted;
 mod shy;
 
 use korr_core::{
-    host::{Floor, Game, Mechanics, Ruleset, Seed, World},
+    host::{Floor, Game, Mechanics, Pos, Ruleset, Runner, Seed, Sequential, World},
     mechanic::{
         Action, Band, CommitCtx, Cost, Dir, Module, PrepCtx, Prepared, Proposals, Senses, Target,
     },
@@ -86,12 +86,47 @@ pub fn game<M: Mechanics>(mechanics: M, seed: Seed) -> Game<M> {
     Game::new(SchemaBuilder::default(), mechanics, seed)
 }
 
+/// Every actor off floor 0 departs for its centre.
+pub const TO_GROUND: Leave = Leave {
+    to: FloorId(0),
+    at: Pos { x: 2, y: 2 },
+};
+
+/// Six 5x5 floors, ids 0 to 5, three actors each at (1..=3, 1). Under
+/// `TO_GROUND` the fifteen travellers outnumber floor 0's six free interior
+/// cells, so some wait in its inbox.
+#[must_use]
+pub fn tower(ruleset: &Ruleset) -> World {
+    World::new(
+        (0..6)
+            .map(|id| {
+                let mut f = floor(ruleset, FloorId(id), 5, 5);
+                for x in 1..=3 {
+                    f.spawn_actor(ruleset, Pos { x, y: 1 });
+                }
+                f
+            })
+            .collect(),
+    )
+}
+
 /// # Panics
 /// When an actor departs to a floor outside `world`.
-pub fn run<M: Mechanics>(game: &Game<M>, world: &mut World, rounds: u64) {
+pub fn run_on<M: Mechanics + Sync>(
+    game: &Game<M>,
+    world: &mut World,
+    rounds: u64,
+    runner: &impl Runner,
+) {
     for _ in 0..rounds {
-        game.run_round(world);
+        game.run_round_on(world, runner);
     }
+}
+
+/// # Panics
+/// When an actor departs to a floor outside `world`.
+pub fn run<M: Mechanics + Sync>(game: &Game<M>, world: &mut World, rounds: u64) {
+    run_on(game, world, rounds, &Sequential);
 }
 
 /// Every actor steps east each turn: 30 ticks for an even id, 100 for an odd one.
