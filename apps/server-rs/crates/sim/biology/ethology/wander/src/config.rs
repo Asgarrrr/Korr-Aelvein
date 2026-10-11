@@ -1,4 +1,4 @@
 use korr_core::mechanic::Cost;
 
-pub const ROAM_COST: Cost = Cost::new(100);
-pub const ROAM_WEIGHT: u16 = 10;
+pub(crate) const ROAM_COST: Cost = Cost::new(100);
+pub(crate) const ROAM_WEIGHT: u16 = 10;

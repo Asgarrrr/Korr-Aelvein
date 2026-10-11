@@ -10,7 +10,7 @@ use korr_core::mechanic::{
     Action, Band, CommitCtx, Dir, DrawIndex, Module, PrepCtx, Prepared, Proposals, Senses, Target,
 };
 
-pub use config::{ROAM_COST, ROAM_WEIGHT};
+use config::{ROAM_COST, ROAM_WEIGHT};
 
 const DIRECTIONS: NonZeroU32 = NonZeroU32::new(8).expect("Dir::ALL holds eight directions");
 
