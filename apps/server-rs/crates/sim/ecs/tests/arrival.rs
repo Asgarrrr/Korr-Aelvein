@@ -15,7 +15,7 @@ impl Component for Satiety {
     }
 }
 
-/// Bytes 8..12 hold the row length, 12..16 the row's column count.
+/// Bytes 8..12 hold the row length, 12..20 the row's schema fingerprint.
 fn reread(t: &Traveller, edit: impl FnOnce(&mut Vec<u8>)) -> Traveller {
     let mut w = Writer::new();
     t.write(&mut w);
@@ -43,13 +43,17 @@ fn check_arrival_agrees_with_attach() {
         let row = u32::try_from(bytes.len() - 12).expect("a short row");
         bytes[8..12].copy_from_slice(&row.to_le_bytes());
     });
-    let miscounted = reread(&leave(), |bytes| {
-        bytes[12..16].copy_from_slice(&2u32.to_le_bytes());
-    });
+    let foreign = reread(&leave(), |bytes| bytes[12] ^= 1);
 
     for (t, expected) in [
-        (truncated, ImageError::Truncated { at: 5 }),
-        (miscounted, ImageError::Schema { index: 2 }),
+        (truncated, ImageError::Truncated { at: 9 }),
+        (
+            foreign,
+            ImageError::Fingerprint {
+                saved: schema.fingerprint() ^ 1,
+                running: schema.fingerprint(),
+            },
+        ),
     ] {
         let before = destination.save();
         assert_eq!(destination.check_arrival(&t), Err(expected.clone()));

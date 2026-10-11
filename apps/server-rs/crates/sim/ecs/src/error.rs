@@ -11,6 +11,8 @@ pub enum ImageError {
     Version(u16),
     #[error("column {index} differs from the schema")]
     Schema { index: u32 },
+    #[error("row of schema {saved:#018x}, running {running:#018x}")]
+    Fingerprint { saved: u64, running: u64 },
     #[error("corrupt image: {0}")]
     Corrupt(&'static str),
     #[error("{0} trailing bytes after the image")]

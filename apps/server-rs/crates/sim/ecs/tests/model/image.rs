@@ -160,7 +160,7 @@ fn schema_mismatch_is_rejected() {
 }
 
 /// The format of `Hunger` after a change to its encoding.
-struct HungerV1(u16);
+pub(crate) struct HungerV1(pub(crate) u16);
 
 impl Component for HungerV1 {
     const VERSION: u16 = 1;

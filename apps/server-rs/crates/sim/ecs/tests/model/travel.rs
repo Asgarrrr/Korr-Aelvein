@@ -1,8 +1,10 @@
 use korr_ecs::{
-    Component, EntityId, FloorId, ImageError, Reader, SchemaBuilder, Store, Traveller, Writer,
+    Component, EntityId, FloorId, ImageError, Reader, Schema, SchemaBuilder, Store, Traveller,
+    Writer,
 };
 
 use crate::driver::{Hunger, Pos, World, schema};
+use crate::image::HungerV1;
 
 const AT: Pos = Pos { x: 3, y: -4 };
 
@@ -130,12 +132,40 @@ fn attach_rejects_foreign_schema_and_leaves_store_unchanged() {
     let from_thin = thin.detach(leaving);
 
     let before = thin.save();
-    assert_eq!(thin.attach(from_wide), Err(ImageError::Schema { index: 2 }));
+    let mismatch = |saved: &Schema, running: &Schema| ImageError::Fingerprint {
+        saved: saved.fingerprint(),
+        running: running.fingerprint(),
+    };
+    assert_eq!(thin.attach(from_wide), Err(mismatch(&full, &narrow)));
     assert_eq!(thin.save(), before);
 
     let before = wide.save();
-    assert_eq!(wide.attach(from_thin), Err(ImageError::Schema { index: 1 }));
+    assert_eq!(wide.attach(from_thin), Err(mismatch(&narrow, &full)));
     assert_eq!(wide.save(), before);
+}
+
+#[test]
+fn attach_rejects_a_row_of_an_older_component_version() {
+    let (old, keys) = schema();
+    let mut builder = SchemaBuilder::default();
+    builder.register::<Pos>("pos");
+    builder.register::<HungerV1>("hunger");
+    let new = builder.build();
+
+    let mut source = Store::new(&old, FloorId(0));
+    let h = source.spawn();
+    source.insert(&keys.hunger, h, Hunger(9));
+    let traveller = source.detach(h);
+    let mut destination = Store::new(&new, FloorId(1));
+    assert_eq!(
+        destination.check_arrival(&traveller),
+        Err(ImageError::Fingerprint {
+            saved: old.fingerprint(),
+            running: new.fingerprint(),
+        })
+    );
+    assert!(destination.attach(traveller).is_err());
+    assert!(destination.is_empty());
 }
 
 fn traveller(id: EntityId, row: &[u8]) -> Traveller {
@@ -148,7 +178,7 @@ fn traveller(id: EntityId, row: &[u8]) -> Traveller {
 
 fn bare_traveller(id: EntityId) -> Traveller {
     let mut row = Writer::new();
-    row.write_u32(2);
+    row.write_u64(schema().0.fingerprint());
     row.write_u8(0);
     row.write_u8(0);
     traveller(id, &row.into_bytes())
@@ -157,7 +187,7 @@ fn bare_traveller(id: EntityId) -> Traveller {
 /// A valid `pos` column followed by `hunger_column` as raw bytes.
 fn row_with_hunger(hunger_column: &[u8]) -> Vec<u8> {
     let mut row = Writer::new();
-    row.write_u32(2);
+    row.write_u64(schema().0.fingerprint());
     row.write_u8(1);
     AT.write(&mut row);
     row.write_bytes(hunger_column);
@@ -174,7 +204,7 @@ fn attach_rejects_a_bad_later_column_and_leaves_store_unchanged() {
 
     for (hunger_column, error) in [
         (&[2][..], ImageError::Corrupt("presence")),
-        (&[1, 9][..], ImageError::Truncated { at: 14 }),
+        (&[1, 9][..], ImageError::Truncated { at: 18 }),
         (&[1, 9, 0, 0][..], ImageError::Trailing(1)),
     ] {
         let before = store.save();

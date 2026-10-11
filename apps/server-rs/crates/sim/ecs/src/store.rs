@@ -13,6 +13,7 @@ pub struct Store {
     pub(crate) entities: Entities,
     pub(crate) columns: Vec<Box<dyn ErasedColumn>>,
     pub(crate) prefixes: Vec<u64>,
+    pub(crate) fingerprint: u64,
 }
 
 impl Store {
@@ -26,6 +27,7 @@ impl Store {
                 .map(|info| (info.new_column)())
                 .collect(),
             prefixes: schema.components.iter().map(|info| info.prefix).collect(),
+            fingerprint: schema.fingerprint(),
         }
     }
 

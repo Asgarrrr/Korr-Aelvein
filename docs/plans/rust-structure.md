@@ -346,7 +346,7 @@ A traveller encodes for the inbox korr-engine saves, little-endian:
 ```
 id         u64
 row length u32, then the row:
-  column count u32, then per column in ComponentId order:
+  schema fingerprint u64, then per column in ComponentId order:
     0u8 when absent, or 1u8 followed by T::write
 ```
 
@@ -356,7 +356,9 @@ It checks, in this order:
 
 1. An id from this floor whose counter is not below `next_counter`:
    `Corrupt("id beyond the floor counter")`.
-2. A column count that differs from the schema: `Schema { index: count }`.
+2. A schema fingerprint that differs from the floor's, so a renamed,
+   reordered, added or re-versioned component fails:
+   `Fingerprint { saved, running }`.
 3. A presence byte other than 0 or 1: `Corrupt("presence")`.
 4. Errors from `T::read`, propagated; the values are dropped.
 5. Bytes left over: `Trailing`.
