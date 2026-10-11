@@ -1,4 +1,4 @@
-use korr_core::{
+use korr_core::mechanic::{
     Action, Band, CommitCtx, Cost, Module, Pos, PrepCtx, Prepared, Proposals, Senses, Target,
 };
 use korr_ecs::FloorId;

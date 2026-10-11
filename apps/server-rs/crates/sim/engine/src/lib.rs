@@ -2,7 +2,7 @@
 #![no_std]
 #![deny(clippy::float_arithmetic)]
 
-use korr_core::{Mechanics, Visit};
+use korr_core::host::{Mechanics, Visit};
 use korr_wander::Wander;
 
 /// One field per mechanic, in run order. `None` disables it.

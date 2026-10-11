@@ -1,6 +1,6 @@
 use core::num::NonZeroU32;
 
-use korr_core::{
+use korr_core::mechanic::{
     Action, Band, CommitCtx, Cost, Dir, DrawIndex, Module, PrepCtx, Prepared, Proposals, Senses,
     Target,
 };

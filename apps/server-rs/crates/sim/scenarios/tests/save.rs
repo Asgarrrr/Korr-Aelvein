@@ -1,4 +1,4 @@
-use korr_core::{Floor, Game, LoadError, Pos, Ruleset, Seed, World, WorldError};
+use korr_core::host::{Floor, Game, LoadError, Pos, Ruleset, Seed, World, WorldError};
 use korr_ecs::{EntityId, FloorId, ImageError};
 use korr_scenarios::{Leave, Pace, floor, game, run};
 

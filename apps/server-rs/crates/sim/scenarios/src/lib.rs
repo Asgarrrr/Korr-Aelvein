@@ -9,8 +9,10 @@ mod scripted;
 mod shy;
 
 use korr_core::{
-    Action, Band, CommitCtx, Cost, Dir, Floor, Game, Mechanics, Module, PrepCtx, Prepared,
-    Proposals, Ruleset, Seed, Senses, Target, World,
+    host::{Floor, Game, Mechanics, Ruleset, Seed, World},
+    mechanic::{
+        Action, Band, CommitCtx, Cost, Dir, Module, PrepCtx, Prepared, Proposals, Senses, Target,
+    },
 };
 use korr_ecs::{FloorId, SchemaBuilder};
 use korr_grid::Shape;

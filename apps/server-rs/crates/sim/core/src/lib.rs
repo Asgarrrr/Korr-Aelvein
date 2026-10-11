@@ -17,16 +17,26 @@ mod senses;
 mod time;
 mod world;
 
-pub use config::{IDLE, INERTIA, MAX_INSTEAD, SIGHT, TICKS_PER_ROUND};
-pub use ctx::{CommitCtx, PrepCtx};
-pub use decision::{Band, Intent};
-pub use error::{LoadError, WorldError};
-pub use floor::{FlightImage, Floor, Sections};
-pub use game::Game;
-pub use korr_grid::{Dir, Pos, StepError};
-pub use korr_random::{DrawIndex, Seed};
-pub use module::{Action, ActionKey, Mechanics, Module, Prepared, Proposals, Target, Visit};
-pub use ruleset::Ruleset;
-pub use senses::{Seen, Senses};
-pub use time::{Cost, Tick};
-pub use world::World;
+/// What a mechanic may name: the module seam and the values it trades in.
+pub mod mechanic {
+    pub use crate::ctx::{CommitCtx, PrepCtx};
+    pub use crate::decision::Band;
+    pub use crate::module::{Action, Module, Prepared, Proposals, Target};
+    pub use crate::senses::{Seen, Senses};
+    pub use crate::time::{Cost, Tick};
+    pub use korr_grid::{Dir, Pos, StepError};
+    pub use korr_random::DrawIndex;
+}
+
+/// What runs a world: the game, its floors, their saves and the registry seam.
+pub mod host {
+    pub use crate::config::{SIGHT, TICKS_PER_ROUND};
+    pub use crate::error::{LoadError, WorldError};
+    pub use crate::floor::{FlightImage, Floor, Sections};
+    pub use crate::game::Game;
+    pub use crate::module::{ActionKey, Mechanics, Visit};
+    pub use crate::ruleset::Ruleset;
+    pub use crate::world::World;
+    pub use korr_grid::{Dir, Pos};
+    pub use korr_random::Seed;
+}

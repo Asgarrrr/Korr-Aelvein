@@ -1,6 +1,9 @@
 use korr_core::{
-    Action, ActionKey, Band, CommitCtx, Dir, Mechanics, Module, Pos, PrepCtx, Prepared, Proposals,
-    Seed, Senses, Target, Tick, Visit, World,
+    host::{ActionKey, Mechanics, Seed, Visit, World},
+    mechanic::{
+        Action, Band, CommitCtx, Dir, Module, Pos, PrepCtx, Prepared, Proposals, Senses, Target,
+        Tick,
+    },
 };
 use korr_ecs::FloorId;
 use korr_scenarios::{Act, Answer, Fake, Pace, Scripted, floor, game};

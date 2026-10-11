@@ -32,7 +32,7 @@ pub(crate) struct Candidate {
 
 /// The action and target an actor last ran.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Intent {
+pub(crate) struct Intent {
     pub action: ActionKey,
     pub target: Target,
 }

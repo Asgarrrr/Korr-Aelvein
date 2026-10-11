@@ -2,7 +2,7 @@
 //! things. The budget is about 200 ns per entity.
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
-use korr_core::{Game, Mechanics, Pos, Seed, World};
+use korr_core::host::{Game, Mechanics, Pos, Seed, World};
 use korr_engine::Registry;
 use korr_scenarios::{Shy, floor, game};
 

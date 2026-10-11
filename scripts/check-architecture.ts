@@ -245,6 +245,27 @@ for (const crate of walk(join(RUST, "crates"), /^Cargo\.toml$/).map(dirname)) {
 		report(join(crate, "Cargo.toml"), found);
 }
 
+// A mechanic sees the module seam only: the host path would hand it the world.
+const HOST_PATH = /\bkorr_core\s*(?:::\s*(?!mechanic\b)|as\b)/;
+let mechanicSources = 0;
+for (const root of MECHANICS)
+	for (const file of walk(root, /\.rs$/)) {
+		mechanicSources++;
+		if (HOST_PATH.test(readFileSync(file, "utf8")))
+			report(file, "a mechanic names korr_core outside korr_core::mechanic");
+	}
+if (mechanicSources === 0)
+	report(SIM, "the mechanic path rule checked no source");
+for (const [sample, fires] of [
+	["use korr_core::mechanic::{Cost, Module};", false],
+	["use korr_core::host::World;", true],
+	["use korr_core::{mechanic::Cost, host::World};", true],
+	["use korr_core as core;", true],
+	["fn f(_: korr_core :: host::Floor) {}", true],
+] as const)
+	if (HOST_PATH.test(sample) !== fires)
+		report(SIM, `the mechanic path rule misreads "${sample}"`);
+
 // A known violation must still be reported, or an edit to this script could disable the rule unnoticed.
 const probe = join(ENGINE, "modules/probe/index.ts");
 const before = errors.length;

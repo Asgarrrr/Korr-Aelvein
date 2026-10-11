@@ -1,4 +1,4 @@
-use korr_core::{Floor, Pos, Ruleset, Seed, World, WorldError};
+use korr_core::host::{Floor, Pos, Ruleset, Seed, World, WorldError};
 use korr_ecs::{FloorId, Handle};
 use korr_engine::Registry;
 use korr_grid::Material;

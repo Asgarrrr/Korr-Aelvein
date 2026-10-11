@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use korr_core::{
+use korr_core::mechanic::{
     Action, Band, CommitCtx, Cost, Dir, Module, PrepCtx, Prepared, Proposals, Senses, Target, Tick,
 };
 

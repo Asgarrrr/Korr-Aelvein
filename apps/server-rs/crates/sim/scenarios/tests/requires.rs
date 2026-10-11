@@ -1,6 +1,9 @@
 use korr_core::{
-    Action, Band, CommitCtx, Cost, Dir, Game, Module, Pos, PrepCtx, Prepared, Proposals, Seed,
-    Senses, Target, World,
+    host::{Game, Seed, World},
+    mechanic::{
+        Action, Band, CommitCtx, Cost, Dir, Module, Pos, PrepCtx, Prepared, Proposals, Senses,
+        Target,
+    },
 };
 use korr_ecs::{Component, FloorId, ImageError, Reader, SchemaBuilder, Writer};
 use korr_scenarios::{floor, run};

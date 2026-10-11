@@ -5,7 +5,10 @@
 use std::cell::RefCell;
 
 use korr_core::{
-    Action, CommitCtx, Module, Pos, PrepCtx, Prepared, Proposals, Seed, Seen, Senses, Target, World,
+    host::{Seed, World},
+    mechanic::{
+        Action, CommitCtx, Module, Pos, PrepCtx, Prepared, Proposals, Seen, Senses, Target,
+    },
 };
 use korr_ecs::{EntityId, FloorId};
 use korr_scenarios::{Shy, floor, game};
