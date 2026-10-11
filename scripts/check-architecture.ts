@@ -290,6 +290,12 @@ const manifestProbes: [string, string, Dependencies, number][] = [
 		0,
 	],
 	[join(SIM, "grid"), testOnly, {}, 0],
+	[
+		join(SIM, "grid"),
+		'[package]\nname = "korr-grid"\n[dependencies]\nkorr-core.workspace = true\n',
+		{ "korr-core": {} },
+		1,
+	],
 ];
 for (const [dir, toml, shared, expected] of manifestProbes) {
 	const manifest = Bun.TOML.parse(toml) as Manifest;
