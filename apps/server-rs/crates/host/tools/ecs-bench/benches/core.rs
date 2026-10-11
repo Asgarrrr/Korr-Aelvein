@@ -1,5 +1,6 @@
 //! One round of the reference world: a 128x128 floor with 8k actors and 2k
-//! things. The budget is about 200 ns per entity.
+//! things. The budget, about 200 ns per entity, holds for wander; perceiving
+//! prices sight with every actor looking, at half density.
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use korr_core::host::{Game, Mechanics, Pos, Seed, World};

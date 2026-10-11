@@ -156,3 +156,24 @@ fn neighbourhood_is_the_interior_sorted_by_ring_then_row() {
         }
     }
 }
+
+#[test]
+fn square_is_the_neighbourhood_in_row_order() {
+    let shape = Shape::new(9, 7).expect("9x7 fits the bounds");
+    for (cx, cy) in [(4, 3), (1, 1), (7, 5), (0, 9), (-3, -2), (12, 3)] {
+        let centre = Pos { x: cx, y: cy };
+        for radius in 0..12_u16 {
+            let mut expected: Vec<Pos> = shape
+                .neighbourhood(centre, radius)
+                .map(|at| shape.pos(at.cell()))
+                .collect();
+            expected.sort_unstable_by_key(|&p| (p.y, p.x));
+            let mut found = Vec::new();
+            shape.scan_square(centre, radius, |p, at| {
+                assert_eq!(shape.pos(at.cell()), p);
+                found.push(p);
+            });
+            assert_eq!(found, expected, "centre {centre:?}, radius {radius}");
+        }
+    }
+}

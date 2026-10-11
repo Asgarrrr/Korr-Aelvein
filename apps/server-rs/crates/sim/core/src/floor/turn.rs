@@ -83,19 +83,19 @@ impl Floor {
         IDLE
     }
 
-    /// The other actors within `SIGHT` of `pos`, in neighbourhood order.
+    /// The other actors within `SIGHT` of `pos`, in neighbourhood order. A row-major
+    /// scan then a stable sort by ring beats walking the rings cell by cell.
     fn look(&mut self, actor: Handle, pos: Pos) {
         let shape = self.grid.shape();
-        for at in shape.neighbourhood(pos, SIGHT) {
-            let cell = at.cell();
-            if let Some(other) = self.grid.actor_at(cell).filter(|&other| other != actor) {
-                let id = self.store.id(other).expect("a placed actor is alive");
-                self.seen.push(Seen {
-                    id,
-                    pos: shape.pos(cell),
-                });
+        let (grid, store, seen) = (&self.grid, &self.store, &mut self.seen);
+        shape.scan_square(pos, SIGHT, |p, at| {
+            if let Some(other) = grid.actor_at(at.cell()).filter(|&other| other != actor) {
+                let id = store.id(other).expect("a placed actor is alive");
+                seen.push(Seen { id, pos: p });
             }
-        }
+        });
+        self.seen
+            .sort_by_key(|s| (s.pos.x - pos.x).abs().max((s.pos.y - pos.y).abs()));
     }
 }
 

@@ -78,7 +78,7 @@ fn shown_in_a_round(perceives: bool) -> Vec<(Pos, Vec<Seen>)> {
     );
     let mut f = floor(game.ruleset(), FloorId(0), 11, 11);
     for at in [
-        Pos { x: 5, y: 8 },
+        Pos { x: 5, y: 2 },
         BEYOND_SIGHT,
         Pos { x: 6, y: 5 },
         CENTRE,
@@ -106,10 +106,10 @@ fn perceiving_mechanics_see_the_others_in_neighbourhood_order() {
         id: EntityId::new(FloorId(0), n),
         pos: Pos { x, y },
     };
-    // Ring 1 row above, ring 1 side, then ring 3 below: not id order.
+    // Ring 1 row above, ring 1 side, then ring 3 above: neither id nor row order.
     assert_eq!(
         seen_by(&shown, CENTRE),
-        [seen(4, 4, 4), seen(2, 6, 5), seen(0, 5, 8)]
+        [seen(4, 4, 4), seen(2, 6, 5), seen(0, 5, 2)]
     );
     assert_eq!(seen_by(&shown, BEYOND_SIGHT), []);
 }

@@ -183,6 +183,31 @@ impl Shape {
             .map(move |(x, y)| Interior(self.cell(y.unsigned_abs(), x.unsigned_abs())))
     }
 
+    /// Calls `f` on each interior cell within Chebyshev distance `radius` of
+    /// `centre`, row-major. `centre` may lie off the floor.
+    #[inline]
+    pub fn scan_square(self, centre: Pos, radius: u16, mut f: impl FnMut(Pos, Interior)) {
+        let (cx, cy, r) = (i32::from(centre.x), i32::from(centre.y), i32::from(radius));
+        let (last_x, last_y) = (i32::from(self.width) - 2, i32::from(self.height) - 2);
+        let (left, right) = ((cx - r).max(1), (cx + r).min(last_x));
+        for y in (cy - r).max(1)..=(cy + r).min(last_y) {
+            for x in left..=right {
+                let at = Interior(self.cell(y.unsigned_abs(), x.unsigned_abs()));
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "interior coordinates fit i16"
+                )]
+                f(
+                    Pos {
+                        x: x as i16,
+                        y: y as i16,
+                    },
+                    at,
+                );
+            }
+        }
+    }
+
     #[must_use]
     #[inline]
     pub(crate) fn neighbour(self, at: Interior, dir: Dir) -> CellIdx {
