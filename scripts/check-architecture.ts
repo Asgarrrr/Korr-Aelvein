@@ -243,6 +243,19 @@ const crateViolations = (dir: string, name: string, deps: string[]) => {
 	return found;
 };
 
+const manifestViolations = (
+	dir: string,
+	manifest: Manifest,
+	shared = workspaceDeps,
+) => {
+	const mechanic = MECHANICS.some((root) => dir.startsWith(root));
+	const deps = linkedCrates(manifest, shared, mechanic);
+	return [
+		...crateViolations(dir, manifest.package?.name ?? "", deps),
+		...(mechanic ? mechanicRenames(manifest, shared) : []),
+	];
+};
+
 const HOST = join(RUST, "crates/host") + sep;
 const HOST_TOOLS = join(HOST, "tools") + sep;
 let hostCrates = 0;
@@ -252,16 +265,8 @@ for (const crate of walk(join(RUST, "crates"), /^Cargo\.toml$/).map(dirname)) {
 	const manifest = Bun.TOML.parse(
 		readFileSync(join(crate, "Cargo.toml"), "utf8"),
 	) as Manifest;
-	const mechanic = MECHANICS.some((root) => crate.startsWith(root));
-	for (const found of crateViolations(
-		crate,
-		manifest.package?.name ?? "",
-		linkedCrates(manifest, workspaceDeps, mechanic),
-	))
+	for (const found of manifestViolations(crate, manifest))
 		report(join(crate, "Cargo.toml"), found);
-	if (mechanic)
-		for (const found of mechanicRenames(manifest))
-			report(join(crate, "Cargo.toml"), found);
 }
 
 // A mechanic sees the module seam only: the host path would hand it the world.
@@ -336,23 +341,30 @@ const renamed = linkedCrates(
 	) as Manifest,
 	{ rng: { package: "korr-random" } },
 );
-const testOnly = Bun.TOML.parse(
-	'[dev-dependencies]\nkorr-engine.workspace = true\n[target."cfg(unix)".dev-dependencies]\nkorr-random.workspace = true\n',
-) as Manifest;
+const testOnly =
+	'[dev-dependencies]\nkorr-engine.workspace = true\n[target."cfg(unix)".dev-dependencies]\nkorr-random.workspace = true\n';
 const mechanicProbe = join(SIM, "biology/ethology/probe");
-if (
-	mechanicRenames(
-		Bun.TOML.parse(
-			'[dependencies]\nkc = { package = "korr-core", path = "x" }\nkorr-genome.workspace = true\nshared.workspace = true\nrng = { package = "rand", version = "1" }\n',
-		) as Manifest,
+const manifestProbes: [string, string, Dependencies, number][] = [
+	[
+		mechanicProbe,
+		'[dependencies]\nkc = { package = "korr-core", path = "x" }\nkorr-genome.workspace = true\nshared.workspace = true\nrng = { package = "rand", version = "1" }\n',
 		{ "korr-genome": {}, shared: { package: "korr-core" } },
-	).length !== 2
-)
-	report(mechanicProbe, "the mechanic rename rule did not fire exactly twice");
+		2,
+	],
+	[mechanicProbe, testOnly, {}, 2],
+	[join(SIM, "grid"), testOnly, {}, 0],
+];
+for (const [dir, toml, shared, expected] of manifestProbes) {
+	const manifest = Bun.TOML.parse(toml) as Manifest;
+	const fired = manifestViolations(dir, manifest, shared).length;
+	if (fired !== expected)
+		report(
+			dir,
+			`the manifest rules fired ${fired} times, expected ${expected}`,
+		);
+}
 const crateProbes: [string, string, string[], number][] = [
 	[mechanicProbe, "korr-probe", renamed, 2],
-	[mechanicProbe, "korr-probe", linkedCrates(testOnly, {}, true), 2],
-	[join(SIM, "grid"), "korr-grid", linkedCrates(testOnly, {}), 0],
 	[
 		mechanicProbe,
 		"korr-probe",
