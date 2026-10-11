@@ -12,7 +12,6 @@ const SUBJECT_LIMIT: u64 = 1 << 63;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Phase {
-    Propose,
     Action,
     Tick,
     Spawn,
@@ -83,7 +82,6 @@ impl Phase {
     // Pinned per variant: reordering or inserting a variant must not shift draws.
     const fn tag(self) -> u64 {
         match self {
-            Self::Propose => 1,
             Self::Action => 2,
             Self::Tick => 3,
             Self::Spawn => 4,
