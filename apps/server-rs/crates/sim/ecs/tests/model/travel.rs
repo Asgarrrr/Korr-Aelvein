@@ -236,6 +236,19 @@ fn attach_rejects_id_beyond_counter() {
 }
 
 #[test]
+fn attach_checks_the_id_before_the_fingerprint() {
+    let (schema, _) = schema();
+    let mut store = Store::new(&schema, FloorId(2));
+    let mut row = Writer::new();
+    row.write_u64(!schema.fingerprint());
+    let both = traveller(EntityId::new(FloorId(2), 0), &row.into_bytes());
+
+    let expected = ImageError::Corrupt("id beyond the floor counter");
+    assert_eq!(store.check_arrival(&both), Err(expected.clone()));
+    assert_eq!(store.attach(both).err(), Some(expected));
+}
+
+#[test]
 fn world_model_with_travel() {
     for seed in 1..=3 {
         let mut world = World::new(seed, 3);
