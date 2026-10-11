@@ -37,6 +37,13 @@ impl Store {
         self.entities.floor()
     }
 
+    /// The counter the next spawn takes.
+    #[must_use]
+    #[inline]
+    pub fn counter(&self) -> u64 {
+        self.entities.next_counter()
+    }
+
     /// The new entity's id is never reused, even when its slot is.
     pub fn spawn(&mut self) -> Handle {
         self.entities.spawn()

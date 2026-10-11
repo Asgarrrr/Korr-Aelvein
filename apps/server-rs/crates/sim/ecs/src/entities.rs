@@ -56,6 +56,10 @@ impl Entities {
         self.floor
     }
 
+    pub(crate) const fn next_counter(&self) -> u64 {
+        self.next_counter
+    }
+
     pub(crate) fn spawn(&mut self) -> Handle {
         let id = EntityId::new(self.floor, self.next_counter);
         self.next_counter += 1;

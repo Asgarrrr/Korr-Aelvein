@@ -27,8 +27,11 @@ impl World {
     /// # Errors
     /// [`WorldError::DuplicateFloor`] when two floors share a `FloorId`: their
     /// entity ids and draws would collide. [`WorldError::Rounds`] when two
-    /// floors are at different rounds. [`WorldError::DuplicateEntity`] when an
-    /// id is alive or waiting on two floors.
+    /// floors are at different rounds. Then, for the lowest failing id:
+    /// [`WorldError::UnknownOrigin`] when its origin floor is absent, since that
+    /// floor could re-mint it; [`WorldError::BeyondCounter`] when its origin
+    /// floor has not minted it yet; [`WorldError::DuplicateEntity`] when it is
+    /// alive or waiting on two floors.
     pub fn try_new(floors: Vec<Floor>) -> Result<Self, WorldError> {
         for (i, a) in floors.iter().enumerate() {
             if floors[i + 1..].iter().any(|b| b.id() == a.id()) {
@@ -40,8 +43,19 @@ impl World {
         }
         let mut ids: Vec<EntityId> = floors.iter().flat_map(Floor::ids).collect();
         ids.sort_unstable();
-        if let Some(pair) = ids.windows(2).find(|pair| pair[0] == pair[1]) {
-            return Err(WorldError::DuplicateEntity(pair[0]));
+        let mut previous = None;
+        for &id in &ids {
+            let origin = floors
+                .iter()
+                .find(|floor| floor.id() == id.origin())
+                .ok_or(WorldError::UnknownOrigin(id))?;
+            if id.counter() >= origin.counter() {
+                return Err(WorldError::BeyondCounter(id));
+            }
+            if previous == Some(id) {
+                return Err(WorldError::DuplicateEntity(id));
+            }
+            previous = Some(id);
         }
         Ok(Self { floors })
     }

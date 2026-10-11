@@ -114,7 +114,11 @@ a second name anywhere.
 - **Image**: one floor's saved bytes: header, sections, inbox entries,
   checksum. The Rust floor image also keeps the slot table, free stack and
   dense order.
-- **Save**: the world header plus every floor image.
+- **Save**: the world header plus every floor image. In Rust (korr-core),
+  `Game::save` and `Game::load`: the seed, the floor count, then each image
+  framed by its length, in ascending FloorId. A load refuses another seed,
+  any bad image, and any world `World::try_new` refuses: an id from an absent
+  floor, beyond its origin floor's counter, or on two floors.
 - **Fingerprint**: a hash of the core schema, each module's name, schema,
   cells and config in registry order, and the species. A save only loads
   into a world with the same fingerprint.

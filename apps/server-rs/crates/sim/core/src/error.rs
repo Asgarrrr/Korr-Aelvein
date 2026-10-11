@@ -6,6 +6,10 @@ pub enum LoadError {
     Image(#[from] ImageError),
     #[error("image saved under ruleset {saved:#018x}, running {running:#018x}")]
     Ruleset { saved: u64, running: u64 },
+    #[error("save made under seed {saved}, running {running}")]
+    Seed { saved: u64, running: u64 },
+    #[error(transparent)]
+    World(#[from] WorldError),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -16,4 +20,8 @@ pub enum WorldError {
     Rounds,
     #[error("entity {0:?} alive or waiting on two floors")]
     DuplicateEntity(EntityId),
+    #[error("entity {0:?} comes from a floor outside this world")]
+    UnknownOrigin(EntityId),
+    #[error("entity {0:?} is beyond its origin floor's counter")]
+    BeyondCounter(EntityId),
 }

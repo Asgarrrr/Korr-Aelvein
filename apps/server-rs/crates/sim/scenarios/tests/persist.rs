@@ -9,7 +9,7 @@ const PINNED: u64 = 0xf012_dec2_b248_786f;
 
 /// 40 actors, two per row. The fast even id starts at x = 3: blocked by the
 /// wall from tick 570, its clock stays off the round boundary. The slow odd
-/// id starts at x = 1: it takes its last step after a save at round 20.
+/// id starts at x = 1: it takes its last step after round 20.
 fn populated(ruleset: &Ruleset) -> (Floor, Vec<Handle>) {
     let mut f = floor(ruleset, 0, 24, 24);
     let mut actors = Vec::new();
@@ -31,6 +31,20 @@ fn uninterrupted_hash(rounds: u64) -> u64 {
 #[test]
 fn same_seed_same_world_hash() {
     assert_eq!(uninterrupted_hash(50), PINNED);
+}
+
+#[test]
+fn save_load_replay_matches_the_pinned_run() {
+    let bytes = {
+        let game = game(Pace, SEED);
+        let mut world = World::new(vec![populated(game.ruleset()).0]);
+        run(&game, &mut world, 20);
+        game.save(&world)
+    };
+    let game = game(Pace, SEED);
+    let mut world = game.load(&bytes).expect("own save loads");
+    run(&game, &mut world, 30);
+    assert_eq!(game.hash(&world), PINNED);
 }
 
 /// Pace draws nothing: this world pins draw addressing. Re-pin on every
@@ -62,28 +76,6 @@ fn wander_positions_pin_the_draws() {
         .flat_map(|p| [p.x.to_le_bytes(), p.y.to_le_bytes()].concat())
         .collect();
     assert_eq!(checksum(&bytes), PINNED_DRAWS);
-}
-
-#[test]
-fn save_reload_replay_matches_the_uninterrupted_run() {
-    let saved: Vec<Vec<u8>> = {
-        let game = game(Pace, SEED);
-        let mut world = World::new(vec![populated(game.ruleset()).0]);
-        run(&game, &mut world, 20);
-        world
-            .floors()
-            .iter()
-            .map(|f| f.save(game.ruleset()))
-            .collect()
-    };
-    let game = game(Pace, SEED);
-    let floors = saved
-        .iter()
-        .map(|bytes| Floor::load(game.ruleset(), bytes).expect("own save loads"))
-        .collect();
-    let mut world = World::new(floors);
-    run(&game, &mut world, 30);
-    assert_eq!(game.hash(&world), uninterrupted_hash(50));
 }
 
 #[test]

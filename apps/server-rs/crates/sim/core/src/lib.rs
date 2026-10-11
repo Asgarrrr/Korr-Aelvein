@@ -12,6 +12,7 @@ mod floor;
 mod game;
 mod module;
 mod ruleset;
+mod save;
 mod senses;
 mod time;
 mod world;

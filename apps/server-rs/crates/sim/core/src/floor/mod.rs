@@ -98,6 +98,10 @@ impl Floor {
         self.round
     }
 
+    pub(crate) fn counter(&self) -> u64 {
+        self.store.counter()
+    }
+
     /// Travellers waiting for a free cell on this floor.
     #[must_use]
     pub fn inbox_len(&self) -> usize {
