@@ -45,15 +45,15 @@ impl Module for Partial {
     }
 
     fn prepare(&self, action: Listing, _: Target, _: &PrepCtx<'_>) -> Prepared<Listing, ()> {
-        match action {
-            Listing::Listed => Prepared::Instead {
+        if action == Listing::Listed && self.redirect {
+            return Prepared::Instead {
                 action: Listing::Unlisted,
                 target: Target::None,
-            },
-            Listing::Unlisted => Prepared::Go {
-                cost: Cost::new(100),
-                plan: (),
-            },
+            };
+        }
+        Prepared::Go {
+            cost: Cost::new(100),
+            plan: (),
         }
     }
 
