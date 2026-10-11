@@ -56,7 +56,7 @@ impl EntityId {
 }
 
 /// A slot and its generation. Valid only on the `Store` that returned it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Handle {
     pub(crate) slot: SlotIdx,
     pub(crate) generation: u32,
@@ -71,7 +71,7 @@ impl Handle {
 }
 
 /// A storage slot. Valid only inside the current core callback.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SlotIdx(u32);
 
 impl SlotIdx {
