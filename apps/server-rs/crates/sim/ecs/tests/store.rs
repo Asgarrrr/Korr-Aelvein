@@ -105,6 +105,21 @@ fn reused_slot_starts_without_components() {
 }
 
 #[test]
+fn has_is_false_for_a_stale_handle_on_a_reused_slot() {
+    let (schema, satiety) = hunger_only();
+    let key = schema.find("satiety").expect("registered");
+    let mut store = Store::new(&schema, FloorId(0));
+    let old = store.spawn();
+    store.despawn(old);
+    let new = store.spawn();
+    assert_eq!(new.slot(), old.slot());
+    store.insert(&satiety, new, Satiety(1));
+
+    assert!(store.has(key, new));
+    assert!(!store.has(key, old));
+}
+
+#[test]
 fn insert_returns_the_previous_value() {
     let (schema, satiety) = hunger_only();
     let mut store = Store::new(&schema, FloorId(0));
