@@ -1,6 +1,16 @@
 // CLAUDE.md rules that Biome cannot express; the rest lives in biome.json.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import {
+	crateViolations,
+	type Dependencies,
+	linkedCrates,
+	type Manifest,
+	MECHANICS,
+	manifestViolations,
+	RUST,
+	SIM,
+} from "./crate-deps";
 import { ALLOWED_SAMPLES, FORBIDDEN, forbiddenIn } from "./module-syntax";
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -139,8 +149,6 @@ for (const dir of workspaces) {
 }
 
 // Rules from docs/plans/rust-structure.md §4 that cargo cannot express.
-const RUST = join(ROOT, "apps/server-rs");
-const SIM = join(RUST, "crates/sim");
 // Anchored to a line start so a comment or a `#[deny]` on one item never counts.
 const DENY_FLOATS = /^#!\[deny\([^\]]*\bclippy::float_arithmetic\b[^\]]*\)\]/m;
 
@@ -172,89 +180,6 @@ for (const crate of simCrates) {
 	if (existsSync(lib) && !DENY_FLOATS.test(readFileSync(lib, "utf8")))
 		report(lib, "missing #![deny(clippy::float_arithmetic)]");
 }
-
-// Crate boundaries from rust-structure.md §3: one Cargo.toml line could undo them.
-const MECHANICS = ["biology", "milieu", "combat"].map(
-	(d) => join(SIM, d) + sep,
-);
-const MECHANIC_DEPS = new Set(["korr-core", "korr-contracts", "korr-genome"]);
-// A mechanic draws through its core context, so it cannot forge another module's stream.
-const RANDOM_USERS = new Set(["korr-core", "korr-genome", "korr-worldgen"]);
-const FOUNDATION_DEPS: Record<string, string[]> = {
-	"korr-random": [],
-	"korr-ecs": [],
-	"korr-grid": ["korr-ecs"],
-};
-
-type Dependency = string | { package?: string; workspace?: boolean };
-type Dependencies = Record<string, Dependency>;
-type Manifest = {
-	package?: { name?: string };
-	dependencies?: Dependencies;
-	"dev-dependencies"?: Dependencies;
-	target?: Record<
-		string,
-		{ dependencies?: Dependencies; "dev-dependencies"?: Dependencies }
-	>;
-};
-
-const workspaceDeps = (
-	Bun.TOML.parse(readFileSync(join(RUST, "Cargo.toml"), "utf8")) as {
-		workspace: { dependencies: Dependencies };
-	}
-).workspace.dependencies;
-
-// Cargo links target-specific and renamed dependencies like plain ones.
-// Foundation tests may link korr-random; a mechanic's tests stay behind its seam.
-const linkedDeps = (manifest: Manifest, shared = workspaceDeps, dev = false) =>
-	[manifest, ...Object.values(manifest.target ?? {})]
-		.flatMap((t) =>
-			dev ? [t.dependencies, t["dev-dependencies"]] : [t.dependencies],
-		)
-		.flatMap((table) => Object.entries(table ?? {}))
-		.map(([key, dep]) => {
-			const spec = typeof dep === "object" && dep.workspace ? shared[key] : dep;
-			return { key, crate: (typeof spec === "object" && spec.package) || key };
-		});
-const linkedCrates = (
-	manifest: Manifest,
-	shared = workspaceDeps,
-	dev = false,
-) => linkedDeps(manifest, shared, dev).map((dep) => dep.crate);
-// The mechanic path rule reads a crate by its own name, which a rename would hide.
-const mechanicRenames = (manifest: Manifest, shared = workspaceDeps) =>
-	linkedDeps(manifest, shared)
-		.filter(({ key, crate }) => crate.startsWith("korr-") && key !== crate)
-		.map(({ key, crate }) => `a mechanic links ${crate} as ${key}`);
-
-const crateViolations = (dir: string, name: string, deps: string[]) => {
-	const workspace = deps.filter((dep) => dep.startsWith("korr-"));
-	if (MECHANICS.some((root) => dir.startsWith(root)))
-		return workspace
-			.filter((dep) => !MECHANIC_DEPS.has(dep))
-			.map((dep) => `a mechanic depends on ${dep}`);
-	const found: string[] = [];
-	if (workspace.includes("korr-random") && !RANDOM_USERS.has(name))
-		found.push("depends on korr-random");
-	const allowed = FOUNDATION_DEPS[name];
-	if (allowed)
-		for (const dep of workspace.filter((d) => !allowed.includes(d)))
-			found.push(`depends on ${dep}`);
-	return found;
-};
-
-const manifestViolations = (
-	dir: string,
-	manifest: Manifest,
-	shared = workspaceDeps,
-) => {
-	const mechanic = MECHANICS.some((root) => dir.startsWith(root));
-	const deps = linkedCrates(manifest, shared, mechanic);
-	return [
-		...crateViolations(dir, manifest.package?.name ?? "", deps),
-		...(mechanic ? mechanicRenames(manifest, shared) : []),
-	];
-};
 
 const HOST = join(RUST, "crates/host") + sep;
 const HOST_TOOLS = join(HOST, "tools") + sep;
@@ -352,6 +277,18 @@ const manifestProbes: [string, string, Dependencies, number][] = [
 		2,
 	],
 	[mechanicProbe, testOnly, {}, 2],
+	[
+		mechanicProbe,
+		'[dev-dependencies]\nkc = { package = "korr-core", path = "x" }\n',
+		{},
+		1,
+	],
+	[
+		join(SIM, "grid"),
+		'[dependencies]\ne = { package = "korr-ecs", path = "x" }\n',
+		{},
+		0,
+	],
 	[join(SIM, "grid"), testOnly, {}, 0],
 ];
 for (const [dir, toml, shared, expected] of manifestProbes) {
