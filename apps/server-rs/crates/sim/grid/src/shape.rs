@@ -183,27 +183,49 @@ impl Shape {
             .map(move |(x, y)| Interior(self.cell(y.unsigned_abs(), x.unsigned_abs())))
     }
 
-    /// Calls `f` on each interior cell within Chebyshev distance `radius` of
-    /// `centre`, row-major. `centre` may lie off the floor.
+    /// Calls `f` on the cells of [`Self::neighbourhood`], in the same order. A
+    /// plain loop: perception walks it for every actor, every turn.
     #[inline]
-    pub fn scan_square(self, centre: Pos, radius: u16, mut f: impl FnMut(Pos, Interior)) {
-        let (cx, cy, r) = (i32::from(centre.x), i32::from(centre.y), i32::from(radius));
+    pub fn scan_rings(self, centre: Pos, radius: u16, mut f: impl FnMut(Pos, Interior)) {
+        let (cx, cy) = (i32::from(centre.x), i32::from(centre.y));
         let (last_x, last_y) = (i32::from(self.width) - 2, i32::from(self.height) - 2);
-        let (left, right) = ((cx - r).max(1), (cx + r).min(last_x));
-        for y in (cy - r).max(1)..=(cy + r).min(last_y) {
-            for x in left..=right {
-                let at = Interior(self.cell(y.unsigned_abs(), x.unsigned_abs()));
-                #[expect(
-                    clippy::cast_possible_truncation,
-                    reason = "interior coordinates fit i16"
-                )]
-                f(
-                    Pos {
-                        x: x as i16,
-                        y: y as i16,
-                    },
-                    at,
-                );
+        let mut visit = |x: i32, y: i32| {
+            let at = Interior(self.cell(y.unsigned_abs(), x.unsigned_abs()));
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "interior coordinates fit i16"
+            )]
+            f(
+                Pos {
+                    x: x as i16,
+                    y: y as i16,
+                },
+                at,
+            );
+        };
+        let inside_x = |x: i32| (1..=last_x).contains(&x);
+        let inside_y = |y: i32| (1..=last_y).contains(&y);
+        for d in 0..=i32::from(radius) {
+            let (left, right) = ((cx - d).max(1), (cx + d).min(last_x));
+            let (top, bottom) = (cy - d, cy + d);
+            if inside_y(top) {
+                for x in left..=right {
+                    visit(x, top);
+                }
+            }
+            let (west, east) = (inside_x(cx - d), inside_x(cx + d));
+            for y in (top + 1).max(1)..=(bottom - 1).min(last_y) {
+                if west {
+                    visit(cx - d, y);
+                }
+                if east {
+                    visit(cx + d, y);
+                }
+            }
+            if d > 0 && inside_y(bottom) {
+                for x in left..=right {
+                    visit(x, bottom);
+                }
             }
         }
     }

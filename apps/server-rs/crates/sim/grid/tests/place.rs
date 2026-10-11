@@ -158,18 +158,17 @@ fn neighbourhood_is_the_interior_sorted_by_ring_then_row() {
 }
 
 #[test]
-fn square_is_the_neighbourhood_in_row_order() {
+fn rings_scan_the_neighbourhood_in_order() {
     let shape = Shape::new(9, 7).expect("9x7 fits the bounds");
     for (cx, cy) in [(4, 3), (1, 1), (7, 5), (0, 9), (-3, -2), (12, 3)] {
         let centre = Pos { x: cx, y: cy };
         for radius in 0..12_u16 {
-            let mut expected: Vec<Pos> = shape
+            let expected: Vec<Pos> = shape
                 .neighbourhood(centre, radius)
                 .map(|at| shape.pos(at.cell()))
                 .collect();
-            expected.sort_unstable_by_key(|&p| (p.y, p.x));
             let mut found = Vec::new();
-            shape.scan_square(centre, radius, |p, at| {
+            shape.scan_rings(centre, radius, |p, at| {
                 assert_eq!(shape.pos(at.cell()), p);
                 found.push(p);
             });
@@ -190,9 +189,10 @@ fn extreme_centres_and_radii_cover_the_interior() {
         (i16::MIN, i16::MAX),
     ] {
         let centre = Pos { x, y };
-        let mut square = Vec::new();
-        shape.scan_square(centre, u16::MAX, |p, _| square.push(p));
-        assert_eq!(square, interior, "centre {centre:?}");
+        let mut scanned = Vec::new();
+        shape.scan_rings(centre, u16::MAX, |p, _| scanned.push(p));
+        scanned.sort_unstable_by_key(|&p| (p.y, p.x));
+        assert_eq!(scanned, interior, "centre {centre:?}");
         let mut ring: Vec<Pos> = shape
             .neighbourhood(centre, u16::MAX)
             .map(|at| shape.pos(at.cell()))

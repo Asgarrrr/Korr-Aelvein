@@ -88,14 +88,12 @@ impl Floor {
     fn look(&mut self, actor: Handle, pos: Pos) {
         let shape = self.grid.shape();
         let (grid, store, seen) = (&self.grid, &self.store, &mut self.seen);
-        shape.scan_square(pos, SIGHT, |p, at| {
+        shape.scan_rings(pos, SIGHT, |p, at| {
             if let Some(other) = grid.actor_at(at.cell()).filter(|&other| other != actor) {
                 let id = store.id(other).expect("a placed actor is alive");
                 seen.push(Seen { id, pos: p });
             }
         });
-        self.seen
-            .sort_by_key(|s| (s.pos.x - pos.x).abs().max((s.pos.y - pos.y).abs()));
     }
 }
 
