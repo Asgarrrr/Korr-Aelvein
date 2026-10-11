@@ -30,7 +30,7 @@ impl CellIdx {
 pub struct Interior(CellIdx);
 
 /// An [`Interior`] without its width, for a record that knows its shape.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct PackedCell(u32);
 
 impl Interior {
