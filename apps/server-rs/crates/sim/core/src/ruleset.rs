@@ -46,6 +46,8 @@ impl Visit for Table {
             M::NAME
         );
         let ordinal = self.modules.len();
+        u16::try_from(ordinal).expect("a module table fits u16");
+        u16::try_from(M::Action::ALL.len()).expect("a module's actions fit u16");
         let actions = M::Action::ALL
             .iter()
             .map(|&action| {
@@ -65,7 +67,8 @@ impl Visit for Table {
 
 impl Ruleset {
     /// # Panics
-    /// When two modules share a name or two actions share an `ActionKey`.
+    /// When two modules share a name, two actions share an `ActionKey`, or
+    /// a module ordinal or action index exceeds `u16`.
     #[must_use]
     pub(crate) fn new(mut schema: SchemaBuilder, mechanics: &impl Mechanics) -> Self {
         let intent = schema.register::<Intent>("core.intent");
