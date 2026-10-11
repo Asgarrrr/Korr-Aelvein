@@ -22,6 +22,8 @@ impl Tick {
 }
 
 impl Component for Tick {
+    const VERSION: u16 = 0;
+
     fn write(&self, w: &mut Writer) {
         w.write_u64(self.0);
     }

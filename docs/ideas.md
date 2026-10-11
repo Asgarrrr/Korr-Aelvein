@@ -53,6 +53,11 @@ the spec is updated to include it.
 - Split `korr-grid` `tests/model/driver.rs` by subject. Do not merge it into
   a korr-ecs driver: korr-ecs cannot depend on korr-grid, and the grid
   driver calls the store only to mint handles and ids.
+- `Store` is a pass-through over `Entities`, and the `Arrival` token
+  duplicates what `attach` already checks: fold them when korr-ecs next
+  changes shape.
+- `join.rs` and `Store::values_mut` serve only korr-ecs-bench: move them
+  behind the bench or delete them when a mechanic needs neither.
 
 ## Visuals
 

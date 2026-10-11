@@ -17,8 +17,8 @@ pub(crate) struct ComponentInfo {
 }
 
 /// The read half of a component key. `fn() -> T` keeps the key `Send`,
-/// `Sync` and `Copy` whatever `T` is. `prefix` hashes the ordered names up to
-/// this one, so a store of another schema rejects the key.
+/// `Sync` and `Copy` whatever `T` is. `prefix` hashes the ordered names and
+/// versions up to this one, so a store of another schema rejects the key.
 pub struct Read<T> {
     pub(crate) id: ComponentId,
     pub(crate) prefix: u64,
@@ -65,6 +65,7 @@ pub struct AnyRead {
 /// # #[derive(Clone, Debug, PartialEq)]
 /// # struct Satiety(u8);
 /// # impl Component for Satiety {
+/// #     const VERSION: u16 = 0;
 /// #     fn write(&self, w: &mut Writer) { w.write_u8(self.0); }
 /// #     fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> { r.read_u8().map(Self) }
 /// # }
@@ -81,6 +82,7 @@ pub struct AnyRead {
 /// # #[derive(Clone)]
 /// # struct Satiety(u8);
 /// # impl Component for Satiety {
+/// #     const VERSION: u16 = 0;
 /// #     fn write(&self, w: &mut Writer) { w.write_u8(self.0); }
 /// #     fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> { r.read_u8().map(Self) }
 /// # }
@@ -92,6 +94,7 @@ pub struct AnyRead {
 /// # use korr_ecs::{Component, FloorId, ImageError, Reader, SchemaBuilder, Store, Writer};
 /// # struct Dread(u8);
 /// # impl Component for Dread {
+/// #     const VERSION: u16 = 0;
 /// #     fn write(&self, w: &mut Writer) { w.write_u8(self.0); }
 /// #     fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> { r.read_u8().map(Self) }
 /// # }
@@ -109,6 +112,7 @@ pub struct AnyRead {
 /// # use korr_ecs::{Component, FloorId, ImageError, Reader, SchemaBuilder, Store, Writer};
 /// # struct Dread(u8);
 /// # impl Component for Dread {
+/// #     const VERSION: u16 = 0;
 /// #     fn write(&self, w: &mut Writer) { w.write_u8(self.0); }
 /// #     fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> { r.read_u8().map(Self) }
 /// # }
@@ -170,7 +174,10 @@ impl SchemaBuilder {
         let id =
             ComponentId(u32::try_from(self.components.len()).expect("fewer than 2^32 components"));
         let len = u16::try_from(name.len()).expect("a component name fits in u16 bytes");
-        self.prefix = absorb(absorb(self.prefix, &len.to_le_bytes()), name.as_bytes());
+        self.prefix = absorb(
+            absorb(absorb(self.prefix, &len.to_le_bytes()), name.as_bytes()),
+            &T::VERSION.to_le_bytes(),
+        );
         self.components.push(ComponentInfo {
             name,
             prefix: self.prefix,
@@ -200,8 +207,8 @@ pub struct Schema {
 }
 
 impl Schema {
-    /// A hash of the ordered component names: equal for two schemas that
-    /// register the same names in the same order.
+    /// A hash of the ordered component names and their format versions: equal
+    /// for two schemas that register the same names and versions in the same order.
     #[must_use]
     pub fn fingerprint(&self) -> u64 {
         self.components

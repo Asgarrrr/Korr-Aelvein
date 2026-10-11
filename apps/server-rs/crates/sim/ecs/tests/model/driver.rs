@@ -18,6 +18,8 @@ pub(crate) struct Pos {
 }
 
 impl Component for Pos {
+    const VERSION: u16 = 0;
+
     fn write(&self, w: &mut Writer) {
         w.write_i32(self.x);
         w.write_i32(self.y);
@@ -35,6 +37,8 @@ impl Component for Pos {
 pub(crate) struct Hunger(pub(crate) u16);
 
 impl Component for Hunger {
+    const VERSION: u16 = 0;
+
     fn write(&self, w: &mut Writer) {
         w.write_u16(self.0);
     }

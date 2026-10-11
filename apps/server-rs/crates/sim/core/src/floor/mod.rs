@@ -2,6 +2,7 @@ mod image;
 mod inbox;
 mod membership;
 mod schedule;
+mod sections;
 mod turn;
 
 use alloc::vec::Vec;
@@ -17,6 +18,8 @@ use crate::floor::schedule::Schedule;
 use crate::ruleset::Ruleset;
 use crate::senses::Seen;
 use crate::time::Tick;
+
+pub use sections::{FlightImage, Sections};
 
 #[derive(Debug)]
 pub struct Floor {

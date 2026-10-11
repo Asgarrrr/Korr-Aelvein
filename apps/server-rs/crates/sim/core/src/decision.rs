@@ -41,6 +41,8 @@ const TARGET_NONE: u8 = 0;
 const TARGET_POS: u8 = 1;
 
 impl Component for Intent {
+    const VERSION: u16 = 0;
+
     fn write(&self, w: &mut Writer) {
         w.write_u64(self.action.to_bits());
         match self.target {

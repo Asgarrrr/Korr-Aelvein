@@ -2,8 +2,8 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use korr_core::{
     Action, Band, CommitCtx, Cost, Dir, Floor, Game, LoadError, Mechanics, Module, Pos, PrepCtx,
-    Prepared, Proposals, Ruleset, Seed, Senses, TICKS_PER_ROUND, Target, Tick, Visit, World,
-    WorldError,
+    Prepared, Proposals, Ruleset, Sections, Seed, Senses, TICKS_PER_ROUND, Target, Tick, Visit,
+    World, WorldError,
 };
 use korr_ecs::{EntityId, FloorId, Handle, ImageError, checksum};
 use korr_scenarios::{Act, Answer, Fake, Leave, Scripted, floor, game, run};
@@ -129,9 +129,9 @@ fn floor_order_never_changes_arrivals() {
     assert_eq!(hashes[0], hashes[1]);
 }
 
-#[test]
-fn save_with_travellers_waiting_replays() {
-    let game = game(
+/// `TO_C`, except C0 leaves C for A from round 2.
+fn homing() -> Game<Keyed<Leave>> {
+    game(
         Keyed {
             home: Home {
                 actor: EntityId::new(C, 0),
@@ -142,7 +142,12 @@ fn save_with_travellers_waiting_replays() {
             rest: TO_C,
         },
         SEED,
-    );
+    )
+}
+
+#[test]
+fn save_with_travellers_waiting_replays() {
+    let game = homing();
     let (mut direct, _) = build(game.ruleset(), false);
     run(&game, &mut direct, 3);
 
@@ -252,119 +257,141 @@ fn an_entity_alive_on_two_floors_is_refused() {
 
 #[test]
 fn a_flight_with_a_live_id_is_corrupt() {
-    let game = game(TO_C, SEED);
+    let game = homing();
     let (mut world, _) = build(game.ruleset(), false);
     run(&game, &mut world, 1);
-    let mut bytes = world.floor(C).save(game.ruleset());
-
-    // Waiting flight A1 (id 1) is rewritten to id 0, the A actor that landed on C.
-    // A flight is the round (0), the cell, then the traveller id.
-    let store_end = 20 + u32::from_le_bytes(bytes[16..20].try_into().expect("4 bytes")) as usize;
-    let mut forged_at = None;
-    for at in store_end + 12..bytes.len() - 8 {
-        if bytes[at - 12..at - 4] == [0; 8] && bytes[at..at + 8] == 1u64.to_le_bytes() {
-            forged_at = Some(at);
-        }
-    }
-    let at = forged_at.expect("flight A1 is waiting in the inbox");
-    bytes[at..at + 8].copy_from_slice(&0u64.to_le_bytes());
-    let body = bytes.len() - 8;
-    let sum = checksum(&bytes[..body]);
-    bytes[body..].copy_from_slice(&sum.to_le_bytes());
-
+    // The first waiting flight is A1, the lowest id sent in round 0.
+    let a1 = parse(&world.floor(C).save(game.ruleset())).flights[0].clone();
+    run(&game, &mut world, 2);
+    // C0 left C in round 2, so A1 landed there.
+    let mut later = parse(&world.floor(C).save(game.ruleset()));
+    assert_eq!(later.flights.len(), 4);
+    later.flights.insert(0, a1);
     assert_eq!(
-        Floor::load(game.ruleset(), &bytes).err(),
+        Floor::load(game.ruleset(), &later.seal()).err(),
         Some(LoadError::Image(ImageError::Corrupt("inbox duplicate id")))
     );
 }
 
-/// The byte range of each flight in the inbox of a saved floor: a round, a
-/// cell, then a traveller, all of one length.
-fn flight_ranges(bytes: &[u8], count: usize) -> Vec<std::ops::Range<usize>> {
-    let body = bytes.len() - 8;
-    let count_le = u32::try_from(count).expect("fits u32").to_le_bytes();
-    let size = (24..body)
-        .find(|size| {
-            let at = body - count * size - 4;
-            bytes[at..at + 4] == count_le
-                && u32::from_le_bytes(bytes[at + 24..at + 28].try_into().expect("4 bytes"))
-                    == u32::try_from(size - 24).expect("fits u32")
-        })
-        .expect("the inbox ends the image");
-    let first = body - count * size;
-    (0..count)
-        .map(|i| first + i * size..first + (i + 1) * size)
-        .collect()
-}
-
-fn reseal(bytes: &mut [u8]) {
-    let body = bytes.len() - 8;
-    let sum = checksum(&bytes[..body]);
-    bytes[body..].copy_from_slice(&sum.to_le_bytes());
+fn parse(bytes: &[u8]) -> Sections {
+    Sections::parse(bytes).expect("own save parses")
 }
 
 /// C after one round: 5 flights wait, all sent in round 0, ids ascending.
-fn saved_inbox() -> (Game<Leave>, Vec<u8>, Vec<std::ops::Range<usize>>) {
+fn saved_inbox() -> (Game<Leave>, Vec<u8>) {
     let game = game(TO_C, SEED);
     let (mut world, _) = build(game.ruleset(), false);
     run(&game, &mut world, 1);
     let bytes = world.floor(C).save(game.ruleset());
-    let flights = flight_ranges(&bytes, 5);
-    (game, bytes, flights)
+    (game, bytes)
+}
+
+fn load_forged(edit: impl FnOnce(&mut Sections)) -> Option<LoadError> {
+    let (game, bytes) = saved_inbox();
+    let mut sections = parse(&bytes);
+    assert_eq!(sections.flights.len(), 5);
+    edit(&mut sections);
+    Floor::load(game.ruleset(), &sections.seal()).err()
+}
+
+#[test]
+fn sections_round_trip() {
+    let (_, bytes) = saved_inbox();
+    assert_eq!(parse(&bytes).seal(), bytes);
+}
+
+/// The image of C after one round, its checksum cut off.
+fn saved_body() -> Vec<u8> {
+    let (_, mut bytes) = saved_inbox();
+    bytes.truncate(bytes.len() - size_of::<u64>());
+    bytes
+}
+
+fn with_checksum(mut body: Vec<u8>) -> Vec<u8> {
+    let sum = checksum(&body);
+    body.extend_from_slice(&sum.to_le_bytes());
+    body
+}
+
+#[test]
+fn a_changed_byte_fails_the_checksum() {
+    let mut body = saved_body();
+    let sum = checksum(&body);
+    body[0] ^= 1;
+    body.extend_from_slice(&sum.to_le_bytes());
+    assert_eq!(Sections::parse(&body), Err(ImageError::Checksum));
+}
+
+#[test]
+fn a_cut_framing_is_truncated() {
+    let mut body = saved_body();
+    body.pop();
+    assert!(matches!(
+        Sections::parse(&with_checksum(body)),
+        Err(ImageError::Truncated { .. })
+    ));
+}
+
+#[test]
+fn bytes_after_the_last_flight_are_trailing() {
+    let mut body = saved_body();
+    body.push(0);
+    assert_eq!(
+        Sections::parse(&with_checksum(body)),
+        Err(ImageError::Trailing(1))
+    );
+}
+
+#[test]
+fn bytes_after_the_grid_are_trailing() {
+    assert_eq!(
+        load_forged(|s| s.grid.push(0)),
+        Some(LoadError::Image(ImageError::Trailing(1)))
+    );
+}
+
+#[test]
+fn bytes_after_a_traveller_are_trailing() {
+    assert_eq!(
+        load_forged(|s| s.flights[0].traveller.push(0)),
+        Some(LoadError::Image(ImageError::Trailing(1)))
+    );
 }
 
 #[test]
 fn flights_out_of_order_are_corrupt() {
-    let (game, mut bytes, flights) = saved_inbox();
-    let (first, second) = (flights[0].clone(), flights[1].clone());
-    let swapped = [
-        bytes[second.clone()].to_vec(),
-        bytes[first.clone()].to_vec(),
-    ]
-    .concat();
-    bytes[first.start..second.end].copy_from_slice(&swapped);
-    reseal(&mut bytes);
     assert_eq!(
-        Floor::load(game.ruleset(), &bytes).err(),
+        load_forged(|s| s.flights.swap(0, 1)),
         Some(LoadError::Image(ImageError::Corrupt("inbox order")))
     );
 }
 
 #[test]
 fn a_flight_repeated_is_corrupt() {
-    let (game, mut bytes, flights) = saved_inbox();
-    let first = bytes[flights[0].clone()].to_vec();
-    bytes[flights[1].clone()].copy_from_slice(&first);
-    reseal(&mut bytes);
     assert_eq!(
-        Floor::load(game.ruleset(), &bytes).err(),
+        load_forged(|s| s.flights[1] = s.flights[0].clone()),
         Some(LoadError::Image(ImageError::Corrupt("inbox order")))
     );
 }
 
 #[test]
 fn a_flight_sent_in_the_current_round_is_corrupt() {
-    let (game, mut bytes, flights) = saved_inbox();
-    let last = flights[4].start;
-    bytes[last..last + 8].copy_from_slice(&1u64.to_le_bytes());
-    reseal(&mut bytes);
     assert_eq!(
-        Floor::load(game.ruleset(), &bytes).err(),
+        load_forged(|s| s.flights[4].round = 1),
         Some(LoadError::Image(ImageError::Corrupt("inbox round")))
     );
 }
 
 #[test]
 fn an_id_waiting_twice_is_corrupt() {
-    let (game, mut bytes, flights) = saved_inbox();
-    bytes[..8].copy_from_slice(&2u64.to_le_bytes());
-    let id = bytes[flights[0].start + 12..flights[0].start + 20].to_vec();
-    let last = flights[4].start;
-    bytes[last..last + 8].copy_from_slice(&1u64.to_le_bytes());
-    bytes[last + 12..last + 20].copy_from_slice(&id);
-    reseal(&mut bytes);
+    let forged = load_forged(|s| {
+        s.round = 2;
+        let mut twin = s.flights[0].clone();
+        twin.round = 1;
+        s.flights.push(twin);
+    });
     assert_eq!(
-        Floor::load(game.ruleset(), &bytes).err(),
+        forged,
         Some(LoadError::Image(ImageError::Corrupt("inbox duplicate id")))
     );
 }

@@ -7,6 +7,8 @@ use korr_random::{DrawIndex, ModuleKey, Phase, Seed, Stream, Subject};
 struct Hunger(u16);
 
 impl Component for Hunger {
+    const VERSION: u16 = 0;
+
     fn write(&self, w: &mut Writer) {
         w.write_u16(self.0);
     }

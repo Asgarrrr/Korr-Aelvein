@@ -1,11 +1,11 @@
-use korr_core::{Floor, LoadError, Pos, Ruleset, Seed, TICKS_PER_ROUND, World};
-use korr_ecs::{FloorId, Handle, ImageError, checksum};
+use korr_core::{Floor, Game, LoadError, Pos, Ruleset, Sections, Seed, TICKS_PER_ROUND, World};
+use korr_ecs::{Component, FloorId, Handle, ImageError, Reader, SchemaBuilder, Writer, checksum};
 use korr_engine::Registry;
 use korr_scenarios::{Pace, floor, game, run};
 
 const SEED: Seed = Seed(7);
 /// Re-pin on every intended change to the image format or to behaviour.
-const PINNED: u64 = 0xf012_dec2_b248_786f;
+const PINNED: u64 = 0x7c1e_0864_12fe_9f93;
 
 /// 40 actors, two per row. The fast even id starts at x = 3: blocked by the
 /// wall from tick 570, its clock stays off the round boundary. The slow odd
@@ -49,7 +49,7 @@ fn save_load_replay_matches_the_pinned_run() {
 
 /// Pace draws nothing: this world pins draw addressing. Re-pin on every
 /// intended change to a draw or to wander.
-const PINNED_WANDER: u64 = 0xba93_4d18_0914_911e;
+const PINNED_WANDER: u64 = 0x2099_4ae8_512c_07a8;
 
 #[test]
 fn wander_world_hash_pins_the_draws() {
@@ -89,25 +89,56 @@ fn a_changed_ruleset_refuses_the_save() {
     ));
 }
 
+struct MarkV0;
+
+impl Component for MarkV0 {
+    const VERSION: u16 = 0;
+
+    fn write(&self, _: &mut Writer) {}
+
+    fn read(_: &mut Reader<'_>) -> Result<Self, ImageError> {
+        Ok(Self)
+    }
+}
+
+struct MarkV1;
+
+impl Component for MarkV1 {
+    const VERSION: u16 = 1;
+
+    fn write(&self, _: &mut Writer) {}
+
+    fn read(_: &mut Reader<'_>) -> Result<Self, ImageError> {
+        Ok(Self)
+    }
+}
+
+#[test]
+fn a_changed_component_encoding_refuses_the_save() {
+    let mut schema0 = SchemaBuilder::default();
+    schema0.register::<MarkV0>("test.mark");
+    let game0 = Game::new(schema0, Pace, SEED);
+    let mut schema1 = SchemaBuilder::default();
+    schema1.register::<MarkV1>("test.mark");
+    let game1 = Game::new(schema1, Pace, SEED);
+    let bytes = populated(game0.ruleset()).0.save(game0.ruleset());
+    assert!(matches!(
+        Floor::load(game1.ruleset(), &bytes),
+        Err(LoadError::Ruleset { .. })
+    ));
+}
+
 #[test]
 fn forged_round_is_corrupt_not_a_panic() {
     let game = game(Pace, SEED);
     let ruleset = game.ruleset();
-    let mut bytes = populated(ruleset).0.save(ruleset);
-    bytes[..8].copy_from_slice(&u64::MAX.to_le_bytes());
-    let body = bytes.len() - 8;
-    let sum = checksum(&bytes[..body]);
-    bytes[body..].copy_from_slice(&sum.to_le_bytes());
+    let mut sections =
+        Sections::parse(&populated(ruleset).0.save(ruleset)).expect("own save parses");
+    sections.round = u64::MAX;
     assert_eq!(
-        Floor::load(ruleset, &bytes).err(),
+        Floor::load(ruleset, &sections.seal()).err(),
         Some(LoadError::Image(ImageError::Corrupt("round")))
     );
-}
-
-fn reseal(bytes: &mut [u8]) {
-    let body = bytes.len() - 8;
-    let sum = checksum(&bytes[..body]);
-    bytes[body..].copy_from_slice(&sum.to_le_bytes());
 }
 
 fn position_of(haystack: &[u8], needle: &[u8]) -> usize {
@@ -119,17 +150,12 @@ fn position_of(haystack: &[u8], needle: &[u8]) -> usize {
 
 /// Rewrites the store image inside a saved floor and seals both checksums.
 fn forge_store(bytes: &[u8], edit: impl FnOnce(&mut Vec<u8>)) -> Vec<u8> {
-    let store_len = u32::from_le_bytes(bytes[16..20].try_into().expect("4 bytes")) as usize;
-    let mut store = bytes[20..20 + store_len].to_vec();
-    edit(&mut store);
-    reseal(&mut store);
-
-    let mut forged = bytes[..16].to_vec();
-    forged.extend_from_slice(&u32::try_from(store.len()).expect("fits u32").to_le_bytes());
-    forged.extend_from_slice(&store);
-    forged.extend_from_slice(&bytes[20 + store_len..]);
-    reseal(&mut forged);
-    forged
+    let mut sections = Sections::parse(bytes).expect("own save parses");
+    edit(&mut sections.store);
+    let body = sections.store.len() - 8;
+    let sum = checksum(&sections.store[..body]);
+    sections.store[body..].copy_from_slice(&sum.to_le_bytes());
+    sections.seal()
 }
 
 /// The offset of the clock column's row count in a store image.

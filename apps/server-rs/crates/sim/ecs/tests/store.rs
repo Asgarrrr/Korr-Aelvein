@@ -6,6 +6,8 @@ use korr_ecs::{
 struct Satiety(u32);
 
 impl Component for Satiety {
+    const VERSION: u16 = 0;
+
     fn write(&self, w: &mut Writer) {
         w.write_u32(self.0);
     }
@@ -19,6 +21,8 @@ impl Component for Satiety {
 struct Dread(u8);
 
 impl Component for Dread {
+    const VERSION: u16 = 0;
+
     fn write(&self, w: &mut Writer) {
         w.write_u8(self.0);
     }

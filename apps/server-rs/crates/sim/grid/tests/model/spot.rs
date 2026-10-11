@@ -9,6 +9,8 @@ pub(crate) struct Spot {
 }
 
 impl Component for Spot {
+    const VERSION: u16 = 0;
+
     fn write(&self, w: &mut Writer) {
         w.write_i16(self.pos.x);
         w.write_i16(self.pos.y);

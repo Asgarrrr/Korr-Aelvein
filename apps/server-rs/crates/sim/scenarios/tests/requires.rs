@@ -8,6 +8,8 @@ use korr_scenarios::{floor, run};
 struct Mark;
 
 impl Component for Mark {
+    const VERSION: u16 = 0;
+
     fn write(&self, _: &mut Writer) {}
 
     fn read(_: &mut Reader<'_>) -> Result<Self, ImageError> {

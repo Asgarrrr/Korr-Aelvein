@@ -113,7 +113,8 @@ a second name anywhere.
   then schedule; unlink before detach.
 - **Image**: one floor's saved bytes: header, sections, inbox entries,
   checksum. The Rust floor image also keeps the slot table, free stack and
-  dense order.
+  dense order. In Rust (korr-core), the store, grid and inbox go through
+  `Sections`: `parse` checks the checksum and framing, `seal` writes them.
 - **Save**: the world header plus every floor image. In Rust (korr-core),
   `Game::save` and `Game::load`: the seed, the floor count, then each image
   framed by its length, in ascending FloorId. A load refuses another seed,
@@ -121,7 +122,8 @@ a second name anywhere.
   floor, beyond its origin floor's counter, or on two floors.
 - **Fingerprint**: a hash of the core schema, each module's name, schema,
   cells and config in registry order, and the species. A save only loads
-  into a world with the same fingerprint.
+  into a world with the same fingerprint. The Rust form hashes the component
+  names and format versions, then the action keys.
 - **Ruleset**: what every floor of a Rust world shares: the schema, the
   core's component keys, the module table (each module's key and action
   keys, in visit order) and a fingerprint of the schema and the action
