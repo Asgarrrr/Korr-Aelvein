@@ -3,12 +3,12 @@ use core::num::NonZeroU32;
 use korr_core::{
     host::{Game, Mechanics, Seed, Visit, World},
     mechanic::{
-        Action, Band, CommitCtx, Cost, Dir, DrawIndex, Module, Pos, PrepCtx, Prepared, Proposals,
-        Senses, Target,
+        Action, Band, CommitCtx, Dir, DrawIndex, Module, Pos, PrepCtx, Prepared, Proposals, Senses,
+        Target,
     },
 };
 use korr_ecs::{FloorId, Handle};
-use korr_scenarios::{Shy, floor, game, run};
+use korr_scenarios::{Shy, floor, game, random_step, run};
 
 /// Outranks `Shy`, draws, then fails, so `Shy` still runs every turn.
 #[derive(Debug)]
@@ -80,7 +80,8 @@ fn a_module_added_before_another_leaves_its_draws_unchanged() {
     assert_eq!(paths(&game(DudThenShy, Seed(3))), alone);
 }
 
-/// Steps in a drawn direction, either at once or after one `Instead` hop.
+/// `hop` reaches the same drawing action through one `Instead`, so the two
+/// runs differ only in how the action was reached.
 #[derive(Debug)]
 struct Roll {
     hop: bool,
@@ -124,15 +125,7 @@ impl Module for Roll {
                 target: Target::None,
             };
         }
-        let eight = NonZeroU32::new(8).expect("nonzero");
-        let dir = Dir::ALL[ctx.below(DrawIndex(0), eight) as usize];
-        match ctx.check_step(dir) {
-            Ok(_) => Prepared::Go {
-                cost: Cost::new(100),
-                plan: dir,
-            },
-            Err(_) => Prepared::Blocked,
-        }
+        random_step(ctx)
     }
 
     fn commit(&self, dir: Dir, ctx: &mut CommitCtx<'_>) {

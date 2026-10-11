@@ -40,17 +40,23 @@ impl Module for Shy {
     }
 
     fn prepare(&self, _: Startle, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Startle, Dir> {
-        let dir = Dir::ALL[ctx.below(DrawIndex(0), DIRECTIONS) as usize];
-        match ctx.check_step(dir) {
-            Ok(_) => Prepared::Go {
-                cost: Cost::new(100),
-                plan: dir,
-            },
-            Err(_) => Prepared::Blocked,
-        }
+        random_step(ctx)
     }
 
     fn commit(&self, dir: Dir, ctx: &mut CommitCtx<'_>) {
         ctx.step(dir);
+    }
+}
+
+/// One draw at index 0 picks the direction; a step that cannot run is `Blocked`.
+#[must_use]
+pub fn random_step<A>(ctx: &PrepCtx<'_>) -> Prepared<A, Dir> {
+    let dir = Dir::ALL[ctx.below(DrawIndex(0), DIRECTIONS) as usize];
+    match ctx.check_step(dir) {
+        Ok(_) => Prepared::Go {
+            cost: Cost::new(100),
+            plan: dir,
+        },
+        Err(_) => Prepared::Blocked,
     }
 }

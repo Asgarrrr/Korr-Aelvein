@@ -19,7 +19,7 @@ use korr_grid::Shape;
 
 pub use leave::Leave;
 pub use scripted::{Act, Answer, Fake, Scripted};
-pub use shy::Shy;
+pub use shy::{Shy, random_step};
 
 /// # Panics
 /// When a side is outside the bounds of `Shape::new`.
