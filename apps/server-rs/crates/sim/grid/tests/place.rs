@@ -177,3 +177,27 @@ fn square_is_the_neighbourhood_in_row_order() {
         }
     }
 }
+
+#[test]
+fn extreme_centres_and_radii_cover_the_interior() {
+    let shape = Shape::new(5, 4).expect("5x4 fits the bounds");
+    let interior: Vec<Pos> = (1..3)
+        .flat_map(|y| (1..4).map(move |x| Pos { x, y }))
+        .collect();
+    for (x, y) in [
+        (i16::MIN, i16::MIN),
+        (i16::MAX, i16::MAX),
+        (i16::MIN, i16::MAX),
+    ] {
+        let centre = Pos { x, y };
+        let mut square = Vec::new();
+        shape.scan_square(centre, u16::MAX, |p, _| square.push(p));
+        assert_eq!(square, interior, "centre {centre:?}");
+        let mut ring: Vec<Pos> = shape
+            .neighbourhood(centre, u16::MAX)
+            .map(|at| shape.pos(at.cell()))
+            .collect();
+        ring.sort_unstable_by_key(|&p| (p.y, p.x));
+        assert_eq!(ring, interior, "centre {centre:?}");
+    }
+}
