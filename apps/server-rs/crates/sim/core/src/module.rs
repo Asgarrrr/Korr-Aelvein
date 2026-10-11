@@ -14,6 +14,14 @@ pub trait Action: Copy + Eq + core::fmt::Debug + 'static {
     fn name(self) -> &'static str;
 }
 
+impl Action for core::convert::Infallible {
+    const ALL: &'static [Self] = &[];
+
+    fn name(self) -> &'static str {
+        match self {}
+    }
+}
+
 /// One mechanic. `prepare` reads, draws and plans; `commit` applies the plan and cannot fail.
 pub trait Module {
     const NAME: &'static str;

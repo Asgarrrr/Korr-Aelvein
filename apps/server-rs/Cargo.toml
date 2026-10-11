@@ -5,6 +5,7 @@ members = [
   "crates/sim/ecs",
   "crates/sim/engine",
   "crates/sim/grid",
+  "crates/sim/milieu/*",
   "crates/sim/random",
   "crates/sim/scenarios",
   "crates/host/server",
@@ -22,6 +23,7 @@ publish = false
 korr-core = { path = "crates/sim/core" }
 korr-ecs = { path = "crates/sim/ecs" }
 korr-engine = { path = "crates/sim/engine" }
+korr-flora = { path = "crates/sim/milieu/flora" }
 korr-grid = { path = "crates/sim/grid" }
 korr-random = { path = "crates/sim/random" }
 korr-scenarios = { path = "crates/sim/scenarios" }

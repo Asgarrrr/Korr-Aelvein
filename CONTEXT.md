@@ -123,11 +123,12 @@ a second name anywhere.
 - **Fingerprint**: a hash of the core schema, each module's name, schema,
   cells and config in registry order, and the species. A save only loads
   into a world with the same fingerprint. The Rust form hashes the component
-  names and format versions, then the action keys.
+  names and format versions, then each module's name and action keys, in
+  visit order.
 - **Ruleset**: what every floor of a Rust world shares: the schema, the
   core's component keys, the module table (each module's key and action
-  keys, in visit order) and a fingerprint of the schema and the action
-  keys. A floor image loads only under a ruleset with the same fingerprint.
+  keys, in visit order) and a fingerprint of the schema and of each
+  module's name and action keys. A floor image loads only under a ruleset with the same fingerprint.
 - **Traffic**: a per-floor running hash of the departures that leave or
   head for the floor. A single floor restores only when its traffic matches.
 - **Fast / full check**: the two load tiers. Fast is for the server's own

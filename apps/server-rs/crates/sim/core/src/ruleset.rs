@@ -102,8 +102,15 @@ impl Ruleset {
         };
         mechanics.each(&mut table);
         let mut bytes = Vec::from(schema.fingerprint().to_le_bytes());
-        for action in table.modules.iter().flat_map(|m| &m.actions) {
-            bytes.extend_from_slice(&action.to_bits().to_le_bytes());
+        for module in &table.modules {
+            let name_len = u32::try_from(module.name.len()).expect("a module name fits u32 bytes");
+            bytes.extend_from_slice(&name_len.to_le_bytes());
+            bytes.extend_from_slice(module.name.as_bytes());
+            let actions = u32::try_from(module.actions.len()).expect("a module's actions fit u32");
+            bytes.extend_from_slice(&actions.to_le_bytes());
+            for action in &module.actions {
+                bytes.extend_from_slice(&action.to_bits().to_le_bytes());
+            }
         }
         let fingerprint = checksum(&bytes);
         table.keys.sort_unstable_by_key(|&(key, ..)| key);
@@ -130,8 +137,8 @@ impl Ruleset {
         }
     }
 
-    /// The schema's fingerprint and the action keys: a save loads only under
-    /// a ruleset with the same fingerprint.
+    /// The schema, then the name and action keys of each module in visit
+    /// order: a save loads only under a ruleset with the same fingerprint.
     #[must_use]
     pub fn fingerprint(&self) -> u64 {
         self.fingerprint
