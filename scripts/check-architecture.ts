@@ -201,15 +201,14 @@ const workspaceDeps = (
 ).workspace.dependencies;
 
 // Cargo links target-specific and renamed dependencies like plain ones.
-const linkedCrates = (manifest: Manifest) =>
+const linkedCrates = (manifest: Manifest, shared = workspaceDeps) =>
 	[
 		manifest.dependencies,
 		...Object.values(manifest.target ?? {}).map((t) => t.dependencies),
 	]
 		.flatMap((table) => Object.entries(table ?? {}))
 		.map(([key, dep]) => {
-			const spec =
-				typeof dep === "object" && dep.workspace ? workspaceDeps[key] : dep;
+			const spec = typeof dep === "object" && dep.workspace ? shared[key] : dep;
 			return (typeof spec === "object" && spec.package) || key;
 		});
 
@@ -229,9 +228,12 @@ const crateViolations = (dir: string, name: string, deps: string[]) => {
 	return found;
 };
 
-const HOST_TOOLS = join(RUST, "crates/host/tools") + sep;
+const HOST = join(RUST, "crates/host") + sep;
+const HOST_TOOLS = join(HOST, "tools") + sep;
+let hostCrates = 0;
 for (const crate of walk(join(RUST, "crates"), /^Cargo\.toml$/).map(dirname)) {
 	if (crate.startsWith(HOST_TOOLS)) continue;
+	if (crate.startsWith(HOST)) hostCrates++;
 	const manifest = Bun.TOML.parse(
 		readFileSync(join(crate, "Cargo.toml"), "utf8"),
 	) as Manifest;
@@ -285,10 +287,13 @@ if (
 )
 	report(SIM, "the float_arithmetic rule misreads a lib.rs header");
 
+if (hostCrates === 0) report(HOST, "the crate rule checked no host crate");
+
 const renamed = linkedCrates(
 	Bun.TOML.parse(
-		'[dependencies]\nrng = { package = "korr-random", path = "x" }\n[target."cfg(unix)".dependencies]\nkorr-wander.workspace = true\n',
+		'[dependencies]\nengine = { package = "korr-engine", path = "x" }\n[target."cfg(unix)".dependencies]\nrng.workspace = true\n',
 	) as Manifest,
+	{ rng: { package: "korr-random" } },
 );
 const mechanicProbe = join(SIM, "biology/ethology/probe");
 const crateProbes: [string, string, string[], number][] = [
