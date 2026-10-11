@@ -191,7 +191,11 @@ type Dependencies = Record<string, Dependency>;
 type Manifest = {
 	package?: { name?: string };
 	dependencies?: Dependencies;
-	target?: Record<string, { dependencies?: Dependencies }>;
+	"dev-dependencies"?: Dependencies;
+	target?: Record<
+		string,
+		{ dependencies?: Dependencies; "dev-dependencies"?: Dependencies }
+	>;
 };
 
 const workspaceDeps = (
@@ -201,18 +205,22 @@ const workspaceDeps = (
 ).workspace.dependencies;
 
 // Cargo links target-specific and renamed dependencies like plain ones.
-const linkedDeps = (manifest: Manifest, shared = workspaceDeps) =>
-	[
-		manifest.dependencies,
-		...Object.values(manifest.target ?? {}).map((t) => t.dependencies),
-	]
+// Foundation tests may link korr-random; a mechanic's tests stay behind its seam.
+const linkedDeps = (manifest: Manifest, shared = workspaceDeps, dev = false) =>
+	[manifest, ...Object.values(manifest.target ?? {})]
+		.flatMap((t) =>
+			dev ? [t.dependencies, t["dev-dependencies"]] : [t.dependencies],
+		)
 		.flatMap((table) => Object.entries(table ?? {}))
 		.map(([key, dep]) => {
 			const spec = typeof dep === "object" && dep.workspace ? shared[key] : dep;
 			return { key, crate: (typeof spec === "object" && spec.package) || key };
 		});
-const linkedCrates = (manifest: Manifest, shared = workspaceDeps) =>
-	linkedDeps(manifest, shared).map((dep) => dep.crate);
+const linkedCrates = (
+	manifest: Manifest,
+	shared = workspaceDeps,
+	dev = false,
+) => linkedDeps(manifest, shared, dev).map((dep) => dep.crate);
 // The mechanic path rule reads a crate by its own name, which a rename would hide.
 const mechanicRenames = (manifest: Manifest, shared = workspaceDeps) =>
 	linkedDeps(manifest, shared)
@@ -244,13 +252,14 @@ for (const crate of walk(join(RUST, "crates"), /^Cargo\.toml$/).map(dirname)) {
 	const manifest = Bun.TOML.parse(
 		readFileSync(join(crate, "Cargo.toml"), "utf8"),
 	) as Manifest;
+	const mechanic = MECHANICS.some((root) => crate.startsWith(root));
 	for (const found of crateViolations(
 		crate,
 		manifest.package?.name ?? "",
-		linkedCrates(manifest),
+		linkedCrates(manifest, workspaceDeps, mechanic),
 	))
 		report(join(crate, "Cargo.toml"), found);
-	if (MECHANICS.some((root) => crate.startsWith(root)))
+	if (mechanic)
 		for (const found of mechanicRenames(manifest))
 			report(join(crate, "Cargo.toml"), found);
 }
@@ -327,11 +336,14 @@ const renamed = linkedCrates(
 	) as Manifest,
 	{ rng: { package: "korr-random" } },
 );
+const testOnly = Bun.TOML.parse(
+	'[dev-dependencies]\nkorr-engine.workspace = true\n[target."cfg(unix)".dev-dependencies]\nkorr-random.workspace = true\n',
+) as Manifest;
 const mechanicProbe = join(SIM, "biology/ethology/probe");
 if (
 	mechanicRenames(
 		Bun.TOML.parse(
-			'[dependencies]\nkc = { package = "korr-core", path = "x" }\nkorr-genome.workspace = true\nshared.workspace = true\n',
+			'[dependencies]\nkc = { package = "korr-core", path = "x" }\nkorr-genome.workspace = true\nshared.workspace = true\nrng = { package = "rand", version = "1" }\n',
 		) as Manifest,
 		{ "korr-genome": {}, shared: { package: "korr-core" } },
 	).length !== 2
@@ -339,6 +351,8 @@ if (
 	report(mechanicProbe, "the mechanic rename rule did not fire exactly twice");
 const crateProbes: [string, string, string[], number][] = [
 	[mechanicProbe, "korr-probe", renamed, 2],
+	[mechanicProbe, "korr-probe", linkedCrates(testOnly, {}, true), 2],
+	[join(SIM, "grid"), "korr-grid", linkedCrates(testOnly, {}), 0],
 	[
 		mechanicProbe,
 		"korr-probe",
