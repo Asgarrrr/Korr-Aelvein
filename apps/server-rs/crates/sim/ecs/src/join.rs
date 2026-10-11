@@ -27,10 +27,9 @@ impl Store {
         let [a, b] = self.columns.get_disjoint_mut(indices).expect(FOREIGN_KEY);
         let a = typed_mut::<A>(&mut **a);
         let b = typed_mut::<B>(&mut **b);
-        for index in 0..a.owners().len() {
-            let slot = a.owners()[index];
+        for (slot, a) in a.rows_mut() {
             if let Some(b) = b.get_mut(slot) {
-                f(self.entities.handle_at(slot), &mut a.values_mut()[index], b);
+                f(self.entities.handle_at(slot), a, b);
             }
         }
     }

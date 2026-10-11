@@ -157,7 +157,8 @@ impl Entities {
     #[inline]
     pub(crate) fn handle_at(&self, slot: SlotIdx) -> Handle {
         let meta = &self.metas[slot.index()];
-        assert!(meta.id.is_some(), "column owner is dead");
+        // Despawn and detach clear every column, and a load checks each owner.
+        debug_assert!(meta.id.is_some(), "column owner is dead");
         Handle {
             slot,
             generation: meta.generation,

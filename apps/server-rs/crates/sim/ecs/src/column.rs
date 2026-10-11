@@ -123,6 +123,11 @@ impl<T> Column<T> {
     pub(crate) fn owners(&self) -> &[SlotIdx] {
         &self.owners
     }
+
+    #[inline]
+    pub(crate) fn rows_mut(&mut self) -> impl Iterator<Item = (SlotIdx, &mut T)> {
+        self.owners.iter().copied().zip(&mut self.dense)
+    }
 }
 
 impl<T: Component> Column<T> {
