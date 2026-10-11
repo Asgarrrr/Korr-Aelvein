@@ -8,16 +8,17 @@
 //! for a trivial per-cell tick. Efficiency is thrpt(N) / (N x thrpt(1)), which
 //! equals T1 / (N x TN) since thrpt is floors per second. The skewed group puts six
 //! 256x256 floors first among 58 towers and compares rayon's default split with one
-//! job per floor. The barrier group times a round minus phase 1: barrier/wander/N
-//! divided by floors/wander/N is the serial barrier's share. No registered
-//! mechanic departs, so this share carries no flights.
+//! job per floor. The barrier group times a round minus phase 1 while every actor of
+//! 64 tower floors moves to the next floor each round: 32k flights per barrier, the
+//! serial barrier at its busiest. Divided by floors/wander/N, it bounds the
+//! barrier's share.
 
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use korr_core::host::{Floor, Game, Job, Mechanics, Pos, Ruleset, Runner, Seed, World};
 use korr_ecs::FloorId;
 use korr_engine::Registry;
 use korr_flora::Flora;
-use korr_scenarios::{Shy, actionless, floor, game};
+use korr_scenarios::{Ring, Shy, actionless, floor, game};
 use korr_server::Threads;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::{ThreadPool, ThreadPoolBuilder};
@@ -42,6 +43,7 @@ const TOWER: Layout = Layout {
     actors: 500,
     things: 125,
 };
+const CENTRE: Pos = Pos { x: 64, y: 64 };
 const FLOORS: u16 = 64;
 const SIDES: [u16; 3] = [64, 128, 256];
 const SIZE_FILL: u32 = 50;
@@ -306,10 +308,16 @@ fn barrier(c: &mut Criterion) {
     let cores = std::thread::available_parallelism().expect("the host reports its parallelism");
     let layouts = vec![TOWER; usize::from(FLOORS)];
     let threads = Threads::new(cores).expect("the pool builds");
-    let (mut world, game) = build(Registry::default(), &layouts);
+    let (mut world, game) = build(
+        Ring {
+            floors: FLOORS,
+            at: CENTRE,
+        },
+        &layouts,
+    );
     let mut group = c.benchmark_group("barrier");
     group.throughput(Throughput::Elements(u64::from(FLOORS)));
-    group.bench_function(BenchmarkId::new("wander", cores.get()), |b| {
+    group.bench_function(BenchmarkId::new("ring", cores.get()), |b| {
         b.iter_custom(|iters| {
             let timed = Timed {
                 runner: &threads,
