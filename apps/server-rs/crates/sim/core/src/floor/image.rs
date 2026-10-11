@@ -2,7 +2,7 @@ use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
 
 use korr_ecs::{EntityId, Handle, ImageError, Reader, Store, Traveller, Writer};
-use korr_grid::Grid;
+use korr_grid::{CellColumn, Grid};
 
 use crate::config::TICKS_PER_ROUND;
 use crate::decision::Candidates;
@@ -18,12 +18,18 @@ impl Floor {
     /// barrier: no `&Floor` exists mid-round.
     ///
     /// # Panics
-    /// When the store image, the grid image, a traveller or the inbox exceeds
-    /// `u32::MAX` bytes or flights.
+    /// When `ruleset` is not the one that built this floor, or the store image,
+    /// the grid image, the columns, a traveller or the inbox exceeds `u32::MAX`
+    /// bytes or flights.
     #[must_use]
     pub fn save(&self, ruleset: &Ruleset) -> Vec<u8> {
+        self.check_ruleset(ruleset);
         let mut grid = Writer::new();
         self.grid.write(&mut grid);
+        let mut columns = Writer::new();
+        for column in &self.columns {
+            column.write(&mut columns);
+        }
         let flights = self
             .inbox
             .flights()
@@ -43,6 +49,7 @@ impl Floor {
             fingerprint: ruleset.fingerprint(),
             store: self.store.save(),
             grid: grid.into_bytes(),
+            columns: columns.into_bytes(),
             flights,
         }
         .seal()
@@ -53,8 +60,8 @@ impl Floor {
     /// # Errors
     /// [`LoadError::Ruleset`] when the image was saved under another ruleset.
     /// [`LoadError::Image`] for the errors of [`Sections::parse`], `Store::load`,
-    /// `Grid::read`, `Traveller::read` and `Store::check_arrival`, trailing
-    /// bytes in the grid or a traveller, or [`ImageError::Corrupt`] with:
+    /// `Grid::read`, `CellColumn::read`, `Traveller::read` and `Store::check_arrival`,
+    /// trailing bytes in the grid, the columns or a traveller, or [`ImageError::Corrupt`] with:
     /// - `"round"`: a round whose ticks overflow;
     /// - `"clock of an unplaced actor"`: a clock row of an entity no cell holds as its actor;
     /// - `"clock out of range"`: a clock before the round or past one maximal cost after it;
@@ -78,6 +85,13 @@ impl Floor {
             .collect();
         let mut r = Reader::new(&sections.grid);
         let grid = Grid::read(&mut r, &store, |id| handles.get(&id).copied())?;
+        r.finish()?;
+        let mut r = Reader::new(&sections.columns);
+        let columns = ruleset
+            .columns
+            .iter()
+            .map(|_| CellColumn::read(&mut r, grid.shape()))
+            .collect::<Result<Vec<_>, _>>()?;
         r.finish()?;
         let mut inbox = Inbox::default();
         let mut waiting = BTreeSet::new();
@@ -133,7 +147,10 @@ impl Floor {
         }
         Ok(Self {
             store,
+            scratch: super::scratch(ruleset, grid.shape()),
             grid,
+            columns,
+            fingerprint: ruleset.fingerprint(),
             schedule,
             round,
             departures: Vec::new(),

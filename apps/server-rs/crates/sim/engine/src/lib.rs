@@ -3,18 +3,21 @@
 #![deny(clippy::float_arithmetic)]
 
 use korr_core::host::{Mechanics, Visit};
+use korr_flora::Flora;
 use korr_wander::Wander;
 
 /// One field per mechanic, in run order. `None` disables it.
 #[derive(Debug)]
 pub struct Registry {
     pub wander: Option<Wander>,
+    pub flora: Option<Flora>,
 }
 
 impl Default for Registry {
     fn default() -> Self {
         Self {
             wander: Some(Wander),
+            flora: Some(Flora),
         }
     }
 }
@@ -23,6 +26,9 @@ impl Mechanics for Registry {
     fn each<V: Visit>(&self, v: &mut V) {
         if let Some(wander) = &self.wander {
             v.module(wander);
+        }
+        if let Some(flora) = &self.flora {
+            v.module(flora);
         }
     }
 }

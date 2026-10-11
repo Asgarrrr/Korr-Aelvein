@@ -56,8 +56,11 @@ a second name anywhere.
 - **Actor**: an entity the scheduler runs. A **player** is an actor whose
   decision comes from a recorded input.
 - **Thing**: an entity linked to a cell that is not an actor: an item, a
-  plant, a corpse, stairs. Many share a cell, in ascending EntityId order; a
-  thing never blocks a step.
+  corpse, stairs. Many share a cell, in ascending EntityId order; a thing
+  never blocks a step.
+- **Plant**: flora's value in one cell, not an entity. 0 is bare ground; a
+  plant grows one step per round until ripe. From the next round, a ripe
+  plant seeds bare walkable neighbouring ground, by chance.
 - **Placement record**: the grid's record of one placed entity: its
   EntityId, Layer and cell. In Rust (korr-grid), the source of position:
   saved in the floor image, and the cell indexes are rebuilt from the records.
@@ -123,11 +126,13 @@ a second name anywhere.
 - **Fingerprint**: a hash of the core schema, each module's name, schema,
   cells and config in registry order, and the species. A save only loads
   into a world with the same fingerprint. The Rust form hashes the component
-  names and format versions, then the action keys.
+  names and format versions, then each module's name, action keys and
+  whether it owns a cell column, in visit order.
 - **Ruleset**: what every floor of a Rust world shares: the schema, the
   core's component keys, the module table (each module's key and action
-  keys, in visit order) and a fingerprint of the schema and the action
-  keys. A floor image loads only under a ruleset with the same fingerprint.
+  keys, in visit order), the modules that own a cell column, and the
+  fingerprint. A floor image loads only under a ruleset with the same
+  fingerprint.
 - **Traffic**: a per-floor running hash of the departures that leave or
   head for the floor. A single floor restores only when its traffic matches.
 - **Fast / full check**: the two load tiers. Fast is for the server's own

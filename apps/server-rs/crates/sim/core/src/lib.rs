@@ -19,12 +19,12 @@ mod world;
 
 /// What a mechanic may name: the module seam and the values it trades in.
 pub mod mechanic {
-    pub use crate::ctx::{CommitCtx, PrepCtx};
+    pub use crate::ctx::{CommitCtx, Draws, PrepCtx};
     pub use crate::decision::Band;
     pub use crate::module::{Action, Module, Prepared, Proposals, Target};
     pub use crate::senses::{Seen, Senses};
     pub use crate::time::{Cost, Tick};
-    pub use korr_grid::{Dir, Pos, StepError};
+    pub use korr_grid::{Dir, Pos, Stencil, StepError};
     pub use korr_random::DrawIndex;
 }
 

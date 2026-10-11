@@ -70,7 +70,13 @@ fn walled_in_wanderer_still_ends_the_round() {
 
 #[test]
 fn wander_disabled_creatures_idle() {
-    let game = game(Registry { wander: None }, Seed(1));
+    let game = game(
+        Registry {
+            wander: None,
+            ..Registry::default()
+        },
+        Seed(1),
+    );
     let mut f = floor(game.ruleset(), FloorId(0), 6, 4);
     let cells: Vec<Pos> = (1..=2)
         .flat_map(|y| (1..=4).map(move |x| Pos { x, y }))

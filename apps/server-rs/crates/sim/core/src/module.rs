@@ -1,9 +1,9 @@
 use core::marker::PhantomData;
 
-use korr_grid::Pos;
+use korr_grid::{Pos, Stencil};
 use korr_random::{ModuleKey, name_hash};
 
-use crate::ctx::{CommitCtx, PrepCtx};
+use crate::ctx::{CommitCtx, Draws, PrepCtx};
 use crate::decision::{ActionRef, Band, Candidate, Candidates};
 use crate::senses::Senses;
 use crate::time::Cost;
@@ -14,12 +14,28 @@ pub trait Action: Copy + Eq + core::fmt::Debug + 'static {
     fn name(self) -> &'static str;
 }
 
+impl Action for core::convert::Infallible {
+    const ALL: &'static [Self] = &[];
+
+    fn name(self) -> &'static str {
+        match self {}
+    }
+}
+
 /// One mechanic. `prepare` reads, draws and plans; `commit` applies the plan and cannot fail.
 pub trait Module {
     const NAME: &'static str;
     type Action: Action;
     /// What `commit` needs: a commit cannot draw, so it cannot redo the plan differently.
     type Plan;
+    /// One `u8` per cell of every floor, 0 on a new floor, named by the module.
+    const CELL_COLUMN: bool = false;
+    /// The next value of the module's cell column at one cell, from the previous
+    /// round's column; called once per cell and round, only when `CELL_COLUMN`.
+    /// Its draws come from the cell's own stream.
+    fn tick(&self, cell: Stencil<'_>, _: Draws) -> u8 {
+        cell.value()
+    }
     /// Whether `propose` reads `Senses::seen`; when no module does, the core skips the scan.
     fn perceives(&self) -> bool {
         false

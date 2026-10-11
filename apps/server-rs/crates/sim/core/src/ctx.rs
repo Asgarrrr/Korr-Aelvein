@@ -7,24 +7,39 @@ use korr_random::{DrawIndex, ModuleKey, Phase, Seed, Stream, Subject};
 
 use crate::time::Tick;
 
-/// The draws of one actor's action at one tick.
+/// The draws of one subject at one time: an actor's action, or a cell's tick.
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct Draws {
+pub struct Draws {
     stream: Stream,
-    actor: Subject,
+    subject: Subject,
 }
 
 impl Draws {
     pub(crate) fn new(seed: Seed, module: ModuleKey, now: Tick, actor: EntityId) -> Self {
         Self {
             stream: Stream::new(seed, module, Phase::Action, now.0),
-            actor: Subject::Entity(actor.to_bits()),
+            subject: Subject::Entity(actor.to_bits()),
         }
     }
 
-    fn below(self, draw: DrawIndex, bound: NonZeroU32) -> u32 {
-        self.stream.below(self.actor, draw, bound)
+    /// `stream` is the module's tick stream of one round.
+    pub(crate) fn cell(stream: Stream, floor: FloorId, at: Pos) -> Self {
+        Self {
+            stream,
+            subject: cell_subject(floor, at),
+        }
     }
+
+    #[must_use]
+    pub fn below(self, draw: impl Into<DrawIndex>, bound: NonZeroU32) -> u32 {
+        self.stream.below(self.subject, draw.into(), bound)
+    }
+}
+
+/// The floor is part of the subject: the same cell of two floors draws differently.
+fn cell_subject(floor: FloorId, at: Pos) -> Subject {
+    let (x, y) = (at.x.cast_unsigned(), at.y.cast_unsigned());
+    Subject::Cell((u64::from(floor.0) << 32) | (u64::from(y) << 16) | u64::from(x))
 }
 
 #[derive(Debug)]
@@ -73,7 +88,7 @@ impl PrepCtx<'_> {
 
     #[must_use]
     pub fn below(&self, draw: impl Into<DrawIndex>, bound: NonZeroU32) -> u32 {
-        self.draws.below(draw.into(), bound)
+        self.draws.below(draw, bound)
     }
 }
 
@@ -107,5 +122,35 @@ impl CommitCtx<'_> {
             to,
             at,
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::collections::BTreeSet;
+
+    use korr_ecs::FloorId;
+    use korr_grid::Pos;
+    use korr_random::Subject;
+
+    use super::cell_subject;
+
+    #[test]
+    fn cell_subjects_never_alias() {
+        let floors = [0, 1, 2, u16::MAX].map(FloorId);
+        let coords = [1, 2, 255, 256, 257, i16::MAX - 1];
+        let mut seen = BTreeSet::new();
+        for floor in floors {
+            for y in coords {
+                for x in coords {
+                    let at = Pos { x, y };
+                    let Subject::Cell(bits) = cell_subject(floor, at) else {
+                        panic!("a cell subject is a cell");
+                    };
+                    assert!(bits < 1 << 63, "{floor:?} {at:?}");
+                    assert!(seen.insert(bits), "{floor:?} {at:?} aliases");
+                }
+            }
+        }
     }
 }

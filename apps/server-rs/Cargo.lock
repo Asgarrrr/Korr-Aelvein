@@ -694,6 +694,7 @@ dependencies = [
  "korr-core",
  "korr-ecs",
  "korr-engine",
+ "korr-flora",
  "korr-grid",
  "korr-random",
  "korr-scenarios",
@@ -704,7 +705,15 @@ name = "korr-engine"
 version = "0.0.0"
 dependencies = [
  "korr-core",
+ "korr-flora",
  "korr-wander",
+]
+
+[[package]]
+name = "korr-flora"
+version = "0.0.0"
+dependencies = [
+ "korr-core",
 ]
 
 [[package]]
@@ -727,6 +736,7 @@ dependencies = [
  "korr-core",
  "korr-ecs",
  "korr-engine",
+ "korr-flora",
  "korr-grid",
 ]
 

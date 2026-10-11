@@ -58,6 +58,10 @@ the spec is updated to include it.
   changes shape.
 - `join.rs` and `Store::values_mut` serve only korr-ecs-bench: move them
   behind the bench or delete them when a mechanic needs neither.
+- The environment phase walks every cell of every cell column, even a bare
+  one: about 2 ns per cell. At low actor density this dominates the round
+  (128x128 with 1.6k actors: +52%). Skip all-zero rows, or keep a list of
+  active cells, once a cell budget for many columns is set.
 
 ## Visuals
 

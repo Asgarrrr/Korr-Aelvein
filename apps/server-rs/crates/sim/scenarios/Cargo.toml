@@ -10,6 +10,7 @@ korr-core.workspace = true
 korr-ecs.workspace = true
 korr-grid.workspace = true
 korr-engine.workspace = true
+korr-flora.workspace = true
 
 [lints]
 workspace = true

@@ -1,9 +1,10 @@
-//! The grid of one floor: shape, coordinates, terrain and occupancy.
+//! The grid of one floor: shape, coordinates, terrain, occupancy and cell columns.
 #![no_std]
 #![deny(clippy::float_arithmetic)]
 
 extern crate alloc;
 
+mod column;
 mod config;
 mod error;
 mod grid;
@@ -12,6 +13,7 @@ mod occupancy;
 mod shape;
 mod terrain;
 
+pub use column::{CellColumn, Stencil};
 pub use config::MAX_STEP;
 pub use error::StepError;
 pub use grid::Grid;

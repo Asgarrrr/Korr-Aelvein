@@ -3,11 +3,11 @@ use korr_core::host::{
 };
 use korr_ecs::{Component, FloorId, Handle, ImageError, Reader, SchemaBuilder, Writer, checksum};
 use korr_engine::Registry;
-use korr_scenarios::{Pace, floor, game, run};
+use korr_scenarios::{Pace, actionless, floor, game, run};
 
 const SEED: Seed = Seed(7);
 /// Re-pin on every intended change to the image format or to behaviour.
-const PINNED: u64 = 0x7578_8f3d_d870_71e3;
+const PINNED: u64 = 0x93cd_b873_5eb0_37d1;
 
 /// 40 actors, two per row. The fast even id starts at x = 3: blocked by the
 /// wall from tick 570, its clock stays off the round boundary. The slow odd
@@ -51,7 +51,7 @@ fn save_load_replay_matches_the_pinned_run() {
 
 /// The whole image under wander: its saved intent and ruleset fingerprint,
 /// which positions alone miss. Any behaviour or floor image change moves it.
-const PINNED_WANDER: u64 = 0x9167_fe17_3efe_8045;
+const PINNED_WANDER: u64 = 0x53ce_641d_44ab_2a92;
 
 #[test]
 fn wander_world_hash_pins_the_image() {
@@ -84,7 +84,38 @@ fn wander_positions_pin_the_draws() {
 fn a_changed_ruleset_refuses_the_save() {
     let saving = game(Registry::default(), SEED);
     let bytes = populated(saving.ruleset()).0.save(saving.ruleset());
-    let running = game(Registry { wander: None }, SEED);
+    let changed = [
+        Registry {
+            wander: None,
+            ..Registry::default()
+        },
+        Registry {
+            flora: None,
+            ..Registry::default()
+        },
+    ];
+    for registry in changed {
+        let label = format!("{registry:?}");
+        let running = game(registry, SEED);
+        assert!(
+            matches!(
+                Floor::load(running.ruleset(), &bytes),
+                Err(LoadError::Ruleset { .. })
+            ),
+            "{label} loads the save"
+        );
+    }
+}
+
+// Names that differ in their bytes but not in their length.
+actionless!(Alpha, "alpha");
+actionless!(Omega, "omega");
+
+#[test]
+fn a_renamed_module_refuses_the_save() {
+    let saving = game(Alpha, SEED);
+    let bytes = floor(saving.ruleset(), FloorId(0), 4, 4).save(saving.ruleset());
+    let running = game(Omega, SEED);
     assert!(matches!(
         Floor::load(running.ruleset(), &bytes),
         Err(LoadError::Ruleset { .. })
