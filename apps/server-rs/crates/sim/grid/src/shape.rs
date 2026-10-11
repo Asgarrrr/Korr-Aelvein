@@ -168,7 +168,7 @@ impl Shape {
 
     #[must_use]
     #[inline]
-    pub fn neighbour(self, at: Interior, dir: Dir) -> CellIdx {
+    pub(crate) fn neighbour(self, at: Interior, dir: Dir) -> CellIdx {
         let (dx, dy) = dir.offset();
         let delta = i32::from(dy) * i32::from(self.width) + i32::from(dx);
         // The wall ring keeps every neighbour of an interior cell in bounds: no wrap.

@@ -97,6 +97,9 @@ impl Grid {
     }
 
     /// Height is not a placement rule.
+    ///
+    /// # Panics
+    /// When `at` is not an interior cell of this floor.
     #[must_use]
     pub fn can_place(&self, at: Interior, layer: Layer) -> bool {
         self.check_interior(at);
