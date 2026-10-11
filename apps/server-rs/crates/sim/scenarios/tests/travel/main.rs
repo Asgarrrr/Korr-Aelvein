@@ -8,7 +8,7 @@ use korr_core::{
     },
 };
 use korr_ecs::{EntityId, FloorId, Handle};
-use korr_scenarios::{Act, Answer, Fake, Leave, Scripted, floor, game, run};
+use korr_scenarios::{Act, Answer, Fake, Leave, Scripted, floor, game, reload, run};
 
 mod inbox;
 
@@ -83,17 +83,13 @@ impl<M: Mechanics> Mechanics for Keyed<M> {
     }
 }
 
-fn reload(ruleset: &Ruleset, world: &World) -> Vec<Floor> {
-    world
-        .floors()
-        .iter()
-        .map(|f| Floor::load(ruleset, &f.save(ruleset)).expect("own save loads"))
-        .collect()
+fn reload_all(ruleset: &Ruleset, world: &World) -> Vec<Floor> {
+    world.floors().iter().map(|f| reload(ruleset, f)).collect()
 }
 
 /// Whether a copy of `floor` can still take a new actor at `at`.
 fn has_room(ruleset: &Ruleset, floor: &Floor, at: Pos) -> bool {
-    let mut copy = Floor::load(ruleset, &floor.save(ruleset)).expect("own save loads");
+    let mut copy = reload(ruleset, floor);
     catch_unwind(AssertUnwindSafe(|| copy.spawn_actor(ruleset, at))).is_ok()
 }
 
@@ -159,7 +155,7 @@ fn save_with_travellers_waiting_replays() {
 
     let (mut world, _) = build(game.ruleset(), false);
     run(&game, &mut world, 1);
-    let mut world = World::new(reload(game.ruleset(), &world));
+    let mut world = World::new(reload_all(game.ruleset(), &world));
     assert_eq!(world.floor(C).inbox_len(), 5);
     run(&game, &mut world, 2);
     assert_eq!(world.floor(C).inbox_len(), 4);
@@ -194,7 +190,7 @@ fn equal_ticks_break_on_entity_id_not_slot() {
     run(&game, &mut world, 1);
     assert_eq!(world.floor(A).pos(older), Some(Pos { x: 2, y: 2 }));
 
-    let mut floors = reload(ruleset, &world);
+    let mut floors = reload_all(ruleset, &world);
     let newer = floors[0].spawn_actor(ruleset, Pos { x: 3, y: 2 });
     assert_eq!(newer.slot(), leaver.slot());
     let mut world = World::new(floors);
@@ -210,7 +206,7 @@ fn floors_at_different_rounds_are_refused() {
     let game = game(TO_C, SEED);
     let mut world = World::new(vec![floor(game.ruleset(), A, 5, 5)]);
     run(&game, &mut world, 1);
-    let mut floors = reload(game.ruleset(), &world);
+    let mut floors = reload_all(game.ruleset(), &world);
     floors.push(floor(game.ruleset(), C, 5, 5));
     assert_eq!(World::try_new(floors).err(), Some(WorldError::Rounds));
 }
@@ -244,7 +240,7 @@ fn histories(c_full: bool) -> [Vec<Floor>; 2] {
         }
         let mut world = World::new(vec![a, c]);
         run(&game, &mut world, 1);
-        reload(ruleset, &world)
+        reload_all(ruleset, &world)
     })
 }
 

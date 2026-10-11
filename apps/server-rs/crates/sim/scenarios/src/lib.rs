@@ -29,6 +29,15 @@ pub fn floor(ruleset: &Ruleset, id: FloorId, width: u16, height: u16) -> Floor {
     Floor::new(ruleset, id, shape)
 }
 
+/// A copy of `floor` through its own save.
+///
+/// # Panics
+/// When `floor` does not load from its own save.
+#[must_use]
+pub fn reload(ruleset: &Ruleset, floor: &Floor) -> Floor {
+    Floor::load(ruleset, &floor.save(ruleset)).expect("own save loads")
+}
+
 /// # Panics
 /// When two modules share a name, two actions share an `ActionKey`, or
 /// an action requires a component the schema does not register.

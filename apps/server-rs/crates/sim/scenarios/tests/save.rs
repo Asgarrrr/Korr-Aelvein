@@ -1,6 +1,6 @@
-use korr_core::host::{Floor, Game, LoadError, Pos, Ruleset, Seed, World, WorldError};
+use korr_core::host::{Game, LoadError, Pos, Ruleset, Seed, World, WorldError};
 use korr_ecs::{EntityId, FloorId, ImageError};
-use korr_scenarios::{Leave, Pace, floor, game, run};
+use korr_scenarios::{Leave, Pace, floor, game, reload, run};
 
 const SEED: Seed = Seed(7);
 const A: FloorId = FloorId(0);
@@ -21,10 +21,6 @@ fn left(game: &Game<Leave>) -> World {
     let mut world = World::new(vec![a, floor(ruleset, B, 7, 7)]);
     run(game, &mut world, 1);
     world
-}
-
-fn reload(ruleset: &Ruleset, floor: &Floor) -> Floor {
-    Floor::load(ruleset, &floor.save(ruleset)).expect("own save loads")
 }
 
 #[test]
