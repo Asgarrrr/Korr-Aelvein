@@ -43,7 +43,7 @@ pub trait Runner {
 /// impl Runner for Peek {
 ///     fn each<F: Fn(&mut Floor) + Sync>(&self, jobs: Vec<Job<'_, F>>) {
 ///         for mut job in jobs {
-///             let _ = job.floor().id();
+///             let _ = job.floor.id();
 ///         }
 ///     }
 /// }
