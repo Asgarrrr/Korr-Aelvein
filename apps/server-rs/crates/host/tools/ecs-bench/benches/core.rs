@@ -4,8 +4,8 @@
 //! at half density. The sweep repeats the round at other sizes and densities,
 //! so a gain is not one point's luck. The flora sweep prices the environment
 //! phase alone per interior cell, budget 5 ns, from ripe plants beside bare ground.
-//! The floors group runs 64 tower floors per round on 1..N threads, for wander and
-//! for a trivial per-cell tick. Efficiency is thrpt(N) / (N x thrpt(1)), which
+//! The floors group runs 64 tower floors per round on 1..N threads, for wander, for
+//! perceiving and for a trivial per-cell tick. Efficiency is thrpt(N) / (N x thrpt(1)), which
 //! equals T1 / (N x TN) since thrpt is floors per second. The skewed group puts six
 //! 256x256 floors first among 58 towers and compares rayon's default split with one
 //! job per floor. The barrier group times a round minus phase 1 while every actor of
@@ -258,6 +258,13 @@ fn floors(c: &mut Criterion) {
             &mut group,
             BenchmarkId::new("wander", n),
             Registry::default(),
+            &layouts,
+            &threads,
+        );
+        parallel_round(
+            &mut group,
+            BenchmarkId::new("perceiving", n),
+            Shy,
             &layouts,
             &threads,
         );
