@@ -48,23 +48,29 @@ pub struct Wander;
 impl Module for Wander {
     const NAME: &'static str = "wander";
     type Action = WanderAction;
+    type Plan = Dir;
 
     fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, WanderAction>) {
         out.push(WanderAction::Roam, Band::Routine, ROAM_WEIGHT, Target::None);
     }
 
-    fn prepare(&self, _: WanderAction, _: Target, ctx: &PrepCtx<'_>) -> Prepared<WanderAction> {
-        match ctx.check_step(direction(ctx.below(Draw::Dir, DIRECTIONS))) {
-            Ok(_) => Prepared::Go { cost: ROAM_COST },
+    fn prepare(
+        &self,
+        _: WanderAction,
+        _: Target,
+        ctx: &PrepCtx<'_>,
+    ) -> Prepared<WanderAction, Dir> {
+        let dir = Dir::ALL[ctx.below(Draw::Dir, DIRECTIONS) as usize];
+        match ctx.check_step(dir) {
+            Ok(_) => Prepared::Go {
+                cost: ROAM_COST,
+                plan: dir,
+            },
             Err(_) => Prepared::Blocked,
         }
     }
 
-    fn commit(&self, _: WanderAction, _: Target, ctx: &mut CommitCtx<'_>) {
-        ctx.step(direction(ctx.below(Draw::Dir, DIRECTIONS)));
+    fn commit(&self, dir: Dir, ctx: &mut CommitCtx<'_>) {
+        ctx.step(dir);
     }
-}
-
-fn direction(draw: u32) -> Dir {
-    Dir::ALL[draw as usize]
 }

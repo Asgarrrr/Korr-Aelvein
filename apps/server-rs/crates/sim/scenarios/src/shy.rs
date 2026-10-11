@@ -27,6 +27,7 @@ impl Action for Startle {
 impl Module for Shy {
     const NAME: &'static str = "shy";
     type Action = Startle;
+    type Plan = Dir;
 
     fn perceives(&self) -> bool {
         true
@@ -38,16 +39,18 @@ impl Module for Shy {
         }
     }
 
-    fn prepare(&self, _: Startle, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Startle> {
-        match ctx.check_step(Dir::ALL[ctx.below(DrawIndex(0), DIRECTIONS) as usize]) {
+    fn prepare(&self, _: Startle, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Startle, Dir> {
+        let dir = Dir::ALL[ctx.below(DrawIndex(0), DIRECTIONS) as usize];
+        match ctx.check_step(dir) {
             Ok(_) => Prepared::Go {
                 cost: Cost::new(100),
+                plan: dir,
             },
             Err(_) => Prepared::Blocked,
         }
     }
 
-    fn commit(&self, _: Startle, _: Target, ctx: &mut CommitCtx<'_>) {
-        ctx.step(Dir::ALL[ctx.below(DrawIndex(0), DIRECTIONS) as usize]);
+    fn commit(&self, dir: Dir, ctx: &mut CommitCtx<'_>) {
+        ctx.step(dir);
     }
 }

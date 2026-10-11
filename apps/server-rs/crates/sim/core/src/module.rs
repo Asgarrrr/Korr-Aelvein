@@ -14,10 +14,12 @@ pub trait Action: Copy + Eq + core::fmt::Debug + 'static {
     fn name(self) -> &'static str;
 }
 
-/// One mechanic. `prepare` reads; `commit` writes and cannot fail.
+/// One mechanic. `prepare` reads, draws and plans; `commit` applies the plan and cannot fail.
 pub trait Module {
     const NAME: &'static str;
     type Action: Action;
+    /// What `commit` needs: a commit cannot draw, so it cannot redo the plan differently.
+    type Plan;
     /// Whether `propose` reads `Senses::seen`; when no module does, the core skips the scan.
     fn perceives(&self) -> bool {
         false
@@ -33,8 +35,8 @@ pub trait Module {
         action: Self::Action,
         target: Target,
         ctx: &PrepCtx<'_>,
-    ) -> Prepared<Self::Action>;
-    fn commit(&self, action: Self::Action, target: Target, ctx: &mut CommitCtx<'_>);
+    ) -> Prepared<Self::Action, Self::Plan>;
+    fn commit(&self, plan: Self::Plan, ctx: &mut CommitCtx<'_>);
 }
 
 pub trait Visit {
@@ -89,8 +91,8 @@ pub enum Target {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Prepared<A> {
-    Go { cost: Cost },
+pub enum Prepared<A, P> {
+    Go { cost: Cost, plan: P },
     Instead { action: A, target: Target },
     Blocked,
     Fail,

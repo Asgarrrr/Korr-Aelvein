@@ -26,22 +26,24 @@ impl Action for Go {
 impl Module for Leave {
     const NAME: &'static str = "leave";
     type Action = Go;
+    type Plan = ();
 
     fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, Go>) {
         out.push(Go::Go, Band::Routine, 1, Target::None);
     }
 
-    fn prepare(&self, _: Go, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Go> {
+    fn prepare(&self, _: Go, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Go, ()> {
         if ctx.floor() == self.to {
             Prepared::Fail
         } else {
             Prepared::Go {
                 cost: Cost::new(100),
+                plan: (),
             }
         }
     }
 
-    fn commit(&self, _: Go, _: Target, ctx: &mut CommitCtx<'_>) {
+    fn commit(&self, (): (), ctx: &mut CommitCtx<'_>) {
         ctx.depart(self.to, self.at);
     }
 }

@@ -7,7 +7,7 @@ use korr_random::{DrawIndex, ModuleKey, Phase, Seed, Stream, Subject};
 
 use crate::time::Tick;
 
-/// The draws of one actor's action at one tick: equal in prepare and commit.
+/// The draws of one actor's action at one tick.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Draws {
     stream: Stream,
@@ -74,7 +74,6 @@ impl PrepCtx<'_> {
 pub struct CommitCtx<'a> {
     pub(crate) grid: &'a mut Grid,
     pub(crate) actor: Handle,
-    pub(crate) draws: Draws,
     pub(crate) departures: &'a mut Vec<(Handle, FloorId, Pos)>,
 }
 
@@ -97,10 +96,5 @@ impl CommitCtx<'_> {
             "one departure per turn"
         );
         self.departures.push((self.actor, to, at));
-    }
-
-    #[must_use]
-    pub fn below(&self, draw: impl Into<DrawIndex>, bound: NonZeroU32) -> u32 {
-        self.draws.below(draw.into(), bound)
     }
 }

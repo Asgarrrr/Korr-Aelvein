@@ -50,6 +50,7 @@ impl Action for Step {
 impl Module for Marked {
     const NAME: &'static str = "marked";
     type Action = Step;
+    type Plan = Dir;
 
     fn requires(action: Step) -> &'static [&'static str] {
         match action {
@@ -63,17 +64,18 @@ impl Module for Marked {
         out.push(Step::West, Band::Routine, 1, Target::None);
     }
 
-    fn prepare(&self, step: Step, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Step> {
+    fn prepare(&self, step: Step, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Step, Dir> {
         match ctx.check_step(step.dir()) {
             Ok(_) => Prepared::Go {
                 cost: Cost::new(100),
+                plan: step.dir(),
             },
             Err(_) => Prepared::Blocked,
         }
     }
 
-    fn commit(&self, step: Step, _: Target, ctx: &mut CommitCtx<'_>) {
-        ctx.step(step.dir());
+    fn commit(&self, dir: Dir, ctx: &mut CommitCtx<'_>) {
+        ctx.step(dir);
     }
 }
 
@@ -123,6 +125,7 @@ impl Action for Hopping {
 impl Module for Hop {
     const NAME: &'static str = "hop";
     type Action = Hopping;
+    type Plan = ();
 
     fn requires(action: Hopping) -> &'static [&'static str] {
         match action {
@@ -135,7 +138,7 @@ impl Module for Hop {
         out.push(Hopping::Start, Band::Routine, 1, Target::None);
     }
 
-    fn prepare(&self, action: Hopping, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Hopping> {
+    fn prepare(&self, action: Hopping, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Hopping, ()> {
         match action {
             Hopping::Start => Prepared::Instead {
                 action: Hopping::Gated,
@@ -144,13 +147,14 @@ impl Module for Hop {
             Hopping::Gated => match ctx.check_step(Dir::East) {
                 Ok(_) => Prepared::Go {
                     cost: Cost::new(100),
+                    plan: (),
                 },
                 Err(_) => Prepared::Blocked,
             },
         }
     }
 
-    fn commit(&self, _: Hopping, _: Target, ctx: &mut CommitCtx<'_>) {
+    fn commit(&self, (): (), ctx: &mut CommitCtx<'_>) {
         ctx.step(Dir::East);
     }
 }

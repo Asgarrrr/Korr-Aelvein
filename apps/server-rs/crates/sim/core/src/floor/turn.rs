@@ -171,14 +171,13 @@ impl RunVisit<'_> {
                 now: self.now,
             };
             match module.prepare(action, target, &prep) {
-                Prepared::Go { cost } => {
+                Prepared::Go { cost, plan } => {
                     let mut commit = CommitCtx {
                         grid: &mut self.floor.grid,
                         actor: self.actor,
-                        draws,
                         departures: &mut self.floor.departures,
                     };
-                    module.commit(action, target, &mut commit);
+                    module.commit(plan, &mut commit);
                     return Some(cost);
                 }
                 Prepared::Blocked => return Some(IDLE),

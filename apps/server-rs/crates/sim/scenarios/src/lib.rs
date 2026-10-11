@@ -63,24 +63,27 @@ impl Action for Step {
 impl Module for Pace {
     const NAME: &'static str = "pace";
     type Action = Step;
+    type Plan = ();
 
     fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, Step>) {
         out.push(Step::Step, Band::Routine, 0, Target::None);
     }
 
-    fn prepare(&self, _: Step, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Step> {
+    fn prepare(&self, _: Step, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Step, ()> {
         match ctx.check_step(Dir::East) {
             Ok(_) if ctx.actor().to_bits() % 2 == 0 => Prepared::Go {
                 cost: Cost::new(30),
+                plan: (),
             },
             Ok(_) => Prepared::Go {
                 cost: Cost::new(100),
+                plan: (),
             },
             Err(_) => Prepared::Blocked,
         }
     }
 
-    fn commit(&self, _: Step, _: Target, ctx: &mut CommitCtx<'_>) {
+    fn commit(&self, (): (), ctx: &mut CommitCtx<'_>) {
         ctx.step(Dir::East);
     }
 }

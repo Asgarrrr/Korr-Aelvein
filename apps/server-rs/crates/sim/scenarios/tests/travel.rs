@@ -43,22 +43,24 @@ impl Action for GoHome {
 impl Module for Home {
     const NAME: &'static str = "keyed";
     type Action = GoHome;
+    type Plan = ();
 
     fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, GoHome>) {
         out.push(GoHome::Home, Band::Vigilance, 0, Target::None);
     }
 
-    fn prepare(&self, _: GoHome, _: Target, ctx: &PrepCtx<'_>) -> Prepared<GoHome> {
+    fn prepare(&self, _: GoHome, _: Target, ctx: &PrepCtx<'_>) -> Prepared<GoHome, ()> {
         if ctx.actor() == self.actor && ctx.now() >= self.from && ctx.floor() != self.to {
             Prepared::Go {
                 cost: Cost::new(100),
+                plan: (),
             }
         } else {
             Prepared::Fail
         }
     }
 
-    fn commit(&self, _: GoHome, _: Target, ctx: &mut CommitCtx<'_>) {
+    fn commit(&self, (): (), ctx: &mut CommitCtx<'_>) {
         ctx.depart(self.to, self.at);
     }
 }

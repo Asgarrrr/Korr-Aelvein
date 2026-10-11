@@ -128,14 +128,15 @@ impl Action for TwinAction {
 impl Module for Twin {
     const NAME: &'static str = "twin";
     type Action = TwinAction;
+    type Plan = ();
 
     fn propose(&self, _: &Senses<'_>, _: &mut Proposals<'_, TwinAction>) {}
 
-    fn prepare(&self, _: TwinAction, _: Target, _: &PrepCtx<'_>) -> Prepared<TwinAction> {
+    fn prepare(&self, _: TwinAction, _: Target, _: &PrepCtx<'_>) -> Prepared<TwinAction, ()> {
         Prepared::Fail
     }
 
-    fn commit(&self, _: TwinAction, _: Target, _: &mut CommitCtx<'_>) {}
+    fn commit(&self, (): (), _: &mut CommitCtx<'_>) {}
 }
 
 #[test]
@@ -164,14 +165,15 @@ impl Action for Other {
 impl Module for Imposter {
     const NAME: &'static str = "pace";
     type Action = Other;
+    type Plan = ();
 
     fn propose(&self, _: &Senses<'_>, _: &mut Proposals<'_, Other>) {}
 
-    fn prepare(&self, _: Other, _: Target, _: &PrepCtx<'_>) -> Prepared<Other> {
+    fn prepare(&self, _: Other, _: Target, _: &PrepCtx<'_>) -> Prepared<Other, ()> {
         Prepared::Fail
     }
 
-    fn commit(&self, _: Other, _: Target, _: &mut CommitCtx<'_>) {}
+    fn commit(&self, (): (), _: &mut CommitCtx<'_>) {}
 }
 
 #[derive(Debug)]

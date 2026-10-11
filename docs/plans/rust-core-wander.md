@@ -54,12 +54,14 @@ pub trait Module: Sync + Sized {
     const NAME: &'static str;
     type Config;
     type Action: Copy;                       // tags only, no payload
+    type Plan;                               // what prepare hands to commit
     fn declare(d: &mut Declare<'_>, cfg: &Self::Config) -> Pending<Self>;
     fn resolve(p: Pending<Self>, r: &Resolve<'_>) -> Result<Self, BuildError>;
     fn tick(&self, _: &mut TickCtx<'_>) {}
     fn propose(&self, _: Actor, _: &Senses<'_>, _: &mut Candidates<'_, Self::Action>) {}
-    fn prepare(&self, _: Self::Action, _: &PrepCtx<'_>, _: Actor, _: Target) -> Prepared;
-    fn commit(&self, _: Self::Action, _: &mut CommitCtx<'_>, _: Actor, _: Target);
+    fn prepare(&self, _: Self::Action, _: &PrepCtx<'_>, _: Actor, _: Target)
+        -> Prepared<Self::Action, Self::Plan>;
+    fn commit(&self, _: Self::Plan, _: &mut CommitCtx<'_>);
 }
 ```
 
@@ -92,9 +94,11 @@ pub trait Module: Sync + Sized {
 
 - `propose` reads only: `&Senses`, `&mut Candidates`.
 - An action runs in two steps. `prepare` reads only and returns
-  `Prepared::{Go { cost }, Instead(ActionKey, Target), Blocked, Fail}`.
-  `commit` then writes and cannot fail. A write before a failure is
-  impossible by construction.
+  `Prepared::{Go { cost, plan }, Instead(ActionKey, Target), Blocked, Fail}`.
+  `commit` then applies the plan and cannot fail. A write before a failure
+  is impossible by construction.
+- Every draw happens in `prepare`. `CommitCtx` cannot draw, so `commit`
+  applies exactly what `prepare` checked and never recomputes it.
 - `commit` writes the module's own components through `CommitCtx`, and
   reaches the rest of the world two ways:
   - Lifecycle primitives, a closed core set: `step`, `harm`, `spawn`,
@@ -172,8 +176,8 @@ pub trait Module: Sync + Sized {
 
 - Proposes `roam` in band `Routine` at its config weight.
 - `roam` is a goal action. `prepare` draws a direction keyed by (actor,
-  round) and checks the step; a refused step is `Blocked`. `commit`
-  requests `step`. It never caches a target cell.
+  round) and checks the step; a refused step is `Blocked`. The direction
+  is the plan; `commit` requests `step` with it. It never caches a target cell.
 - Removing wander leaves creatures that idle.
 
 ## 2. Errors

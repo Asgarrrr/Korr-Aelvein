@@ -56,6 +56,7 @@ impl Scripted {
 impl Module for Scripted {
     const NAME: &'static str = "fake";
     type Action = Fake;
+    type Plan = Dir;
 
     fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, Fake>) {
         for act in &self.0 {
@@ -63,7 +64,7 @@ impl Module for Scripted {
         }
     }
 
-    fn prepare(&self, action: Fake, target: Target, ctx: &PrepCtx<'_>) -> Prepared<Fake> {
+    fn prepare(&self, action: Fake, target: Target, ctx: &PrepCtx<'_>) -> Prepared<Fake, Dir> {
         match self.act(action, target).answer {
             Answer::Instead(next) => Prepared::Instead {
                 action: next,
@@ -73,6 +74,7 @@ impl Module for Scripted {
             Answer::Go(dir) | Answer::FailBefore(_, dir) => match ctx.check_step(dir) {
                 Ok(_) => Prepared::Go {
                     cost: Cost::new(100),
+                    plan: dir,
                 },
                 Err(_) => Prepared::Blocked,
             },
@@ -80,14 +82,7 @@ impl Module for Scripted {
         }
     }
 
-    fn commit(&self, action: Fake, target: Target, ctx: &mut CommitCtx<'_>) {
-        match self.act(action, target).answer {
-            Answer::Go(dir) | Answer::FailBefore(_, dir) => {
-                ctx.step(dir);
-            }
-            Answer::Instead(_) | Answer::Fail => {
-                panic!("commit of an answer that never goes")
-            }
-        }
+    fn commit(&self, dir: Dir, ctx: &mut CommitCtx<'_>) {
+        ctx.step(dir);
     }
 }

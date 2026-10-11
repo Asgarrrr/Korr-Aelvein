@@ -35,6 +35,7 @@ impl Action for Nothing {
 impl Module for Watcher {
     const NAME: &'static str = "watcher";
     type Action = Nothing;
+    type Plan = Nothing;
 
     fn perceives(&self) -> bool {
         self.perceives
@@ -46,12 +47,12 @@ impl Module for Watcher {
             .push((senses.pos(), senses.seen().to_vec()));
     }
 
-    fn prepare(&self, action: Nothing, _: Target, _: &PrepCtx<'_>) -> Prepared<Nothing> {
+    fn prepare(&self, action: Nothing, _: Target, _: &PrepCtx<'_>) -> Prepared<Nothing, Nothing> {
         match action {}
     }
 
-    fn commit(&self, action: Nothing, _: Target, _: &mut CommitCtx<'_>) {
-        match action {}
+    fn commit(&self, plan: Nothing, _: &mut CommitCtx<'_>) {
+        match plan {}
     }
 }
 
