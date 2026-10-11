@@ -164,15 +164,54 @@ for (const config of [
 	)
 		report(config, "CLIPPY_CONF_DIR overrides the sim clippy.toml");
 
+const simCrates = walk(SIM, /^Cargo\.toml$/).map(dirname);
+
 // A crate cannot add lints on top of `lints.workspace = true` (cargo#13157).
-for (const crate of readdirSync(SIM, { withFileTypes: true })) {
-	const lib = join(SIM, crate.name, "src/lib.rs");
-	if (
-		crate.isDirectory() &&
-		existsSync(lib) &&
-		!DENY_FLOATS.test(readFileSync(lib, "utf8"))
-	)
+for (const crate of simCrates) {
+	const lib = join(crate, "src/lib.rs");
+	if (existsSync(lib) && !DENY_FLOATS.test(readFileSync(lib, "utf8")))
 		report(lib, "missing #![deny(clippy::float_arithmetic)]");
+}
+
+// Crate boundaries from rust-structure.md §3: one Cargo.toml line could undo them.
+const MECHANICS = ["biology", "milieu", "combat"].map(
+	(d) => join(SIM, d) + sep,
+);
+const MECHANIC_DEPS = new Set(["korr-core", "korr-contracts", "korr-genome"]);
+// A mechanic draws through its core context, so it cannot forge another module's stream.
+const RANDOM_USERS = new Set(["korr-core", "korr-genome", "korr-worldgen"]);
+const FOUNDATION_DEPS: Record<string, string[]> = {
+	"korr-random": [],
+	"korr-ecs": [],
+	"korr-grid": ["korr-ecs"],
+};
+
+const crateViolations = (dir: string, name: string, deps: string[]) => {
+	const found: string[] = [];
+	const workspace = deps.filter((dep) => dep.startsWith("korr-"));
+	if (MECHANICS.some((root) => dir.startsWith(root)))
+		for (const dep of workspace.filter((d) => !MECHANIC_DEPS.has(d)))
+			found.push(`a mechanic depends on ${dep}`);
+	if (workspace.includes("korr-random") && !RANDOM_USERS.has(name))
+		found.push("depends on korr-random");
+	const allowed = FOUNDATION_DEPS[name];
+	if (allowed)
+		for (const dep of workspace.filter((d) => !allowed.includes(d)))
+			found.push(`depends on ${dep}`);
+	return found;
+};
+
+for (const crate of simCrates) {
+	const manifest = Bun.TOML.parse(
+		readFileSync(join(crate, "Cargo.toml"), "utf8"),
+	) as { package?: { name?: string }; dependencies?: object };
+	const name = manifest.package?.name ?? "";
+	for (const found of crateViolations(
+		crate,
+		name,
+		Object.keys(manifest.dependencies ?? {}),
+	))
+		report(join(crate, "Cargo.toml"), found);
 }
 
 // A known violation must still be reported, or an edit to this script could disable the rule unnoticed.
@@ -216,6 +255,27 @@ if (
 	DENY_FLOATS.test("#![deny(clippy::float_cmp)]\n")
 )
 	report(SIM, "the float_arithmetic rule misreads a lib.rs header");
+
+const crateProbes: [string, string, string[], number][] = [
+	[
+		join(SIM, "biology/ethology/probe"),
+		"korr-probe",
+		["korr-core", "korr-wander", "korr-random"],
+		3,
+	],
+	[
+		join(SIM, "biology/ethology/probe"),
+		"korr-probe",
+		["korr-core", "korr-contracts", "korr-genome"],
+		0,
+	],
+	[join(SIM, "grid"), "korr-grid", ["korr-ecs", "korr-core", "thiserror"], 1],
+	[join(SIM, "core"), "korr-core", ["korr-ecs", "korr-grid", "korr-random"], 0],
+	[join(SIM, "engine"), "korr-engine", ["korr-random"], 1],
+];
+for (const [dir, name, deps, expected] of crateProbes)
+	if (crateViolations(dir, name, deps).length !== expected)
+		report(dir, `the crate rule did not fire exactly ${expected} times`);
 
 if (errors.length > 0) {
 	console.error(`architecture check failed (${errors.length}):`);
