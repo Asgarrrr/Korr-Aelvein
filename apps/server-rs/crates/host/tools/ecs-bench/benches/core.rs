@@ -4,13 +4,26 @@
 //! at half density. The sweep repeats the round at other sizes and densities,
 //! so a gain is not one point's luck. The flora sweep prices the environment
 //! phase alone per interior cell, budget 5 ns, from ripe plants beside bare ground.
+//! The floors group runs 64 tower floors per round on 1..N threads, for wander and
+//! for a trivial per-cell tick. Efficiency is thrpt(N) / (N x thrpt(1)), which
+//! equals T1 / (N x TN) since thrpt is floors per second. The skewed group puts six
+//! 256x256 floors first among 58 towers and compares rayon's default split with one
+//! job per floor. The barrier group times a round minus phase 1: barrier/wander/N
+//! divided by floors/wander/N is the serial barrier's share. No registered
+//! mechanic departs, so this share carries no flights.
 
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use korr_core::host::{Game, Mechanics, Pos, Seed, World};
+use korr_core::host::{Floor, Game, Mechanics, Pos, Ruleset, Runner, Seed, World};
 use korr_ecs::FloorId;
 use korr_engine::Registry;
 use korr_flora::Flora;
-use korr_scenarios::{Shy, floor, game};
+use korr_scenarios::{Shy, actionless, floor, game};
+use korr_server::Threads;
+use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
+use rayon::{ThreadPool, ThreadPoolBuilder};
+use std::cell::Cell;
+use std::num::NonZeroUsize;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy)]
 struct Layout {
@@ -24,6 +37,12 @@ const REFERENCE: Layout = Layout {
     actors: 8_000,
     things: 2_000,
 };
+const TOWER: Layout = Layout {
+    side: 128,
+    actors: 500,
+    things: 125,
+};
+const FLOORS: u16 = 64;
 const SIDES: [u16; 3] = [64, 128, 256];
 const SIZE_FILL: u32 = 50;
 const FILLS: [u32; 2] = [10, 90];
@@ -44,18 +63,55 @@ impl Layout {
         u64::from(self.actors + self.things)
     }
 
-    fn world<M: Mechanics>(self, mechanics: M) -> (World, Game<M>) {
-        let game = game(mechanics, Seed(1));
-        let mut f = floor(game.ruleset(), FloorId(0), self.side, self.side);
+    fn floor(self, ruleset: &Ruleset, id: FloorId) -> Floor {
+        let mut f = floor(ruleset, id, self.side, self.side);
         for k in 0..self.actors {
-            f.spawn_actor(game.ruleset(), spread(self.side, k, self.actors));
+            f.spawn_actor(ruleset, spread(self.side, k, self.actors));
         }
         for k in 0..self.things {
             f.spawn_thing(spread(self.side, k, self.things));
         }
-        (World::new(vec![f]), game)
+        f
     }
 }
+
+#[derive(Debug)]
+struct Split(ThreadPool);
+
+impl Runner for Split {
+    fn each<F: Fn(&mut Floor) + Sync + Send>(&self, floors: &mut [Floor], f: F) {
+        self.0.install(|| floors.par_iter_mut().for_each(f));
+    }
+}
+
+#[derive(Debug)]
+struct Timed<'a, R> {
+    runner: &'a R,
+    phase: Cell<Duration>,
+}
+
+impl<R: Runner> Runner for Timed<'_, R> {
+    fn each<F: Fn(&mut Floor) + Sync + Send>(&self, floors: &mut [Floor], f: F) {
+        let start = Instant::now();
+        self.runner.each(floors, f);
+        self.phase.set(self.phase.get() + start.elapsed());
+    }
+}
+
+fn build<M: Mechanics>(mechanics: M, layouts: &[Layout]) -> (World, Game<M>) {
+    let game = game(mechanics, Seed(1));
+    let floors = layouts
+        .iter()
+        .enumerate()
+        .map(|(i, layout)| {
+            let id = FloorId(u16::try_from(i).expect("a bench floor id fits u16"));
+            layout.floor(game.ruleset(), id)
+        })
+        .collect();
+    (World::new(floors), game)
+}
+
+actionless!(Still, "still", CELL_COLUMN = true);
 
 /// The `k`-th of `n` cells spread evenly over the interior, row-major.
 fn spread(side: u16, k: u32, n: u32) -> Pos {
@@ -71,9 +127,23 @@ fn spread(side: u16, k: u32, n: u32) -> Pos {
 type Group<'a> = criterion::BenchmarkGroup<'a, criterion::measurement::WallTime>;
 
 fn round(group: &mut Group<'_>, id: BenchmarkId, layout: Layout, mechanics: impl Mechanics + Sync) {
-    let (mut world, game) = layout.world(mechanics);
+    let (mut world, game) = build(mechanics, &[layout]);
     group.throughput(Throughput::Elements(layout.entities()));
     group.bench_function(id, |b| b.iter(|| game.run_round(&mut world)));
+}
+
+fn parallel_round(
+    group: &mut Group<'_>,
+    id: BenchmarkId,
+    mechanics: impl Mechanics + Sync,
+    layouts: &[Layout],
+    runner: &impl Runner,
+) {
+    let (mut world, game) = build(mechanics, layouts);
+    group.throughput(Throughput::Elements(
+        u64::try_from(layouts.len()).expect("the floor count fits u64"),
+    ));
+    group.bench_function(id, |b| b.iter(|| game.run_round_on(&mut world, runner)));
 }
 
 fn core(c: &mut Criterion) {
@@ -175,5 +245,88 @@ fn flora_sweep(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, core, sweep, flora_sweep);
+fn floors(c: &mut Criterion) {
+    let cores = std::thread::available_parallelism().expect("the host reports its parallelism");
+    let layouts = vec![TOWER; usize::from(FLOORS)];
+    let mut group = c.benchmark_group("floors");
+    for n in 1..=cores.get() {
+        let threads = Threads::new(NonZeroUsize::new(n).expect("a thread count is positive"))
+            .expect("the pool builds");
+        parallel_round(
+            &mut group,
+            BenchmarkId::new("wander", n),
+            Registry::default(),
+            &layouts,
+            &threads,
+        );
+        parallel_round(
+            &mut group,
+            BenchmarkId::new("trivial", n),
+            Still,
+            &layouts,
+            &threads,
+        );
+    }
+    group.finish();
+}
+
+fn skewed(c: &mut Criterion) {
+    let cores = std::thread::available_parallelism().expect("the host reports its parallelism");
+    let n = cores.get();
+    let heavy = Layout::filled(256, SIZE_FILL);
+    let layouts: Vec<Layout> = (0..FLOORS)
+        .map(|i| if i < FLOORS / 10 { heavy } else { TOWER })
+        .collect();
+    let split = Split(
+        ThreadPoolBuilder::new()
+            .num_threads(n)
+            .build()
+            .expect("the pool builds"),
+    );
+    let threads = Threads::new(cores).expect("the pool builds");
+    let mut group = c.benchmark_group("skewed");
+    parallel_round(
+        &mut group,
+        BenchmarkId::new("default_split", n),
+        Registry::default(),
+        &layouts,
+        &split,
+    );
+    parallel_round(
+        &mut group,
+        BenchmarkId::new("max_len_1", n),
+        Registry::default(),
+        &layouts,
+        &threads,
+    );
+    group.finish();
+}
+
+fn barrier(c: &mut Criterion) {
+    let cores = std::thread::available_parallelism().expect("the host reports its parallelism");
+    let layouts = vec![TOWER; usize::from(FLOORS)];
+    let threads = Threads::new(cores).expect("the pool builds");
+    let (mut world, game) = build(Registry::default(), &layouts);
+    let mut group = c.benchmark_group("barrier");
+    group.throughput(Throughput::Elements(u64::from(FLOORS)));
+    group.bench_function(BenchmarkId::new("wander", cores.get()), |b| {
+        b.iter_custom(|iters| {
+            let timed = Timed {
+                runner: &threads,
+                phase: Cell::new(Duration::ZERO),
+            };
+            let start = Instant::now();
+            for _ in 0..iters {
+                game.run_round_on(&mut world, &timed);
+            }
+            start
+                .elapsed()
+                .checked_sub(timed.phase.get())
+                .expect("phase 1 lies inside the rounds")
+        });
+    });
+    group.finish();
+}
+
+criterion_group!(benches, core, sweep, flora_sweep, floors, skewed, barrier);
 criterion_main!(benches);

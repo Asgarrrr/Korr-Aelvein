@@ -717,6 +717,8 @@ dependencies = [
  "korr-grid",
  "korr-random",
  "korr-scenarios",
+ "korr-server",
+ "rayon",
 ]
 
 [[package]]

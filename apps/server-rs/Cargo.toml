@@ -27,6 +27,7 @@ korr-flora = { path = "crates/sim/milieu/flora" }
 korr-grid = { path = "crates/sim/grid" }
 korr-random = { path = "crates/sim/random" }
 korr-scenarios = { path = "crates/sim/scenarios" }
+korr-server = { path = "crates/host/server" }
 korr-wander = { path = "crates/sim/biology/ethology/wander" }
 bevy_ecs = { version = "0.20.0", default-features = false, features = ["std"] }
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
