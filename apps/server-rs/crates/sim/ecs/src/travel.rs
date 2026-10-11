@@ -8,7 +8,7 @@ use crate::codec::{Reader, Writer};
 use crate::column::ErasedColumn;
 use crate::entities::Arrival;
 use crate::error::ImageError;
-use crate::id::{EntityId, Handle};
+use crate::id::{EntityId, Handle, SlotIdx};
 use crate::store::Store;
 
 /// An entity off every floor: its id and its row, encoded per column.
@@ -119,7 +119,7 @@ impl Store {
 
 fn attach_columns(
     columns: &mut [Box<dyn ErasedColumn>],
-    slot: u32,
+    slot: SlotIdx,
     mut r: Reader<'_>,
 ) -> Result<(), ImageError> {
     for column in columns {

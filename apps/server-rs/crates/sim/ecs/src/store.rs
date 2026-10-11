@@ -114,7 +114,7 @@ impl Store {
     #[must_use]
     pub fn has(&self, key: AnyRead, h: Handle) -> bool {
         let column = &self.columns[self.checked(key.id, key.prefix)];
-        self.is_alive(h) && column.contains(h)
+        self.is_alive(h) && column.contains(h.slot)
     }
 
     /// # Panics

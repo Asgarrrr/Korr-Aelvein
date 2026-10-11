@@ -8,7 +8,7 @@ use core::mem;
 use crate::codec::{Component, Reader, Writer};
 use crate::entities::Entities;
 use crate::error::ImageError;
-use crate::id::Handle;
+use crate::id::SlotIdx;
 
 pub(crate) const FOREIGN_KEY: &str = "component key from another schema";
 
@@ -17,9 +17,9 @@ const ROW_ABSENT: u8 = 0;
 const ROW_PRESENT: u8 = 1;
 
 pub(crate) trait ErasedColumn: Any + Send {
-    fn clear_slot(&mut self, slot: u32);
+    fn clear_slot(&mut self, slot: SlotIdx);
 
-    fn contains(&self, h: Handle) -> bool;
+    fn contains(&self, slot: SlotIdx) -> bool;
 
     fn write(&self, w: &mut Writer);
 
@@ -27,16 +27,16 @@ pub(crate) trait ErasedColumn: Any + Send {
     fn read(&mut self, r: &mut Reader<'_>, entities: &Entities) -> Result<(), ImageError>;
 
     /// Writes the presence byte and the value, and removes the value.
-    fn detach_row(&mut self, slot: u32, w: &mut Writer);
+    fn detach_row(&mut self, slot: SlotIdx, w: &mut Writer);
 
-    fn attach_row(&mut self, slot: u32, r: &mut Reader<'_>) -> Result<(), ImageError>;
+    fn attach_row(&mut self, slot: SlotIdx, r: &mut Reader<'_>) -> Result<(), ImageError>;
 
     fn check_row(&self, r: &mut Reader<'_>) -> Result<(), ImageError>;
 }
 
 #[inline]
-pub(crate) fn find(sparse: &[u32], slot: u32) -> Option<usize> {
-    match sparse.get(slot as usize) {
+pub(crate) fn find(sparse: &[u32], slot: SlotIdx) -> Option<usize> {
+    match sparse.get(slot.index()) {
         Some(&index) if index != ABSENT => Some(index as usize),
         _ => None,
     }
@@ -57,7 +57,7 @@ pub(crate) fn typed_mut<T: Component>(column: &mut dyn ErasedColumn) -> &mut Col
 pub(crate) struct Column<T> {
     sparse: Vec<u32>,
     dense: Vec<T>,
-    owners: Vec<u32>,
+    owners: Vec<SlotIdx>,
 }
 
 impl<T> Column<T> {
@@ -70,15 +70,15 @@ impl<T> Column<T> {
     }
 
     #[inline]
-    fn index(&self, slot: u32) -> Option<usize> {
+    fn index(&self, slot: SlotIdx) -> Option<usize> {
         find(&self.sparse, slot)
     }
 
-    pub(crate) fn insert(&mut self, slot: u32, value: T) -> Option<T> {
+    pub(crate) fn insert(&mut self, slot: SlotIdx, value: T) -> Option<T> {
         if let Some(existing) = self.get_mut(slot) {
             return Some(mem::replace(existing, value));
         }
-        let at = slot as usize;
+        let at = slot.index();
         if at >= self.sparse.len() {
             self.sparse.resize(at + 1, ABSENT);
         }
@@ -89,23 +89,23 @@ impl<T> Column<T> {
     }
 
     #[inline]
-    pub(crate) fn get(&self, slot: u32) -> Option<&T> {
+    pub(crate) fn get(&self, slot: SlotIdx) -> Option<&T> {
         self.index(slot).map(|index| &self.dense[index])
     }
 
     #[inline]
-    pub(crate) fn get_mut(&mut self, slot: u32) -> Option<&mut T> {
+    pub(crate) fn get_mut(&mut self, slot: SlotIdx) -> Option<&mut T> {
         self.index(slot).map(|index| &mut self.dense[index])
     }
 
-    pub(crate) fn remove(&mut self, slot: u32) -> Option<T> {
+    pub(crate) fn remove(&mut self, slot: SlotIdx) -> Option<T> {
         let hole = self.index(slot)?;
         let value = self.dense.swap_remove(hole);
         self.owners.swap_remove(hole);
         if let Some(&moved) = self.owners.get(hole) {
-            self.sparse[moved as usize] = self.sparse[slot as usize];
+            self.sparse[moved.index()] = self.sparse[slot.index()];
         }
-        self.sparse[slot as usize] = ABSENT;
+        self.sparse[slot.index()] = ABSENT;
         Some(value)
     }
 
@@ -120,7 +120,7 @@ impl<T> Column<T> {
     }
 
     #[inline]
-    pub(crate) fn owners(&self) -> &[u32] {
+    pub(crate) fn owners(&self) -> &[SlotIdx] {
         &self.owners
     }
 }
@@ -136,25 +136,25 @@ impl<T: Component> Column<T> {
 }
 
 impl<T: Component> ErasedColumn for Column<T> {
-    fn clear_slot(&mut self, slot: u32) {
+    fn clear_slot(&mut self, slot: SlotIdx) {
         self.remove(slot);
     }
 
-    fn contains(&self, h: Handle) -> bool {
-        self.index(h.slot).is_some()
+    fn contains(&self, slot: SlotIdx) -> bool {
+        self.index(slot).is_some()
     }
 
     fn write(&self, w: &mut Writer) {
         w.write_u32(u32::try_from(self.owners.len()).expect("fewer values than slots"));
         for (&slot, value) in self.owners.iter().zip(&self.dense) {
-            w.write_u32(slot);
+            w.write_u32(slot.get());
             value.write(w);
         }
     }
 
     fn read(&mut self, r: &mut Reader<'_>, entities: &Entities) -> Result<(), ImageError> {
         for _ in 0..r.read_u32()? {
-            let slot = r.read_u32()?;
+            let slot = SlotIdx::new(r.read_u32()?);
             if !entities.is_slot_alive(slot) || self.index(slot).is_some() {
                 return Err(ImageError::Corrupt("column owner"));
             }
@@ -163,7 +163,7 @@ impl<T: Component> ErasedColumn for Column<T> {
         Ok(())
     }
 
-    fn detach_row(&mut self, slot: u32, w: &mut Writer) {
+    fn detach_row(&mut self, slot: SlotIdx, w: &mut Writer) {
         match self.remove(slot) {
             None => w.write_u8(ROW_ABSENT),
             Some(value) => {
@@ -173,7 +173,7 @@ impl<T: Component> ErasedColumn for Column<T> {
         }
     }
 
-    fn attach_row(&mut self, slot: u32, r: &mut Reader<'_>) -> Result<(), ImageError> {
+    fn attach_row(&mut self, slot: SlotIdx, r: &mut Reader<'_>) -> Result<(), ImageError> {
         if let Some(value) = Self::read_row(r)? {
             self.insert(slot, value);
         }
