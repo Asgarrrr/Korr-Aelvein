@@ -82,19 +82,6 @@ fn recycled_slot_keeps_its_slot_idx() {
 }
 
 #[test]
-fn handle_at_names_live_slots_only() {
-    let (schema, _) = hunger_only();
-    let mut store = Store::new(&schema, FloorId(0));
-    let a = store.spawn();
-    let b = store.spawn();
-    assert_eq!(store.handle_at(a.slot().get()), Some(a));
-    assert_eq!(store.handle_at(b.slot().get()), Some(b));
-    store.despawn(a);
-    assert_eq!(store.handle_at(a.slot().get()), None);
-    assert_eq!(store.handle_at(b.slot().get() + 1), None);
-}
-
-#[test]
 fn reused_slot_starts_without_components() {
     let (schema, satiety) = hunger_only();
     let mut store = Store::new(&schema, FloorId(0));

@@ -26,14 +26,14 @@ fn things_iterate_in_ascending_id_after_slot_recycling() {
     let t2 = store.spawn();
     let t3 = store.spawn();
     for t in [t3, t1, t2] {
-        grid.link_thing(&store, t, at);
+        grid.link_thing(t, store.id(t).expect("a spawned handle is alive"), at);
     }
     assert_eq!(things(&grid, WEST), [t1, t2, t3]);
     grid.unlink(t1);
     store.despawn(t1);
     let t4 = store.spawn();
     assert_eq!(t4.slot(), t1.slot(), "the store recycles t1's slot");
-    grid.link_thing(&store, t4, at);
+    grid.link_thing(t4, store.id(t4).expect("a spawned handle is alive"), at);
     assert_eq!(things(&grid, WEST), [t2, t3, t4]);
 }
 
@@ -43,7 +43,7 @@ fn unlink_of_a_middle_thing_keeps_the_others_in_order() {
     let at = interior(&grid, WEST);
     let t: Vec<Handle> = (0..6).map(|_| store.spawn()).collect();
     for &h in &t {
-        grid.link_thing(&store, h, at);
+        grid.link_thing(h, store.id(h).expect("a spawned handle is alive"), at);
     }
     for (removed, left) in [
         (t[2], vec![t[0], t[1], t[3], t[4], t[5]]),
@@ -63,8 +63,16 @@ fn things_do_not_block_a_step() {
     let (mut store, mut grid) = setup();
     let a = store.spawn();
     let t = store.spawn();
-    grid.link_actor(&store, a, interior(&grid, WEST));
-    grid.link_thing(&store, t, interior(&grid, EAST));
+    grid.link_actor(
+        a,
+        store.id(a).expect("a spawned handle is alive"),
+        interior(&grid, WEST),
+    );
+    grid.link_thing(
+        t,
+        store.id(t).expect("a spawned handle is alive"),
+        interior(&grid, EAST),
+    );
     assert_eq!(grid.step(a, Dir::East), Ok(EAST));
     assert_eq!(grid.actor_at(interior(&grid, EAST).cell()), Some(a));
     assert_eq!(things(&grid, EAST), [t]);
@@ -77,9 +85,9 @@ fn actor_and_things_share_a_cell() {
     let t1 = store.spawn();
     let a = store.spawn();
     let t2 = store.spawn();
-    grid.link_thing(&store, t1, at);
-    grid.link_actor(&store, a, at);
-    grid.link_thing(&store, t2, at);
+    grid.link_thing(t1, store.id(t1).expect("a spawned handle is alive"), at);
+    grid.link_actor(a, store.id(a).expect("a spawned handle is alive"), at);
+    grid.link_thing(t2, store.id(t2).expect("a spawned handle is alive"), at);
     assert_eq!(grid.actor_at(at.cell()), Some(a));
     assert_eq!(things(&grid, WEST), [t1, t2]);
     grid.unlink(t1);
@@ -95,6 +103,10 @@ fn actor_and_things_share_a_cell() {
 fn step_of_a_thing_panics() {
     let (mut store, mut grid) = setup();
     let t = store.spawn();
-    grid.link_thing(&store, t, interior(&grid, WEST));
+    grid.link_thing(
+        t,
+        store.id(t).expect("a spawned handle is alive"),
+        interior(&grid, WEST),
+    );
     let _result = grid.step(t, Dir::East);
 }

@@ -5,6 +5,7 @@ use korr_ecs::{EntityId, Traveller};
 use korr_grid::{Layer, Pos};
 
 use crate::floor::Floor;
+use crate::floor::membership::Joiner;
 use crate::ruleset::Ruleset;
 use crate::time::Tick;
 
@@ -52,14 +53,7 @@ impl Floor {
                 self.inbox.0.push(flight);
                 continue;
             };
-            let id = flight.traveller.id();
-            let h = self
-                .store
-                .attach(flight.traveller)
-                .expect("an inbox traveller was checked");
-            self.grid.link_actor(&self.store, h, cell);
-            self.store.insert(&ruleset.clock, h, next);
-            self.schedule.push(next, id, h);
+            self.join_actor(ruleset, Joiner::Arrived(flight.traveller), cell, next);
         }
     }
 }

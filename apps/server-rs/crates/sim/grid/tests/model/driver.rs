@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::num::NonZeroU32;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -307,7 +307,12 @@ impl World {
             grid.write(&mut w);
             let bytes = w.into_bytes();
             let mut reader = Reader::new(&bytes);
-            *grid = Grid::read(&mut reader, store).expect("own grid rebuilds");
+            let handles: BTreeMap<EntityId, Handle> = store
+                .handles()
+                .map(|h| (store.id(h).expect("a listed handle is alive"), h))
+                .collect();
+            *grid =
+                Grid::read(&mut reader, |id| handles.get(&id).copied()).expect("own grid rebuilds");
             reader.finish().expect("the grid reads every byte it wrote");
         }
     }
@@ -353,9 +358,10 @@ impl World {
 }
 
 fn link(grid: &mut Grid, store: &Store, h: Handle, at: Interior, layer: Layer) {
+    let id = store.id(h).expect("a linked handle is alive");
     match layer {
-        Layer::Actor => grid.link_actor(store, h, at),
-        Layer::Thing => grid.link_thing(store, h, at),
+        Layer::Actor => grid.link_actor(h, id, at),
+        Layer::Thing => grid.link_thing(h, id, at),
     }
 }
 

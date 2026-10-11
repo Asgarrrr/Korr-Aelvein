@@ -1,6 +1,8 @@
 use std::num::NonZeroU32;
 
-use korr_ecs::{FloorId, Handle, ImageError, Reader, SchemaBuilder, Store, Writer};
+use korr_ecs::{
+    EntityId, FloorId, Handle, ImageError, Reader, SchemaBuilder, Store, Traveller, Writer,
+};
 use korr_grid::{Dir, Grid, MAX_STEP, Material, Pos, Shape, StepError};
 use korr_random::{DrawIndex, ModuleKey, Phase, Seed, Stream, Subject};
 
@@ -9,8 +11,8 @@ const SIDE: u16 = 18;
 const ACTOR: u8 = 0;
 const THING: u8 = 1;
 
-/// A placement record as the image holds it: slot, layer byte, position.
-type Record = (u32, u8, Pos);
+/// A placement record as the image holds it: `EntityId` bits, layer byte, position.
+type Record = (u64, u8, Pos);
 
 fn store() -> Store {
     Store::new(&SchemaBuilder::default().build(), FloorId(0))
@@ -27,7 +29,9 @@ fn bytes(grid: &Grid) -> Vec<u8> {
 }
 
 fn read(bytes: &[u8], store: &Store) -> Result<Grid, ImageError> {
-    Grid::read(&mut Reader::new(bytes), store)
+    Grid::read(&mut Reader::new(bytes), |id| {
+        store.handles().find(|&h| store.id(h) == Some(id))
+    })
 }
 
 /// The image of `terrain`, an unlinked grid, with `records` in place of its empty list.
@@ -37,8 +41,8 @@ fn forged(terrain: &Grid, records: &[Record]) -> Vec<u8> {
     assert_eq!(count, [0; 4], "an unlinked grid writes no record");
     let mut w = Writer::new();
     w.write_u32(u32::try_from(records.len()).expect("a test writes few records"));
-    for &(slot, layer, p) in records {
-        w.write_u32(slot);
+    for &(bits, layer, p) in records {
+        w.write_u64(bits);
         w.write_u8(layer);
         w.write_i16(p.x);
         w.write_i16(p.y);
@@ -49,6 +53,14 @@ fn forged(terrain: &Grid, records: &[Record]) -> Vec<u8> {
 
 fn slot(h: Handle) -> u32 {
     h.slot().get()
+}
+
+fn id(store: &Store, h: Handle) -> EntityId {
+    store.id(h).expect("a test handle is alive")
+}
+
+fn bits(store: &Store, h: Handle) -> u64 {
+    id(store, h).to_bits()
 }
 
 fn seeded() -> Grid {
@@ -154,7 +166,7 @@ fn position_on_the_ring_is_corrupt() {
     for layer in [ACTOR, THING] {
         assert_eq!(
             read(
-                &forged(&terrain, &[(slot(h), layer, Pos { x: 0, y: 1 })]),
+                &forged(&terrain, &[(bits(&store, h), layer, Pos { x: 0, y: 1 })]),
                 &store
             )
             .err(),
@@ -175,7 +187,7 @@ fn rebuild_rejects_position_off_shape() {
         Pos { x: 99, y: 99 },
     ] {
         assert_eq!(
-            read(&forged(&terrain, &[(slot(h), ACTOR, p)]), &store).err(),
+            read(&forged(&terrain, &[(bits(&store, h), ACTOR, p)]), &store).err(),
             Some(ImageError::Corrupt("position off the floor")),
             "{p:?}"
         );
@@ -187,7 +199,13 @@ fn rebuild_accepts_actor_and_thing_on_wall() {
     let mut store = store();
     let (a, t) = (store.spawn(), store.spawn());
     let wall = Pos { x: 2, y: 1 };
-    let image = forged(&cliff(), &[(slot(a), ACTOR, wall), (slot(t), THING, wall)]);
+    let image = forged(
+        &cliff(),
+        &[
+            (bits(&store, a), ACTOR, wall),
+            (bits(&store, t), THING, wall),
+        ],
+    );
     assert!(read(&image, &store).is_ok());
 }
 
@@ -197,7 +215,10 @@ fn two_actors_on_one_cell_is_corrupt() {
     let a = store.spawn();
     let b = store.spawn();
     let at = Pos { x: 1, y: 1 };
-    let image = forged(&cliff(), &[(slot(a), ACTOR, at), (slot(b), ACTOR, at)]);
+    let image = forged(
+        &cliff(),
+        &[(bits(&store, a), ACTOR, at), (bits(&store, b), ACTOR, at)],
+    );
     assert_eq!(
         read(&image, &store).err(),
         Some(ImageError::Corrupt("two actors on one cell"))
@@ -217,7 +238,10 @@ fn rebuild_orders_things_by_id() {
     by_id.sort_unstable_by_key(|&h| store.id(h));
     assert_ne!(by_slot, by_id, "recycled slots must hold the newest ids");
     let at = Pos { x: 1, y: 1 };
-    let records: Vec<Record> = by_slot.iter().map(|&h| (slot(h), THING, at)).collect();
+    let records: Vec<Record> = by_id
+        .iter()
+        .map(|&h| (bits(&store, h), THING, at))
+        .collect();
     let grid = read(&forged(&cliff(), &records), &store).expect("things on ground rebuild");
     let cell = grid.shape().idx(at).expect("inside").cell();
     assert_eq!(grid.things(cell).collect::<Vec<_>>(), by_id);
@@ -229,7 +253,11 @@ fn rebuilt_grid_steps_like_the_original() {
     let h = store.spawn();
     let start = Pos { x: 1, y: 1 };
     let mut original = cliff();
-    original.link_actor(&store, h, original.shape().idx(start).expect("inside"));
+    original.link_actor(
+        h,
+        id(&store, h),
+        original.shape().idx(start).expect("inside"),
+    );
     let mut rebuilt = read(&bytes(&original), &store).expect("own image rebuilds");
     for (dir, expected) in [
         (Dir::East, Err(StepError::Blocked)),
@@ -250,14 +278,14 @@ fn placement_records_round_trip_byte_equal() {
     for (i, &h) in (0u16..).zip(&handles) {
         let at = shape.idx(pos(1 + i % 4, 1 + i / 4)).expect("inside");
         if i % 3 == 0 {
-            original.link_thing(&store, h, at);
+            original.link_thing(h, id(&store, h), at);
         } else {
-            original.link_actor(&store, h, at);
+            original.link_actor(h, id(&store, h), at);
         }
     }
     let shared = shape.idx(pos(1, 1)).expect("inside");
     let extra = store.spawn();
-    original.link_thing(&store, extra, shared);
+    original.link_thing(extra, id(&store, extra), shared);
     let image = bytes(&original);
     let reloaded = read(&image, &store).expect("own image reads");
     assert_eq!(bytes(&reloaded), image);
@@ -271,29 +299,60 @@ fn placement_records_round_trip_byte_equal() {
 }
 
 #[test]
-fn placement_of_a_dead_slot_is_corrupt() {
+fn a_record_of_an_absent_entity_is_corrupt() {
     let mut store = store();
-    let dead = store.spawn();
-    let live = store.spawn();
-    store.despawn(dead);
-    let at = Pos { x: 1, y: 1 };
-    for s in [slot(dead), slot(live) + 1] {
-        assert_eq!(
-            read(&forged(&cliff(), &[(s, THING, at)]), &store).err(),
-            Some(ImageError::Corrupt("placement of a dead slot")),
-            "{s}"
-        );
-    }
+    let h = store.spawn();
+    let mut grid = cliff();
+    grid.link_thing(
+        h,
+        id(&store, h),
+        grid.shape().idx(Pos { x: 1, y: 1 }).expect("inside"),
+    );
+    assert_eq!(
+        Grid::read(&mut Reader::new(&bytes(&grid)), |_| None).err(),
+        Some(ImageError::Corrupt("placement of an absent entity"))
+    );
 }
 
 #[test]
-fn repeated_slot_is_corrupt() {
+fn placement_records_ignore_slot_order() {
+    let schema = SchemaBuilder::default().build();
+    let travellers = || -> (Traveller, Traveller) {
+        let mut source = Store::new(&schema, FloorId(0));
+        let (x, y) = (source.spawn(), source.spawn());
+        (source.detach(x), source.detach(y))
+    };
+    let image = |x: Traveller, y: Traveller, y_first: bool| {
+        let mut store = Store::new(&schema, FloorId(1));
+        let mut grid = cliff();
+        let (x_id, y_id) = (x.id(), y.id());
+        let mut attach = |t| store.attach(t).expect("a detached row attaches");
+        let (hx, hy) = if y_first {
+            let hy = attach(y);
+            (attach(x), hy)
+        } else {
+            let hx = attach(x);
+            (hx, attach(y))
+        };
+        let at = |p| grid.shape().idx(p).expect("inside");
+        let (p, q) = (at(Pos { x: 1, y: 1 }), at(Pos { x: 2, y: 2 }));
+        grid.link_actor(hx, x_id, p);
+        grid.link_actor(hy, y_id, q);
+        bytes(&grid)
+    };
+    let (x1, y1) = travellers();
+    let (x2, y2) = travellers();
+    assert_eq!(image(x1, y1, false), image(x2, y2, true));
+}
+
+#[test]
+fn repeated_id_is_corrupt() {
     let mut store = store();
     let (a, b) = (store.spawn(), store.spawn());
     let (p, q) = (Pos { x: 1, y: 1 }, Pos { x: 2, y: 2 });
     for records in [
-        [(slot(a), ACTOR, p), (slot(a), THING, q)],
-        [(slot(b), ACTOR, p), (slot(a), ACTOR, q)],
+        [(bits(&store, a), ACTOR, p), (bits(&store, a), THING, q)],
+        [(bits(&store, b), ACTOR, p), (bits(&store, a), ACTOR, q)],
     ] {
         assert_eq!(
             read(&forged(&cliff(), &records), &store).err(),
@@ -309,7 +368,7 @@ fn unknown_layer_is_corrupt() {
     let h = store.spawn();
     assert_eq!(
         read(
-            &forged(&cliff(), &[(slot(h), 2, Pos { x: 1, y: 1 })]),
+            &forged(&cliff(), &[(bits(&store, h), 2, Pos { x: 1, y: 1 })]),
             &store
         )
         .err(),

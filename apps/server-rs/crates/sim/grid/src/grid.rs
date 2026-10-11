@@ -1,4 +1,4 @@
-use korr_ecs::{Handle, Store};
+use korr_ecs::{EntityId, Handle};
 
 use crate::config::MAX_STEP;
 use crate::error::StepError;
@@ -29,27 +29,27 @@ impl Grid {
         self.shape
     }
 
+    /// The caller links a live handle with its own id; core floor membership does.
     /// Walkability is not checked: worldgen and arrival choose the cell.
     /// Unlink before `Store::despawn` and before `Store::detach`.
     ///
     /// # Panics
-    /// When `h` is dead on `store`, its slot is still linked, `at` holds an actor,
-    /// or `at` is not an interior cell of this floor.
-    pub fn link_actor(&mut self, store: &Store, h: Handle, at: Interior) {
+    /// When the slot of `h` is still linked, `at` holds an actor, or `at` is not
+    /// an interior cell of this floor.
+    pub fn link_actor(&mut self, h: Handle, id: EntityId, at: Interior) {
         self.check_interior(at);
-        let id = store.id(h).expect("link of a dead handle");
         self.occupancy.link_actor(h, id, at);
     }
 
+    /// The caller links a live handle with its own id; core floor membership does.
     /// Things never block a step and never touch the actor layer.
     /// Unlink before `Store::despawn` and before `Store::detach`.
     ///
     /// # Panics
-    /// When `h` is dead on `store`, its slot is still linked, or `at` is not an
-    /// interior cell of this floor.
-    pub fn link_thing(&mut self, store: &Store, h: Handle, at: Interior) {
+    /// When the slot of `h` is still linked, or `at` is not an interior cell of
+    /// this floor.
+    pub fn link_thing(&mut self, h: Handle, id: EntityId, at: Interior) {
         self.check_interior(at);
-        let id = store.id(h).expect("link of a dead handle");
         self.occupancy.link_thing(h, id, at);
     }
 

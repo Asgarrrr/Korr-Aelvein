@@ -63,14 +63,6 @@ impl Store {
         self.entities.id(h)
     }
 
-    /// `None` for a dead slot or one past the table.
-    #[must_use]
-    pub fn handle_at(&self, slot: u32) -> Option<Handle> {
-        self.entities
-            .is_slot_alive(slot)
-            .then(|| self.entities.handle_at(slot))
-    }
-
     /// Every live entity, in ascending slot.
     pub fn handles(&self) -> impl Iterator<Item = Handle> + '_ {
         self.entities.handles()

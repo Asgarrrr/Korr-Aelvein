@@ -10,19 +10,6 @@ fn setup() -> (Store, Grid) {
 }
 
 #[test]
-#[should_panic(expected = "link of a dead handle")]
-fn link_of_a_dead_handle_panics() {
-    let (mut store, mut grid) = setup();
-    let h = store.spawn();
-    store.despawn(h);
-    let at = grid
-        .shape()
-        .idx(Pos { x: 1, y: 1 })
-        .expect("the centre is inside");
-    grid.link_actor(&store, h, at);
-}
-
-#[test]
 #[should_panic(expected = "step of an entity that is not a linked actor")]
 fn step_of_an_unlinked_handle_panics() {
     let (mut store, mut grid) = setup();
@@ -40,8 +27,8 @@ fn linking_onto_an_actor_panics() {
         .shape()
         .idx(Pos { x: 1, y: 1 })
         .expect("the centre is inside");
-    grid.link_actor(&store, a, at);
-    grid.link_actor(&store, b, at);
+    grid.link_actor(a, store.id(a).expect("a spawned handle is alive"), at);
+    grid.link_actor(b, store.id(b).expect("a spawned handle is alive"), at);
 }
 
 #[test]
@@ -53,8 +40,8 @@ fn linking_a_linked_handle_panics() {
         .shape()
         .idx(Pos { x: 1, y: 1 })
         .expect("the centre is inside");
-    grid.link_actor(&store, h, at);
-    grid.link_actor(&store, h, at);
+    grid.link_actor(h, store.id(h).expect("a spawned handle is alive"), at);
+    grid.link_actor(h, store.id(h).expect("a spawned handle is alive"), at);
 }
 
 const WEST: Pos = Pos { x: 1, y: 1 };
@@ -74,12 +61,20 @@ fn interior(grid: &Grid, p: Pos) -> Interior {
 fn recycled() -> (Grid, Handle, Handle) {
     let (mut store, mut grid) = setup_wide();
     let a = store.spawn();
-    grid.link_actor(&store, a, interior(&grid, WEST));
+    grid.link_actor(
+        a,
+        store.id(a).expect("a spawned handle is alive"),
+        interior(&grid, WEST),
+    );
     grid.unlink(a);
     store.despawn(a);
     let b = store.spawn();
     assert_eq!(b.slot(), a.slot(), "the store recycles A's slot");
-    grid.link_actor(&store, b, interior(&grid, EAST));
+    grid.link_actor(
+        b,
+        store.id(b).expect("a spawned handle is alive"),
+        interior(&grid, EAST),
+    );
     (grid, a, b)
 }
 
@@ -111,11 +106,19 @@ fn stale_step_panics_and_keeps_the_new_holder() {
 fn despawn_without_unlink_is_caught_when_the_slot_returns() {
     let (mut store, mut grid) = setup_wide();
     let a = store.spawn();
-    grid.link_actor(&store, a, interior(&grid, WEST));
+    grid.link_actor(
+        a,
+        store.id(a).expect("a spawned handle is alive"),
+        interior(&grid, WEST),
+    );
     store.despawn(a);
     let b = store.spawn();
     assert_eq!(b.slot(), a.slot(), "the store recycles A's slot");
-    grid.link_actor(&store, b, interior(&grid, EAST));
+    grid.link_actor(
+        b,
+        store.id(b).expect("a spawned handle is alive"),
+        interior(&grid, EAST),
+    );
 }
 
 #[test]
@@ -124,8 +127,16 @@ fn pos_follows_link_step_and_unlink() {
     let actor = store.spawn();
     let thing = store.spawn();
     assert_eq!(grid.pos(actor), None);
-    grid.link_actor(&store, actor, interior(&grid, WEST));
-    grid.link_thing(&store, thing, interior(&grid, EAST));
+    grid.link_actor(
+        actor,
+        store.id(actor).expect("a spawned handle is alive"),
+        interior(&grid, WEST),
+    );
+    grid.link_thing(
+        thing,
+        store.id(thing).expect("a spawned handle is alive"),
+        interior(&grid, EAST),
+    );
     assert_eq!(grid.pos(actor), Some(WEST));
     assert_eq!(grid.pos(thing), Some(EAST));
     assert_eq!(grid.step(actor, Dir::East), Ok(EAST));

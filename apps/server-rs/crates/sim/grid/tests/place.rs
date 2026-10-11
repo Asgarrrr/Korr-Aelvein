@@ -21,7 +21,7 @@ fn place(grid: &Grid, from: Pos, layer: Layer) -> Option<Pos> {
 fn link_actor(grid: &mut Grid, store: &mut Store, x: i16, y: i16) {
     let h = store.spawn();
     let at = at(grid, x, y);
-    grid.link_actor(store, h, at);
+    grid.link_actor(h, store.id(h).expect("a spawned handle is alive"), at);
 }
 
 const CENTRE: Pos = Pos { x: 3, y: 3 };
@@ -161,7 +161,7 @@ fn holds_actor_follows_link_and_unlink() {
     let cell = at(&grid, 2, 2);
     let h = store.spawn();
     assert!(!grid.holds_actor(cell.cell()));
-    grid.link_actor(&store, h, cell);
+    grid.link_actor(h, store.id(h).expect("a spawned handle is alive"), cell);
     assert!(grid.holds_actor(cell.cell()));
     grid.unlink(h);
     assert!(!grid.holds_actor(cell.cell()));

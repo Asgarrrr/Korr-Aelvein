@@ -33,7 +33,7 @@ fn populate(shape: Shape) -> (Grid, Vec<Handle>) {
         let at = interior(shape, pick);
         if grid.actor_at(at.cell()).is_none() {
             let h = store.spawn();
-            grid.link_actor(&store, h, at);
+            grid.link_actor(h, store.id(h).expect("a spawned handle is alive"), at);
             actors.push(h);
         }
     }

@@ -58,9 +58,9 @@ a second name anywhere.
 - **Thing**: an entity linked to a cell that is not an actor: an item, a
   plant, a corpse, stairs. Many share a cell, in ascending EntityId order; a
   thing never blocks a step.
-- **Placement record**: the grid's record of one placed entity: its slot,
-  Layer and cell. In Rust (korr-grid), the source of position: saved in
-  the floor image, and the cell indexes are rebuilt from the records.
+- **Placement record**: the grid's record of one placed entity: its
+  EntityId, Layer and cell. In Rust (korr-grid), the source of position:
+  saved in the floor image, and the cell indexes are rebuilt from the records.
 
 ## Decisions
 
@@ -108,7 +108,9 @@ a second name anywhere.
 - **Inbox**: entities on their way to a floor, sorted by (time, id) and
   saved with that floor.
 - **Floor membership**: an entity being on a floor: its slot, grid link,
-  schedule entry and player count. Changed only by `attach` and `detach`.
+  schedule entry and player count. In Rust (korr-core), only
+  `floor/membership.rs` changes it: spawn or attach, then link, then clock,
+  then schedule; unlink before detach.
 - **Image**: one floor's saved bytes: header, sections, inbox entries,
   checksum. The Rust floor image also keeps the slot table, free stack and
   dense order.

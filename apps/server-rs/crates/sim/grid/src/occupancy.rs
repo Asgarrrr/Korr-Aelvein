@@ -143,15 +143,15 @@ impl Occupancy {
     }
 
     /// One placement record per link, in ascending slot.
-    pub(crate) fn records(&self) -> impl Iterator<Item = (u32, Layer, Interior)> + '_ {
+    pub(crate) fn records(&self) -> impl Iterator<Item = (EntityId, Layer, Interior)> + '_ {
         (0..).zip(&self.links).filter_map(|(slot, link)| {
-            let cell = link.as_ref()?.cell;
-            let layer = if self.actor[cell.cell().index()] == slot {
+            let link = link.as_ref()?;
+            let layer = if self.actor[link.cell.cell().index()] == slot {
                 Layer::Actor
             } else {
                 Layer::Thing
             };
-            Some((slot, layer, cell))
+            Some((link.id, layer, link.cell))
         })
     }
 

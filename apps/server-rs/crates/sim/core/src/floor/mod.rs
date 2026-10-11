@@ -1,15 +1,18 @@
 mod image;
 mod inbox;
+mod membership;
 mod schedule;
 mod turn;
 
 use alloc::vec::Vec;
+use core::mem;
 
 use korr_ecs::{Component, EntityId, FloorId, Handle, Own, Store};
 use korr_grid::{Grid, Interior, Layer, Material, Pos, Shape};
 
 use crate::decision::Candidates;
 use crate::floor::inbox::{Flight, Inbox};
+use crate::floor::membership::Joiner;
 use crate::floor::schedule::Schedule;
 use crate::ruleset::Ruleset;
 use crate::senses::Seen;
@@ -62,22 +65,14 @@ impl Floor {
             self.grid.can_place(at, Layer::Actor),
             "no room for an actor at this cell"
         );
-        let h = self.store.spawn();
-        self.grid.link_actor(&self.store, h, at);
-        let id = self.store.id(h).expect("a spawned handle is alive");
-        let now = Tick::start_of(self.round);
-        self.store.insert(&ruleset.clock, h, now);
-        self.schedule.push(now, id, h);
-        h
+        self.join_actor(ruleset, Joiner::Spawned, at, Tick::start_of(self.round))
     }
 
     /// # Panics
     /// When `at` is not an interior cell of this floor.
     pub fn spawn_thing(&mut self, at: Pos) -> Handle {
         let at = self.interior(at);
-        let h = self.store.spawn();
-        self.grid.link_thing(&self.store, h, at);
-        h
+        self.join_thing(at)
     }
 
     /// For setup and content: a turn never calls it. Returns the value `h` held before.
@@ -118,11 +113,10 @@ impl Floor {
     /// At the barrier, this round's departures leave, each with its destination.
     pub(crate) fn send(&mut self) -> Vec<(FloorId, Flight)> {
         let round = self.round;
-        self.departures
-            .drain(..)
+        mem::take(&mut self.departures)
+            .into_iter()
             .map(|(h, to, at)| {
-                self.grid.unlink(h);
-                let traveller = self.store.detach(h);
+                let traveller = self.leave(h);
                 (
                     to,
                     Flight {

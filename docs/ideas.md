@@ -50,7 +50,9 @@ the spec is updated to include it.
 - The two-phase build test of the core design: a reader registered before its owner resolves. It waits for the first cross-module `Read<T>` (hunger).
 - `korr-random` hard-codes the `Phase` list: a mechanic with a phase of its own edits the RNG crate. Derive the phase key from a name, like `ModuleKey`, once a module needs its own phase.
 - `Subject::Cell` packing the floor, so two floors never share a cell subject.
-- Split `korr-grid` `tests/model/driver.rs` by subject.
+- Split `korr-grid` `tests/model/driver.rs` by subject. Do not merge it into
+  a korr-ecs driver: korr-ecs cannot depend on korr-grid, and the grid
+  driver calls the store only to mint handles and ids.
 
 ## Visuals
 

@@ -10,7 +10,7 @@ fn place(shape: Shape, p: Pos) -> (Grid, Handle) {
     let h = store.spawn();
     let mut grid = Grid::new(shape);
     let at = shape.idx(p).expect("the actor starts inside");
-    grid.link_actor(&store, h, at);
+    grid.link_actor(h, store.id(h).expect("a spawned handle is alive"), at);
     (grid, h)
 }
 
@@ -22,7 +22,7 @@ fn place_all(shape: Shape, ps: &[Pos]) -> (Grid, Vec<Handle>) {
         .map(|&p| {
             let h = store.spawn();
             let at = shape.idx(p).expect("every actor starts inside");
-            grid.link_actor(&store, h, at);
+            grid.link_actor(h, store.id(h).expect("a spawned handle is alive"), at);
             h
         })
         .collect();

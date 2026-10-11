@@ -1,7 +1,7 @@
-use alloc::collections::BTreeSet;
+use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
 
-use korr_ecs::{Handle, ImageError, Reader, Store, Traveller, Writer, checksum};
+use korr_ecs::{EntityId, Handle, ImageError, Reader, Store, Traveller, Writer, checksum};
 use korr_grid::{Grid, Pos};
 
 use crate::config::TICKS_PER_ROUND;
@@ -80,7 +80,11 @@ impl Floor {
         }
         let len = r.read_u32()?;
         let store = Store::load(&ruleset.schema, r.read_bytes(len as usize)?)?;
-        let grid = Grid::read(&mut r, &store)?;
+        let handles: BTreeMap<EntityId, Handle> = store
+            .handles()
+            .filter_map(|h| Some((store.id(h)?, h)))
+            .collect();
+        let grid = Grid::read(&mut r, |id| handles.get(&id).copied())?;
         let mut inbox = Inbox::default();
         let mut taken: BTreeSet<_> = store.handles().filter_map(|h| store.id(h)).collect();
         for _ in 0..r.read_u32()? {

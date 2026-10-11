@@ -2,7 +2,9 @@
 //! the cell indexes are rebuilt from the records, the source of position.
 //! The core's floor image carries the header and checksum.
 
-use korr_ecs::{ImageError, Reader, Store, Writer};
+use alloc::vec::Vec;
+
+use korr_ecs::{EntityId, Handle, ImageError, Reader, Writer};
 
 use crate::grid::Grid;
 use crate::occupancy::Layer;
@@ -15,8 +17,9 @@ const THING: u8 = 1;
 impl Grid {
     /// Width and height as `u16`, then the interior materials, then the
     /// interior heights, each one byte per cell in row-major order. Then a
-    /// `u32` record count and one record per placed entity in ascending slot:
-    /// `u32` slot, `u8` layer (0 actor, 1 thing), `i16` x, `i16` y.
+    /// `u32` record count and one record per placed entity in strictly
+    /// ascending `EntityId`: `u64` id bits, `u8` layer (0 actor, 1 thing),
+    /// `i16` x, `i16` y.
     #[expect(
         clippy::cast_possible_truncation,
         reason = "records are indexed by u32 slots, so their count fits u32"
@@ -31,10 +34,12 @@ impl Grid {
         for at in interior(shape) {
             w.write_i8(self.terrain.height(at.cell()));
         }
-        w.write_u32(self.occupancy.records().count() as u32);
-        for (slot, layer, at) in self.occupancy.records() {
+        let mut records: Vec<_> = self.occupancy.records().collect();
+        records.sort_unstable_by_key(|&(id, _, _)| id);
+        w.write_u32(records.len() as u32);
+        for (id, layer, at) in records {
             let p = shape.pos(at.cell());
-            w.write_u32(slot);
+            w.write_u64(id.to_bits());
             w.write_u8(match layer {
                 Layer::Actor => ACTOR,
                 Layer::Thing => THING,
@@ -44,20 +49,24 @@ impl Grid {
         }
     }
 
-    /// Reads what [`Grid::write`] wrote and links each record's live entity on
-    /// `store`, things in ascending `EntityId` whatever the slot order. Never
-    /// calls `Reader::finish` and never panics.
+    /// Reads what [`Grid::write`] wrote and links each record's entity on the
+    /// handle `resolve` maps its id to. Never calls `Reader::finish`. When
+    /// `resolve` maps distinct ids to distinct live handles, never panics.
     ///
     /// # Errors
     /// [`ImageError::Truncated`] when the bytes run out, or [`ImageError::Corrupt`] with:
     /// - `"floor shape"`: a side outside `3..=i16::MAX`;
     /// - `"material"`: an id outside the material table;
-    /// - `"placement order"`: a record slot not above the previous one;
-    /// - `"placement of a dead slot"`: a record slot with no live entity on `store`;
+    /// - `"entity id"`: record id bits that name no `EntityId`;
+    /// - `"placement order"`: a record id not above the previous one;
+    /// - `"placement of an absent entity"`: a record id `resolve` maps to no handle;
     /// - `"layer"`: a layer byte other than 0 and 1;
     /// - `"position off the floor"`: a record position outside the shape or on the ring;
     /// - `"two actors on one cell"`.
-    pub fn read(r: &mut Reader<'_>, store: &Store) -> Result<Self, ImageError> {
+    pub fn read(
+        r: &mut Reader<'_>,
+        mut resolve: impl FnMut(EntityId) -> Option<Handle>,
+    ) -> Result<Self, ImageError> {
         let width = r.read_u16()?;
         let height = r.read_u16()?;
         let shape = Shape::new(width, height).ok_or(ImageError::Corrupt("floor shape"))?;
@@ -73,19 +82,18 @@ impl Grid {
         }
         let mut previous = None;
         for _ in 0..r.read_u32()? {
-            let slot = r.read_u32()?;
+            let bits = r.read_u64()?;
             let layer = r.read_u8()?;
             let pos = Pos {
                 x: r.read_i16()?,
                 y: r.read_i16()?,
             };
-            if previous.is_some_and(|previous| slot <= previous) {
+            let id = EntityId::from_bits(bits).ok_or(ImageError::Corrupt("entity id"))?;
+            if previous.is_some_and(|previous| id <= previous) {
                 return Err(ImageError::Corrupt("placement order"));
             }
-            previous = Some(slot);
-            let h = store
-                .handle_at(slot)
-                .ok_or(ImageError::Corrupt("placement of a dead slot"))?;
+            previous = Some(id);
+            let h = resolve(id).ok_or(ImageError::Corrupt("placement of an absent entity"))?;
             let layer = match layer {
                 ACTOR => Layer::Actor,
                 THING => Layer::Thing,
@@ -99,9 +107,9 @@ impl Grid {
                     if grid.actor_at(at.cell()).is_some() {
                         return Err(ImageError::Corrupt("two actors on one cell"));
                     }
-                    grid.link_actor(store, h, at);
+                    grid.link_actor(h, id, at);
                 }
-                Layer::Thing => grid.link_thing(store, h, at),
+                Layer::Thing => grid.link_thing(h, id, at),
             }
         }
         Ok(grid)

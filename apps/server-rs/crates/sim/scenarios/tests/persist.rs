@@ -5,7 +5,7 @@ use korr_scenarios::{Pace, floor, game, run};
 
 const SEED: Seed = Seed(7);
 /// Re-pin on every intended change to the image format or to behaviour.
-const PINNED: u64 = 0x74de_a463_5b75_44e9;
+const PINNED: u64 = 0xf012_dec2_b248_786f;
 
 /// 40 actors, two per row. The fast even id starts at x = 3: blocked by the
 /// wall from tick 570, its clock stays off the round boundary. The slow odd
@@ -35,7 +35,7 @@ fn same_seed_same_world_hash() {
 
 /// Pace draws nothing: this world pins draw addressing. Re-pin on every
 /// intended change to a draw or to wander.
-const PINNED_WANDER: u64 = 0x9419_ab3a_d669_63c9;
+const PINNED_WANDER: u64 = 0xba93_4d18_0914_911e;
 
 #[test]
 fn wander_world_hash_pins_the_draws() {
