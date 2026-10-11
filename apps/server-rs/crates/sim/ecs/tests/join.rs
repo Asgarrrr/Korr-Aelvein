@@ -88,42 +88,6 @@ fn id_of(store: &Store, h: Handle) -> EntityId {
 }
 
 #[test]
-fn join_yields_exactly_rows_with_both() {
-    let f = fixture();
-    let joined: BTreeMap<EntityId, (u32, u32)> = f
-        .store
-        .join(f.a.read(), f.b.read())
-        .map(|(h, a, b)| (id_of(&f.store, h), (a.0, b.0)))
-        .collect();
-    let expected: BTreeMap<EntityId, (u32, u32)> = f
-        .model
-        .iter()
-        .filter_map(|(&id, &(a, b))| Some((id, (a?, b?))))
-        .collect();
-    assert!(expected.len() > 100);
-    assert_eq!(joined.len(), f.store.join(f.a.read(), f.b.read()).count());
-    assert_eq!(joined, expected);
-}
-
-#[test]
-fn join_order_is_the_first_keys_dense_order() {
-    let f = fixture();
-    let expected: Vec<Handle> = f
-        .store
-        .iter(f.a.read())
-        .map(|(h, _)| h)
-        .filter(|&h| f.store.get(f.b.read(), h).is_some())
-        .collect();
-    let joined: Vec<Handle> = f
-        .store
-        .join(f.a.read(), f.b.read())
-        .map(|(h, _, _)| h)
-        .collect();
-    assert!(expected.len() > 100);
-    assert_eq!(joined, expected);
-}
-
-#[test]
 fn join_mut_touches_only_rows_with_both() {
     let mut f = fixture();
     let mut touched = Vec::new();
@@ -168,13 +132,6 @@ fn lone_store() -> (Store, Own<A>, Own<B>) {
 
 #[test]
 #[should_panic(expected = "join of a component with itself")]
-fn join_of_a_key_with_itself_panics() {
-    let (store, a, _) = lone_store();
-    let _ = store.join(a.read(), a.read());
-}
-
-#[test]
-#[should_panic(expected = "join of a component with itself")]
 fn join_mut_of_a_key_with_itself_panics() {
     let (mut store, a, _) = lone_store();
     store.join_mut(&a, &a, |_, _: &mut A, _: &mut A| {});
@@ -192,26 +149,10 @@ fn foreign_keys() -> (Own<A>, Own<A>) {
 
 #[test]
 #[should_panic(expected = "component key from another schema")]
-fn join_with_an_out_of_range_key_panics() {
-    let (store, a, _) = lone_store();
-    let (_, out_of_range) = foreign_keys();
-    let _ = store.join(a.read(), out_of_range.read());
-}
-
-#[test]
-#[should_panic(expected = "component key from another schema")]
 fn join_mut_with_an_out_of_range_key_panics() {
     let (mut store, a, _) = lone_store();
     let (_, out_of_range) = foreign_keys();
     store.join_mut(&a, &out_of_range, |_, _: &mut A, _: &mut A| {});
-}
-
-#[test]
-#[should_panic(expected = "component key from another schema")]
-fn join_with_a_mismatched_key_panics() {
-    let (store, a, _) = lone_store();
-    let (mismatched, _) = foreign_keys();
-    let _ = store.join(a.read(), mismatched.read());
 }
 
 #[test]

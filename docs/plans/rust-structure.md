@@ -224,17 +224,16 @@ value.
 
 ### Join
 
-`Store::join(a, b)` yields `(Handle, &A, &B)` for each holder of both
-components. `Store::join_mut(a, b, f)` calls `f(Handle, &mut A, &mut B)`
-on the same rows. Both walk the dense order of `a`, the first key, so the
-order is predictable from one column: put the rarer component first. The
+`Store::join_mut(a, b, f)` calls `f(Handle, &mut A, &mut B)` for each
+holder of both components. It walks the dense order of `a`, the first key,
+so the order is predictable from one column: put the rarer component first. The
 same key on both sides, or a key from another schema, panics.
 
 `join_mut` borrows the two columns through `<[T]>::get_disjoint_mut`
 (std, stable since 1.86), so it needs no `unsafe`. `f` cannot reach the
 `Store`, so the borrow checker rules out structural changes during a join:
 a caller collects the handles to kill and applies them afterwards. There
-is no N-ary query until a mechanic needs one.
+is no read-only join and no N-ary query until a caller needs one.
 
 ### Views (not exported)
 
