@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use core::mem;
 
-use korr_ecs::{FloorId, Store};
+use korr_ecs::{FloorId, Handle, Store};
 use korr_grid::{CellColumn, Grid};
 use korr_random::{Phase, Seed, Stream};
 
@@ -40,6 +40,7 @@ impl Floor {
             scratch: self.scratch.as_mut(),
             store: &mut self.store,
             harms: &mut self.harms,
+            harmed: &mut self.harmed,
             ordinal: 0,
         });
         self.rot(ruleset);
@@ -60,6 +61,7 @@ struct TickVisit<'a> {
     scratch: Option<&'a mut CellColumn>,
     store: &'a mut Store,
     harms: &'a mut Vec<Harm>,
+    harmed: &'a mut Vec<(Handle, u16)>,
     ordinal: usize,
 }
 
@@ -78,7 +80,12 @@ impl Visit for TickVisit<'_> {
             });
             mem::swap(column, scratch);
         }
-        module.tick_rows(&mut Rows::new(self.store, self.harms, module_key::<M>()));
+        module.tick_rows(&mut Rows::new(
+            self.store,
+            self.harms,
+            self.harmed,
+            module_key::<M>(),
+        ));
         self.ordinal += 1;
     }
 }

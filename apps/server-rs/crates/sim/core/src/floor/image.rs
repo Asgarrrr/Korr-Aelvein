@@ -154,6 +154,7 @@ impl Floor {
             candidates: Candidates::default(),
             seen: Vec::new(),
             harms: Vec::new(),
+            harmed: Vec::new(),
             events: Vec::new(),
         })
     }

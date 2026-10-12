@@ -47,6 +47,8 @@ pub struct Floor {
     seen: Vec<Seen>,
     /// Harms since the last drain; empty between turns and at every save.
     harms: Vec<Harm>,
+    /// Scratch of one row join, cleared before every join.
+    harmed: Vec<(Handle, u16)>,
     /// What happened since the round started; never saved or hashed.
     events: Vec<Event>,
 }
@@ -71,6 +73,7 @@ impl Floor {
             candidates: Candidates::default(),
             seen: Vec::new(),
             harms: Vec::new(),
+            harmed: Vec::new(),
             events: Vec::new(),
         }
     }

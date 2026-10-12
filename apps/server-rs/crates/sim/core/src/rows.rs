@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use korr_ecs::{Component, Own, Store};
+use korr_ecs::{Component, Handle, Own, Store};
 use korr_random::ModuleKey;
 
 use crate::life::{Cause, Harm};
@@ -129,14 +129,21 @@ use crate::life::{Cause, Harm};
 pub struct Rows<'a> {
     store: &'a mut Store,
     harms: &'a mut Vec<Harm>,
+    harmed: &'a mut Vec<(Handle, u16)>,
     module: ModuleKey,
 }
 
 impl<'a> Rows<'a> {
-    pub(crate) fn new(store: &'a mut Store, harms: &'a mut Vec<Harm>, module: ModuleKey) -> Self {
+    pub(crate) fn new(
+        store: &'a mut Store,
+        harms: &'a mut Vec<Harm>,
+        harmed: &'a mut Vec<(Handle, u16)>,
+        module: ModuleKey,
+    ) -> Self {
         Self {
             store,
             harms,
+            harmed,
             module,
         }
     }
@@ -156,7 +163,8 @@ impl Rows<'_> {
         b: &Own<B>,
         mut f: impl FnMut(&mut A, &mut B) -> u16,
     ) {
-        let mut harmed = Vec::new();
+        let harmed = &mut *self.harmed;
+        harmed.clear();
         self.store.join_mut(a, b, |h, a, b| {
             let amount = f(a, b);
             if amount > 0 {
@@ -164,7 +172,7 @@ impl Rows<'_> {
             }
         });
         let cause = Cause::Mechanic(self.module);
-        for (h, amount) in harmed {
+        for &(h, amount) in &*self.harmed {
             let id = self.store.id(h).expect("a joined row is alive");
             self.harms.push((id, cause, amount));
         }
