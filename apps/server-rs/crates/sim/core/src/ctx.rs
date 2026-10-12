@@ -7,6 +7,7 @@ use korr_grid::{CellColumn, Dir, Grid, Pos, StepError};
 use korr_random::{DrawIndex, ModuleKey, Phase, Seed, Stream, Subject};
 
 use crate::build::Ask;
+use crate::config::SIGHT;
 use crate::ruleset::{ModuleEntry, Ruleset};
 use crate::time::Tick;
 
@@ -77,6 +78,7 @@ pub(crate) fn departed(departures: &[Departure], actor: Handle) -> bool {
 
 pub struct PrepCtx<'a> {
     pub(crate) grid: &'a Grid,
+    pub(crate) store: &'a Store,
     pub(crate) actor: Handle,
     pub(crate) id: EntityId,
     pub(crate) floor: FloorId,
@@ -126,6 +128,15 @@ impl PrepCtx<'_> {
     #[inline]
     pub fn check_step(&self, dir: Dir) -> Result<Pos, StepError> {
         self.grid.check_step(self.actor, dir)
+    }
+
+    /// Where `id` stands on this floor, when it is alive and within `SIGHT`.
+    #[must_use]
+    pub fn locate(&self, id: EntityId) -> Option<Pos> {
+        let at = self.grid.pos(self.store.handle_of(id)?)?;
+        let pos = self.pos();
+        let distance = at.x.abs_diff(pos.x).max(at.y.abs_diff(pos.y));
+        (distance <= SIGHT).then_some(at)
     }
 
     #[must_use]

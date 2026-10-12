@@ -70,6 +70,13 @@ impl Store {
         self.entities.id(h)
     }
 
+    /// The live entity named `id` on this floor.
+    #[must_use]
+    #[inline]
+    pub fn handle_of(&self, id: EntityId) -> Option<Handle> {
+        self.entities.handle_of(id)
+    }
+
     /// Every live entity, in ascending slot.
     pub fn handles(&self) -> impl Iterator<Item = Handle> + '_ {
         self.entities.handles()

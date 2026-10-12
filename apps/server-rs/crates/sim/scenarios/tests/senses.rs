@@ -116,15 +116,13 @@ fn seen_by(shown: &[(Pos, Vec<Seen>)], at: Pos) -> &[Seen] {
 #[test]
 fn perceiving_mechanics_see_the_others_in_neighbourhood_order() {
     let shown = shown_in_a_round(true);
-    let seen = |n, x, y| Seen {
-        id: EntityId::new(FloorId(0), n),
-        pos: Pos { x, y },
-    };
+    let seen = |n, x, y| (EntityId::new(FloorId(0), n), Pos { x, y });
+    let pairs: Vec<(EntityId, Pos)> = seen_by(&shown, CENTRE)
+        .iter()
+        .map(|s| (s.id, s.pos))
+        .collect();
     // Ring 1 row above, ring 1 side, then ring 3 above: neither id nor row order.
-    assert_eq!(
-        seen_by(&shown, CENTRE),
-        [seen(4, 4, 4), seen(2, 6, 5), seen(0, 5, 2)]
-    );
+    assert_eq!(pairs, [seen(4, 4, 4), seen(2, 6, 5), seen(0, 5, 2)]);
     assert_eq!(seen_by(&shown, BEYOND_SIGHT), []);
 }
 

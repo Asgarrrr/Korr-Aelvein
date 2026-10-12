@@ -124,7 +124,11 @@ impl Floor {
         shape.scan_rings(pos, SIGHT, |p, at| {
             if let Some(other) = grid.actor_at(at.cell()).filter(|&other| other != actor) {
                 let id = store.id(other).expect("a placed actor is alive");
-                seen.push(Seen { id, pos: p });
+                seen.push(Seen {
+                    id,
+                    pos: p,
+                    handle: other,
+                });
             }
         });
     }
@@ -196,6 +200,7 @@ impl RunVisit<'_> {
             }
             let prep = PrepCtx {
                 grid: &self.floor.grid,
+                store,
                 actor: self.actor,
                 id: self.id,
                 floor,

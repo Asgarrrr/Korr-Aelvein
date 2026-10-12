@@ -10,6 +10,7 @@ mod entities;
 mod error;
 mod id;
 mod image;
+mod index;
 mod join;
 mod schema;
 mod store;

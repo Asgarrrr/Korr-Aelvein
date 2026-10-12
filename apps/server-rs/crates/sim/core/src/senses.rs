@@ -8,6 +8,8 @@ use crate::config::SIGHT;
 pub struct Seen {
     pub id: EntityId,
     pub pos: Pos,
+    /// Valid this turn only: never stored.
+    pub(crate) handle: Handle,
 }
 
 /// What an actor perceives this turn: one snapshot, so every proposer reads
@@ -53,6 +55,15 @@ impl<'a> Senses<'a> {
     #[must_use]
     pub fn pos(&self) -> Pos {
         self.pos
+    }
+
+    /// `seen`'s row of `key`, read without a lookup.
+    ///
+    /// # Panics
+    /// When `key` comes from another schema.
+    #[must_use]
+    pub fn get_seen<T: Component>(&self, key: Read<T>, seen: &Seen) -> Option<&'a T> {
+        self.store.get(key, seen.handle)
     }
 
     /// The other actors within sight, in neighbourhood order; empty when the

@@ -1,7 +1,7 @@
-use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
 
-use korr_ecs::{EntityId, Handle, ImageError, Reader, Store, Traveller, Writer};
+use korr_ecs::{Handle, ImageError, Reader, Store, Traveller, Writer};
 use korr_grid::{CellColumn, Grid};
 
 use crate::config::TICKS_PER_ROUND;
@@ -79,12 +79,8 @@ impl Floor {
         }
         let round = sections.round;
         let store = Store::load(&ruleset.schema, &sections.store)?;
-        let handles: BTreeMap<EntityId, Handle> = store
-            .handles()
-            .filter_map(|h| Some((store.id(h)?, h)))
-            .collect();
         let mut r = Reader::new(&sections.grid);
-        let grid = Grid::read(&mut r, &store, |id| handles.get(&id).copied())?;
+        let grid = Grid::read(&mut r, &store, |id| store.handle_of(id))?;
         r.finish()?;
         let mut r = Reader::new(&sections.columns);
         let columns = ruleset
@@ -115,7 +111,7 @@ impl Floor {
                 return Err(ImageError::Corrupt("inbox round").into());
             }
             let id = flight.traveller.id();
-            if handles.contains_key(&id) || !waiting.insert(id) {
+            if store.handle_of(id).is_some() || !waiting.insert(id) {
                 return Err(ImageError::Corrupt("inbox duplicate id").into());
             }
             store.check_arrival(&flight.traveller)?;

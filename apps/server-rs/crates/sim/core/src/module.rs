@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
-use korr_ecs::AnyRead;
+use korr_ecs::{AnyRead, EntityId};
 use korr_grid::{Pos, Stencil};
 use korr_random::{ModuleKey, name_hash};
 
@@ -122,6 +122,7 @@ pub(crate) fn module_key<M: Module>() -> ModuleKey {
 pub enum Target {
     None,
     Pos(Pos),
+    Entity(EntityId),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
