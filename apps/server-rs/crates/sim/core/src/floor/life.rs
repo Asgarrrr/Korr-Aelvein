@@ -86,8 +86,24 @@ impl Floor {
             .filter(|(_, remains)| remains.mass == 0)
             .map(|(h, _)| (self.store.id(h).expect("a stored row is alive"), h))
             .collect();
-        rotten.sort_unstable_by_key(|&(id, _)| id);
-        for (_, h) in rotten {
+        self.clear(&mut rotten);
+    }
+
+    /// The remains the last action ate to nothing leave.
+    #[inline]
+    pub(crate) fn clear_emptied(&mut self) {
+        if !self.emptied.is_empty() {
+            let mut emptied = mem::take(&mut self.emptied);
+            self.clear(&mut emptied);
+            self.emptied = emptied;
+        }
+    }
+
+    /// Unlinks and despawns `things` in id order, and empties the list.
+    #[cold]
+    fn clear(&mut self, things: &mut Vec<(EntityId, Handle)>) {
+        things.sort_unstable_by_key(|&(id, _)| id);
+        for (_, h) in things.drain(..) {
             self.grid.unlink(h);
             self.store.despawn(h);
         }

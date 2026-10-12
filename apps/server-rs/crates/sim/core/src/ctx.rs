@@ -164,6 +164,7 @@ pub struct CommitCtx<'a> {
     pub(crate) columns: &'a mut [CellColumn],
     pub(crate) routes: &'a Routes<'a>,
     pub(crate) harms: &'a mut Vec<Harm>,
+    pub(crate) emptied: &'a mut Vec<(EntityId, Handle)>,
 }
 
 impl fmt::Debug for CommitCtx<'_> {
@@ -226,6 +227,24 @@ impl CommitCtx<'_> {
         if amount > 0 {
             self.harms.push((target, Cause::Entity(self.id), amount));
         }
+    }
+
+    /// Eats up to `amount` of the mass of the remains named `id`, and returns
+    /// what it ate: 0 when `id` names no remains here. Remains eaten to
+    /// nothing leave once the turn ends, so later actors never see them.
+    pub fn consume(&mut self, id: EntityId, amount: u16) -> u16 {
+        let Some(h) = self.store.handle_of(id) else {
+            return 0;
+        };
+        let Some(remains) = self.store.get_mut(&self.routes.ruleset.remains, h) else {
+            return 0;
+        };
+        let eaten = amount.min(remains.mass);
+        remains.mass -= eaten;
+        if eaten > 0 && remains.mass == 0 {
+            self.emptied.push((id, h));
+        }
+        eaten
     }
 }
 

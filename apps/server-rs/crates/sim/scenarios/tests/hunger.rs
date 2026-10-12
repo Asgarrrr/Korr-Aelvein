@@ -20,6 +20,11 @@ use korr_hunger::config::{DECAY, PECKISH, STARVING};
 use korr_hunger::{Hunger, Satiety};
 use korr_scenarios::{Act, Answer, Fake, Scripted, floor, game, run};
 
+const HERBIVORE: Appetite = Appetite {
+    urgency: 0,
+    eats: Appetite::PLANTS,
+};
+
 /// Proposes nothing and records the urgency each actor holds, in turn order.
 #[derive(Debug)]
 #[expect(
@@ -86,7 +91,7 @@ fn hungry(game: &Watched, satiety: u16) -> World {
     let mut f = floor(ruleset, FloorId(0), 5, 5);
     let h = f.spawn_actor(ruleset, Pos { x: 2, y: 2 });
     f.init(ruleset, h, "hunger.satiety", Satiety(satiety));
-    f.init(ruleset, h, Appetite::NAME, Appetite { urgency: 0 });
+    f.init(ruleset, h, Appetite::NAME, HERBIVORE);
     World::new(vec![f])
 }
 
@@ -201,7 +206,7 @@ fn meadow<M: Mechanics>(
         .map(|&at| {
             let h = f.spawn_actor(ruleset, at);
             f.init(ruleset, h, "hunger.satiety", Satiety(satiety));
-            f.init(ruleset, h, Appetite::NAME, Appetite { urgency: 0 });
+            f.init(ruleset, h, Appetite::NAME, HERBIVORE);
             h
         })
         .collect();
@@ -256,7 +261,7 @@ fn a_wall_stops_the_approach() {
     f.set_material(Pos { x: 5, y: 4 }, Material::WALL);
     let h = f.spawn_actor(ruleset, home);
     f.init(ruleset, h, "hunger.satiety", Satiety(0));
-    f.init(ruleset, h, Appetite::NAME, Appetite { urgency: 0 });
+    f.init(ruleset, h, Appetite::NAME, HERBIVORE);
     let mut world = World::new(vec![f]);
     run(&game, &mut world, 3);
     assert_eq!(world.floor(MEADOW).pos(h), Some(home));

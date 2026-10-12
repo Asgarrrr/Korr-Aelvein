@@ -1,8 +1,9 @@
 use korr_ecs::{Component, EntityId, Handle, Read, Store};
-use korr_grid::{CellColumn, Pos, Shape};
+use korr_grid::{CellColumn, Grid, Pos};
 
 use crate::build::ReadCells;
 use crate::config::SIGHT;
+use crate::life::Remains;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Seen {
@@ -10,6 +11,13 @@ pub struct Seen {
     pub pos: Pos,
     /// Valid this turn only: never stored.
     pub(crate) handle: Handle,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SeenRemains {
+    pub id: EntityId,
+    pub pos: Pos,
+    pub mass: u16,
 }
 
 /// What an actor perceives this turn: one snapshot, so every proposer reads
@@ -20,7 +28,8 @@ pub struct Senses<'a> {
     seen: &'a [Seen],
     store: &'a Store,
     actor: Handle,
-    shape: Shape,
+    grid: &'a Grid,
+    remains: Read<Remains>,
     columns: &'a [CellColumn],
 }
 
@@ -30,7 +39,8 @@ impl<'a> Senses<'a> {
         seen: &'a [Seen],
         store: &'a Store,
         actor: Handle,
-        shape: Shape,
+        grid: &'a Grid,
+        remains: Read<Remains>,
         columns: &'a [CellColumn],
     ) -> Self {
         Self {
@@ -38,7 +48,8 @@ impl<'a> Senses<'a> {
             seen,
             store,
             actor,
-            shape,
+            grid,
+            remains,
             columns,
         }
     }
@@ -80,9 +91,26 @@ impl<'a> Senses<'a> {
     /// When `key` comes from another ruleset.
     pub fn cells(&self, key: ReadCells) -> impl Iterator<Item = (Pos, u8)> + use<'a> {
         let column = &self.columns[usize::from(key.slot)];
-        let shape = self.shape;
+        let shape = self.grid.shape();
         shape
             .neighbourhood(self.pos, SIGHT)
             .map(move |at| (shape.pos(at.cell()), column.get(at)))
+    }
+
+    /// The remains within sight, in neighbourhood order, then id order
+    /// within a cell. Walked on each call: only a mechanic that asks pays.
+    pub fn remains(&self) -> impl Iterator<Item = SeenRemains> + use<'a> {
+        let (grid, store, key) = (self.grid, self.store, self.remains);
+        let shape = grid.shape();
+        shape.neighbourhood(self.pos, SIGHT).flat_map(move |at| {
+            let pos = shape.pos(at.cell());
+            grid.things(at.cell()).filter_map(move |h| {
+                Some(SeenRemains {
+                    mass: store.get(key, h)?.mass,
+                    id: store.id(h)?,
+                    pos,
+                })
+            })
+        })
     }
 }

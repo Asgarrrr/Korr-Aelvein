@@ -1,5 +1,6 @@
 //! Hunger: satiety decays every round and sets how urgently a creature needs to
-//! eat. A hungry creature steps toward the nearest plant it sees and grazes it.
+//! eat. A hungry creature steps toward the nearest food of its diet it sees,
+//! a plant it grazes or remains it feeds on.
 #![no_std]
 #![deny(clippy::float_arithmetic)]
 
@@ -13,13 +14,14 @@ use core::cmp::Reverse;
 
 use korr_contracts::{Appetite, Graze, Plants};
 use korr_core::mechanic::{
-    Action, AnyRead, Ask, Band, Builder, CommitCtx, Component, Dir, ImageError, Module, Own, Pos,
-    PrepCtx, Prepared, Proposals, Provided, ReadCells, Reader, Rows, Senses, Target, Writer,
-    provides,
+    Action, AnyRead, Ask, Band, Builder, CommitCtx, Component, Dir, EntityId, ImageError, Module,
+    Own, Pos, PrepCtx, Prepared, Proposals, Provided, ReadCells, Reader, Rows, Senses, Target,
+    Writer, provides,
 };
 
 use config::{
-    APPROACH_COST, DECAY, EAT_COST, FULL, PECKISH, PLANT_NUTRITION, STARVE_DAMAGE, STARVING,
+    APPROACH_COST, BITE, DECAY, EAT_COST, FULL, PECKISH, PLANT_NUTRITION, REMAINS_NUTRITION,
+    STARVE_DAMAGE, STARVING,
 };
 
 /// What is left in the stomach.
@@ -58,6 +60,7 @@ impl Action for Eating {
 #[derive(Debug)]
 pub enum Meal {
     Graze { at: Pos, gain: u16 },
+    Feed { id: EntityId },
     Step(Dir),
 }
 
@@ -91,6 +94,26 @@ fn chebyshev(a: Pos, b: Pos) -> u16 {
     a.x.abs_diff(b.x).max(a.y.abs_diff(b.y))
 }
 
+/// The least is eaten first: nearest, then most nourishing, then by (y, x),
+/// then a plant (no id) before remains, then by id.
+type Choice = (u16, Reverse<u16>, i16, i16, Option<EntityId>);
+
+fn choice(from: Pos, at: Pos, nutrition: u16, remains: Option<EntityId>) -> Choice {
+    (chebyshev(from, at), Reverse(nutrition), at.y, at.x, remains)
+}
+
+/// A greedy step from `pos` toward `at`.
+fn approach(ctx: &PrepCtx<'_>, pos: Pos, at: Pos) -> Prepared<Eating, Meal> {
+    let toward = ((at.x - pos.x).signum(), (at.y - pos.y).signum());
+    match Dir::ALL.into_iter().find(|dir| dir.offset() == toward) {
+        Some(dir) if ctx.check_step(dir).is_ok() => Prepared::Go {
+            cost: APPROACH_COST,
+            plan: Meal::Step(dir),
+        },
+        _ => Prepared::Fail,
+    }
+}
+
 impl Module for Hunger {
     const NAME: &'static str = "hunger";
     const PROVIDES: &'static [Provided] = &[provides::<Appetite>()];
@@ -110,9 +133,6 @@ impl Module for Hunger {
     }
 
     fn propose(&self, senses: &Senses<'_>, out: &mut Proposals<'_, Eating>) {
-        let (Some(plants), Some(_)) = (self.plants, self.graze) else {
-            return;
-        };
         let Some(&Satiety(satiety)) = senses.get(self.satiety.read()) else {
             return;
         };
@@ -120,31 +140,73 @@ impl Module for Hunger {
         if urgency == 0 {
             return;
         }
-        let pos = senses.pos();
-        let Some((at, _)) = senses
-            .cells(plants)
-            .filter(|&(_, growth)| growth > 0)
-            .min_by_key(|&(at, growth)| (chebyshev(pos, at), Reverse(growth)))
-        else {
+        let Some(&Appetite { eats, .. }) = senses.get(self.appetite.read()) else {
             return;
         };
+        let pos = senses.pos();
+        let plant = match (self.plants, self.graze) {
+            (Some(plants), Some(_)) if eats & Appetite::PLANTS != 0 => senses
+                .cells(plants)
+                .filter(|&(_, growth)| growth > 0)
+                .map(|(at, growth)| choice(pos, at, u16::from(growth) * PLANT_NUTRITION, None))
+                .min(),
+            _ => None,
+        };
+        let remains = (eats & Appetite::REMAINS != 0)
+            .then(|| {
+                senses
+                    .remains()
+                    .map(|r| choice(pos, r.pos, r.mass.min(BITE) * REMAINS_NUTRITION, Some(r.id)))
+                    .min()
+            })
+            .flatten();
+        let Some((.., y, x, remains)) = plant.into_iter().chain(remains).min() else {
+            return;
+        };
+        let target = remains.map_or(Target::Pos(Pos { x, y }), Target::Entity);
         let band = if satiety < STARVING {
             Band::Vigilance
         } else {
             Band::Routine
         };
-        out.push(Eating::Eat, band, u16::from(urgency), Target::Pos(at));
+        out.push(Eating::Eat, band, u16::from(urgency), target);
     }
 
     fn prepare(&self, action: Eating, target: Target, ctx: &PrepCtx<'_>) -> Prepared<Eating, Meal> {
-        let (Target::Pos(at), Some(graze)) = (target, self.graze) else {
+        match target {
+            Target::Pos(at) => self.graze_at(action, at, ctx),
+            Target::Entity(id) => feed_on(action, id, ctx),
+            Target::None => Prepared::Fail,
+        }
+    }
+
+    fn commit(&self, meal: Meal, ctx: &mut CommitCtx<'_>) {
+        match meal {
+            Meal::Graze { at, gain } => {
+                ctx.order(self.graze.expect("a graze was checked"), at);
+                self.sate(gain, ctx);
+            }
+            Meal::Feed { id } => {
+                let eaten = ctx.consume(id, BITE);
+                self.sate(eaten * REMAINS_NUTRITION, ctx);
+            }
+            Meal::Step(dir) => {
+                ctx.step(dir);
+            }
+        }
+    }
+}
+
+impl Hunger {
+    fn graze_at(&self, action: Eating, at: Pos, ctx: &PrepCtx<'_>) -> Prepared<Eating, Meal> {
+        let Some(graze) = self.graze else {
             return Prepared::Fail;
         };
         let pos = ctx.pos();
         match action {
             Eating::Eat if chebyshev(pos, at) > 1 => Prepared::Instead {
                 action: Eating::Approach,
-                target,
+                target: Target::Pos(at),
             },
             Eating::Eat => match ctx.check(graze, at) {
                 Some(growth) => Prepared::Go {
@@ -156,35 +218,34 @@ impl Module for Hunger {
                 },
                 None => Prepared::Fail,
             },
-            Eating::Approach => {
-                let toward = ((at.x - pos.x).signum(), (at.y - pos.y).signum());
-                match Dir::ALL.into_iter().find(|dir| dir.offset() == toward) {
-                    Some(dir) if ctx.check_step(dir).is_ok() => Prepared::Go {
-                        cost: APPROACH_COST,
-                        plan: Meal::Step(dir),
-                    },
-                    _ => Prepared::Fail,
-                }
-            }
+            Eating::Approach => approach(ctx, pos, at),
         }
     }
 
-    fn commit(&self, meal: Meal, ctx: &mut CommitCtx<'_>) {
-        match meal {
-            Meal::Graze { at, gain } => {
-                ctx.order(self.graze.expect("a graze was checked"), at);
-                let satiety = ctx
-                    .get_mut(&self.satiety)
-                    .expect("the run requires satiety");
-                satiety.0 = satiety.0.saturating_add(gain).min(FULL);
-                let satiety = satiety.0;
-                ctx.get_mut(&self.appetite)
-                    .expect("the run requires appetite")
-                    .urgency = urgency(satiety);
-            }
-            Meal::Step(dir) => {
-                ctx.step(dir);
-            }
-        }
+    fn sate(&self, gain: u16, ctx: &mut CommitCtx<'_>) {
+        let satiety = ctx
+            .get_mut(&self.satiety)
+            .expect("the run requires satiety");
+        satiety.0 = satiety.0.saturating_add(gain).min(FULL);
+        let satiety = satiety.0;
+        ctx.get_mut(&self.appetite)
+            .expect("the run requires appetite")
+            .urgency = urgency(satiety);
+    }
+}
+
+fn feed_on(action: Eating, id: EntityId, ctx: &PrepCtx<'_>) -> Prepared<Eating, Meal> {
+    let pos = ctx.pos();
+    match (action, ctx.locate(id)) {
+        (Eating::Eat, Some(at)) if chebyshev(pos, at) > 1 => Prepared::Instead {
+            action: Eating::Approach,
+            target: Target::Entity(id),
+        },
+        (Eating::Eat, Some(_)) => Prepared::Go {
+            cost: EAT_COST,
+            plan: Meal::Feed { id },
+        },
+        (Eating::Approach, Some(at)) => approach(ctx, pos, at),
+        (_, None) => Prepared::Fail,
     }
 }

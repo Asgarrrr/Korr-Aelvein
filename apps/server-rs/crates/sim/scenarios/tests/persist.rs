@@ -51,7 +51,7 @@ fn save_load_replay_matches_the_pinned_run() {
 
 /// The whole image under wander: its saved intent and ruleset fingerprint,
 /// which positions alone miss. Any behaviour or floor image change moves it.
-const PINNED_WANDER: u64 = 0xd714_b38e_411f_271b;
+const PINNED_WANDER: u64 = 0xa068_67d1_ff86_66e5;
 
 #[test]
 fn wander_world_hash_pins_the_image() {

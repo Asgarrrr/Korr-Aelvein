@@ -49,6 +49,8 @@ pub struct Floor {
     harms: Vec<Harm>,
     /// Scratch of one row join, cleared before every join.
     harmed: Vec<(Handle, u16)>,
+    /// Remains eaten to nothing since the last turn ended; empty between turns.
+    emptied: Vec<(EntityId, Handle)>,
     /// What happened since the round started; never saved or hashed.
     events: Vec<Event>,
 }
@@ -74,6 +76,7 @@ impl Floor {
             seen: Vec::new(),
             harms: Vec::new(),
             harmed: Vec::new(),
+            emptied: Vec::new(),
             events: Vec::new(),
         }
     }

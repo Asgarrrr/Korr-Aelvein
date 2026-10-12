@@ -31,9 +31,9 @@ pub mod mechanic {
     pub use crate::decision::Band;
     pub use crate::module::{Action, Module, Prepared, Proposals, Target};
     pub use crate::rows::Rows;
-    pub use crate::senses::{Seen, Senses};
+    pub use crate::senses::{Seen, SeenRemains, Senses};
     pub use crate::time::{Cost, Tick};
-    pub use korr_ecs::{AnyRead, Component, ImageError, Own, Read, Reader, Writer};
+    pub use korr_ecs::{AnyRead, Component, EntityId, ImageError, Own, Read, Reader, Writer};
     pub use korr_grid::{Dir, Pos, Stencil, StepError};
     pub use korr_random::DrawIndex;
 }

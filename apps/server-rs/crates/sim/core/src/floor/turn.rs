@@ -54,6 +54,7 @@ impl Floor {
             };
             let cost = self.turn(seed, mechanics, &routes, placed);
             self.drain(ruleset);
+            self.clear_emptied();
             if !self.store.is_alive(actor) || departed(&self.departures, actor) {
                 continue;
             }
@@ -90,7 +91,8 @@ impl Floor {
                 &self.seen,
                 &self.store,
                 actor,
-                self.grid.shape(),
+                &self.grid,
+                ruleset.remains.read(),
                 &self.columns,
             ),
             out: &mut self.candidates,
@@ -244,6 +246,7 @@ impl RunVisit<'_> {
                         columns: &mut self.floor.columns,
                         routes: self.routes,
                         harms: &mut self.floor.harms,
+                        emptied: &mut self.floor.emptied,
                     };
                     module.commit(plan, &mut commit);
                     return Some(cost);

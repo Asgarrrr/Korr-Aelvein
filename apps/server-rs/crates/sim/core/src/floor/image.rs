@@ -155,6 +155,7 @@ impl Floor {
             seen: Vec::new(),
             harms: Vec::new(),
             harmed: Vec::new(),
+            emptied: Vec::new(),
             events: Vec::new(),
         })
     }

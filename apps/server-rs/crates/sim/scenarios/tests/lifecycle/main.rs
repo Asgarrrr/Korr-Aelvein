@@ -15,6 +15,10 @@ const GROUND: FloorId = FloorId(0);
 const UPPER: FloorId = FloorId(1);
 const HUNGER: Cause = Cause::Mechanic(ModuleKey::of("hunger"));
 const MAX: u16 = 10;
+const HERBIVORE: Appetite = Appetite {
+    urgency: 0,
+    eats: Appetite::PLANTS,
+};
 
 mod actions;
 mod causes;
@@ -32,7 +36,7 @@ fn mortal(f: &mut Floor, ruleset: &Ruleset, at: Pos, hp: u16, max: u16) -> Handl
 
 fn starve(f: &mut Floor, ruleset: &Ruleset, h: Handle) {
     f.init(ruleset, h, "hunger.satiety", Satiety(0));
-    f.init(ruleset, h, Appetite::NAME, Appetite { urgency: 0 });
+    f.init(ruleset, h, Appetite::NAME, HERBIVORE);
 }
 
 fn hunger() -> Game<Hunger> {
