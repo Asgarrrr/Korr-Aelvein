@@ -17,7 +17,6 @@ use crate::decision::Candidates;
 use crate::floor::inbox::{Flight, Inbox};
 use crate::floor::membership::Joiner;
 use crate::floor::schedule::Schedule;
-use crate::module::Module;
 use crate::ruleset::Ruleset;
 use crate::senses::Seen;
 use crate::time::{Round, Tick};
@@ -31,7 +30,7 @@ pub struct Floor {
     /// One per entry of `Ruleset::columns`, in the same order.
     columns: Vec<CellColumn>,
     /// The next values of the column being ticked; swapped with it, never read between ticks.
-    /// `None` when the ruleset runs no module with a cell column.
+    /// `None` when the ruleset has no cell column.
     scratch: Option<CellColumn>,
     /// Fingerprint of the ruleset that built the floor: its column order is the only key to `columns`.
     fingerprint: u64,
@@ -75,22 +74,24 @@ impl Floor {
         self.grid.set_material(at, m);
     }
 
-    /// # Panics
-    /// When `ruleset` is not the one that built this floor, does not run `M`,
-    /// or `at` is not an interior cell of this floor.
-    #[must_use]
-    pub fn cell_value<M: Module>(&self, ruleset: &Ruleset, at: Pos) -> u8 {
-        self.columns[self.column_of::<M>(ruleset)].get(self.interior(at))
-    }
-
-    /// For setup and content: a round never calls it.
+    /// For tests and setup: a round resolves no column by name.
     ///
     /// # Panics
-    /// When `ruleset` is not the one that built this floor, does not run `M`,
-    /// or `at` is not an interior cell of this floor.
-    pub fn set_cell_value<M: Module>(&mut self, ruleset: &Ruleset, at: Pos, value: u8) {
+    /// When `ruleset` is not the one that built this floor, has no cell
+    /// column `name`, or `at` is not an interior cell of this floor.
+    #[must_use]
+    pub fn cell(&self, ruleset: &Ruleset, name: &str, at: Pos) -> u8 {
+        self.columns[self.column_of(ruleset, name)].get(self.interior(at))
+    }
+
+    /// For tests and setup: a round resolves no column by name.
+    ///
+    /// # Panics
+    /// When `ruleset` is not the one that built this floor, has no cell
+    /// column `name`, or `at` is not an interior cell of this floor.
+    pub fn set_cell(&mut self, ruleset: &Ruleset, name: &str, at: Pos, value: u8) {
         let at = self.interior(at);
-        let column = self.column_of::<M>(ruleset);
+        let column = self.column_of(ruleset, name);
         self.columns[column].set(at, value);
     }
 
@@ -120,6 +121,28 @@ impl Floor {
     /// When `h` is dead, or `key` comes from another schema.
     pub fn insert<T: Component>(&mut self, key: &Own<T>, h: Handle, value: T) -> Option<T> {
         self.store.insert(key, h, value)
+    }
+
+    /// Species setup by the host, through a component found by name: the one
+    /// write without the write key, so content seeds rows a module owns.
+    /// Returns the value `h` held before.
+    ///
+    /// # Panics
+    /// When `ruleset` is not the one that built this floor, registers no
+    /// component `name`, or its column does not hold `T`, or `h` is dead.
+    pub fn init<T: Component>(
+        &mut self,
+        ruleset: &Ruleset,
+        h: Handle,
+        name: &str,
+        value: T,
+    ) -> Option<T> {
+        self.check_ruleset(ruleset);
+        let key = ruleset
+            .schema
+            .find(name)
+            .unwrap_or_else(|| panic!("no component named {name}"));
+        self.store.init(key, h, value)
     }
 
     #[must_use]
@@ -188,14 +211,13 @@ impl Floor {
         );
     }
 
-    fn column_of<M: Module>(&self, ruleset: &Ruleset) -> usize {
-        const { assert!(M::CELL_COLUMN, "the module owns no cell column") };
+    fn column_of(&self, ruleset: &Ruleset, name: &str) -> usize {
         self.check_ruleset(ruleset);
         ruleset
             .columns
             .iter()
-            .position(|&name| name == M::NAME)
-            .unwrap_or_else(|| panic!("the ruleset does not run {}", M::NAME))
+            .position(|column| column == name)
+            .unwrap_or_else(|| panic!("no cell column named {name}"))
     }
 }
 

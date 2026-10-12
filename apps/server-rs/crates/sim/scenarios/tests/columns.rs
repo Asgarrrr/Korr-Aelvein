@@ -1,35 +1,112 @@
-use korr_core::host::{Floor, Game, LoadError, Pos, Ruleset, Sections, Seed, World};
+use core::convert::Infallible;
+
+use korr_contracts::Graze;
+use korr_core::host::{Floor, Game, LoadError, Pos, Ruleset, Sections, Seed, Then, World, keyed};
+use korr_core::mechanic::{
+    Builder, CommitCtx, Module, PrepCtx, Prepared, Proposals, Senses, Served, Target, serves,
+};
 use korr_ecs::{FloorId, ImageError};
-use korr_engine::Registry;
-use korr_flora::Flora;
+use korr_engine::{Modules, Registry};
 use korr_scenarios::{actionless, floor, game, reload};
 
 const SEED: Seed = Seed(7);
 
 // One name, with and without a cell column.
 actionless!(Bare, "test.soil");
-actionless!(Soiled, "test.soil", CELL_COLUMN = true);
+actionless!(Soiled, "test.soil", cells);
 
 #[test]
 fn a_module_that_gains_a_column_refuses_the_save() {
     let saving = game(Bare, SEED);
     let bytes = floor(saving.ruleset(), FloorId(0), 4, 4).save(saving.ruleset());
-    let running = game(Soiled, SEED);
+    let running = game(keyed(Soiled::build), SEED);
     assert!(matches!(
         Floor::load(running.ruleset(), &bytes),
         Err(LoadError::Ruleset { .. })
     ));
 }
 
-actionless!(Peat, "test.peat", CELL_COLUMN = true);
+actionless!(Peat, "test.peat", cells);
 
 #[test]
 #[should_panic(expected = "ruleset is not the one that built this floor")]
 fn a_cell_column_is_not_readable_under_a_foreign_ruleset() {
-    let building = game(Soiled, SEED);
+    let building = game(keyed(Soiled::build), SEED);
     let f = floor(building.ruleset(), FloorId(0), 4, 4);
-    let foreign = game(Peat, SEED);
-    let _ = f.cell_value::<Peat>(foreign.ruleset(), Pos { x: 1, y: 1 });
+    let foreign = game(keyed(Peat::build), SEED);
+    let _ = f.cell(foreign.ruleset(), "test.peat.cells", Pos { x: 1, y: 1 });
+}
+
+#[test]
+#[should_panic(expected = "no cell column named test.peat.cells")]
+fn a_cell_column_is_found_only_by_its_name() {
+    let game = game(keyed(Soiled::build), SEED);
+    let f = floor(game.ruleset(), FloorId(0), 4, 4);
+    let _ = f.cell(game.ruleset(), "test.peat.cells", Pos { x: 1, y: 1 });
+}
+
+actionless!(Greedy, "test.greedy");
+
+impl Greedy {
+    fn build(b: &mut Builder<'_>) -> Self {
+        b.cells("soil");
+        b.cells("peat");
+        Self
+    }
+}
+
+#[test]
+#[should_panic(expected = "test.greedy owns two cell columns")]
+fn a_module_binds_one_cell_column() {
+    let _ = game(keyed(Greedy::build), SEED);
+}
+
+/// Serves `Graze` like flora, on a column of its own or none.
+struct Grazed;
+
+impl Grazed {
+    fn bare(_: &mut Builder<'_>) -> Self {
+        Self
+    }
+
+    fn build(b: &mut Builder<'_>) -> Self {
+        b.cells("cells");
+        Self
+    }
+}
+
+impl Module for Grazed {
+    const NAME: &'static str = "test.grazed";
+    const SERVES: Option<Served> = Some(serves::<Graze>());
+    type Action = Infallible;
+    type Plan = Infallible;
+
+    fn propose(&self, _: &Senses<'_>, _: &mut Proposals<'_, Infallible>) {}
+
+    fn prepare(
+        &self,
+        action: Infallible,
+        _: Target,
+        _: &PrepCtx<'_>,
+    ) -> Prepared<Infallible, Infallible> {
+        match action {}
+    }
+
+    fn commit(&self, plan: Infallible, _: &mut CommitCtx<'_>) {
+        match plan {}
+    }
+}
+
+#[test]
+#[should_panic(expected = "test.grazed serves graze without a cell column")]
+fn a_command_is_served_on_a_cell_column() {
+    let _ = game(keyed(Grazed::bare), SEED);
+}
+
+#[test]
+#[should_panic(expected = "command graze served by flora and test.grazed")]
+fn one_module_serves_a_command() {
+    let _ = game(Then(Registry::default(), keyed(Grazed::build)), SEED);
 }
 
 #[test]
@@ -37,7 +114,7 @@ fn a_cell_column_is_not_readable_under_a_foreign_ruleset() {
 fn a_round_does_not_run_on_a_floor_of_another_ruleset() {
     let building = game(
         Registry {
-            flora: None,
+            flora: false,
             ..Registry::default()
         },
         SEED,
@@ -53,7 +130,7 @@ fn a_floor_is_not_saved_under_another_ruleset() {
     let f = floor(building.ruleset(), FloorId(0), 4, 4);
     let foreign = game(
         Registry {
-            flora: None,
+            flora: false,
             ..Registry::default()
         },
         SEED,
@@ -65,15 +142,16 @@ fn a_floor_is_not_saved_under_another_ruleset() {
 fn planted(ruleset: &Ruleset) -> Floor {
     let mut f = floor(ruleset, FloorId(0), 10, 7);
     for (x, y, value) in [(1, 1, 1), (8, 1, 2), (1, 5, 3), (8, 5, 255), (4, 3, 4)] {
-        f.set_cell_value::<Flora>(ruleset, Pos { x, y }, value);
+        f.set_cell(ruleset, "plants", Pos { x, y }, value);
     }
     f
 }
 
-fn flora_only() -> Game<Registry> {
+fn flora_only() -> Game<Modules> {
     game(
         Registry {
-            wander: None,
+            wander: false,
+            hunger: false,
             ..Registry::default()
         },
         SEED,
@@ -90,8 +168,8 @@ fn planted_cells_survive_a_reload() {
         for x in 1..=8 {
             let at = Pos { x, y };
             assert_eq!(
-                loaded.cell_value::<Flora>(ruleset, at),
-                saved.cell_value::<Flora>(ruleset, at),
+                loaded.cell(ruleset, "plants", at),
+                saved.cell(ruleset, "plants", at),
                 "{at:?}"
             );
         }

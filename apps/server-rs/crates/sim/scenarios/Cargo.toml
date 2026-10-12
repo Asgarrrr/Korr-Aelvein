@@ -6,11 +6,13 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+korr-contracts.workspace = true
 korr-core.workspace = true
 korr-ecs.workspace = true
 korr-grid.workspace = true
 korr-engine.workspace = true
 korr-flora.workspace = true
+korr-hunger.workspace = true
 
 [lints]
 workspace = true

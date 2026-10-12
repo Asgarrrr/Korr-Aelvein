@@ -1,11 +1,11 @@
 use korr_core::{
-    host::{Game, Seed, World},
+    host::{Seed, World},
     mechanic::{
         Action, Band, CommitCtx, Cost, Module, Pos, PrepCtx, Prepared, Proposals, Senses, Target,
     },
 };
-use korr_ecs::{FloorId, SchemaBuilder};
-use korr_scenarios::{floor, run};
+use korr_ecs::FloorId;
+use korr_scenarios::{floor, game, run};
 
 /// `Unlisted` is left out of `ALL`; the flag picks how it reaches the core.
 #[derive(Debug)]
@@ -61,7 +61,7 @@ impl Module for Partial {
 }
 
 fn one_turn(redirect: bool) {
-    let game = Game::new(SchemaBuilder::default(), Partial { redirect }, Seed(1));
+    let game = game(Partial { redirect }, Seed(1));
     let mut f = floor(game.ruleset(), FloorId(0), 5, 5);
     f.spawn_actor(game.ruleset(), Pos { x: 2, y: 2 });
     run(&game, &mut World::new(vec![f]), 1);

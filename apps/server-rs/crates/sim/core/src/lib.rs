@@ -4,6 +4,7 @@
 
 extern crate alloc;
 
+mod build;
 mod config;
 mod ctx;
 mod decision;
@@ -11,6 +12,7 @@ mod error;
 mod floor;
 mod game;
 mod module;
+mod rows;
 mod ruleset;
 mod runner;
 mod save;
@@ -20,17 +22,24 @@ mod world;
 
 /// What a mechanic may name: the module seam and the values it trades in.
 pub mod mechanic {
+    pub use crate::build::{
+        Ask, Builder, CellContract, Command, Contract, Provided, ReadCells, Served, provides,
+        provides_cells, serves,
+    };
     pub use crate::ctx::{CommitCtx, Draws, PrepCtx};
     pub use crate::decision::Band;
     pub use crate::module::{Action, Module, Prepared, Proposals, Target};
+    pub use crate::rows::Rows;
     pub use crate::senses::{Seen, Senses};
     pub use crate::time::{Cost, Tick};
+    pub use korr_ecs::{AnyRead, Component, ImageError, Own, Read, Reader, Writer};
     pub use korr_grid::{Dir, Pos, Stencil, StepError};
     pub use korr_random::DrawIndex;
 }
 
 /// What runs a world: the game, its floors, their saves and the registry seam.
 pub mod host {
+    pub use crate::build::{Assembly, Both, Declarations, Keyed, Recipe, Then, keyed};
     pub use crate::config::{SIGHT, TICKS_PER_ROUND};
     pub use crate::error::{LoadError, WorldError};
     pub use crate::floor::{FlightImage, Floor, Sections};

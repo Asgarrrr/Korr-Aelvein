@@ -1,10 +1,14 @@
+use alloc::vec::Vec;
 use core::marker::PhantomData;
 
+use korr_ecs::AnyRead;
 use korr_grid::{Pos, Stencil};
 use korr_random::{ModuleKey, name_hash};
 
+use crate::build::{Provided, Served};
 use crate::ctx::{CommitCtx, Draws, PrepCtx};
 use crate::decision::{ActionRef, Band, Candidate, Candidates};
+use crate::rows::Rows;
 use crate::senses::Senses;
 use crate::time::Cost;
 
@@ -28,22 +32,36 @@ pub trait Module {
     type Action: Action;
     /// What `commit` needs: a commit cannot draw, so it cannot redo the plan differently.
     type Plan;
-    /// One `u8` per cell of every floor, 0 on a new floor, named by the module.
-    const CELL_COLUMN: bool = false;
+    /// The contracts the module's build must provide, one `provides::<C>()` each.
+    const PROVIDES: &'static [Provided] = &[];
+    /// The command the module serves on its cell column, one `serves::<C>()`.
+    const SERVES: Option<Served> = None;
     /// The next value of the module's cell column at one cell, from the previous
-    /// round's column; called once per cell and round, only when `CELL_COLUMN`.
-    /// Its draws come from the cell's own stream.
+    /// round's column; called once per cell and round, only when the build
+    /// binds a column. Its draws come from the cell's own stream.
     fn tick(&self, cell: Stencil<'_>, _: Draws) -> u8 {
         cell.value()
     }
+    /// The reply to the served command at a cell holding `value`, in the
+    /// asker's prepare; `None` refuses it.
+    fn check(&self, _value: u8) -> Option<u8> {
+        None
+    }
+    /// The cell's value once the served command is applied, in the asker's commit.
+    fn apply(&self, value: u8) -> u8 {
+        value
+    }
+    /// The module's bulk tick over entity rows, once per floor and round, after its cells.
+    fn tick_rows(&self, _: &mut Rows<'_>) {}
     /// Whether `propose` reads `Senses::seen`; when no module does, the core skips the scan.
     fn perceives(&self) -> bool {
         false
     }
-    /// The components the actor must hold, by schema name; without one the run fails.
+    /// The components the actor must hold to run `action`; without one the run
+    /// fails. Called once per action, when the ruleset is built.
     #[must_use]
-    fn requires(_: Self::Action) -> &'static [&'static str] {
-        &[]
+    fn requires(&self, _action: Self::Action) -> Vec<AnyRead> {
+        Vec::new()
     }
     fn propose(&self, senses: &Senses<'_>, out: &mut Proposals<'_, Self::Action>);
     fn prepare(

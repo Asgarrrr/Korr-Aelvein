@@ -1,11 +1,32 @@
 use alloc::vec::Vec;
+use core::fmt;
 use core::num::NonZeroU32;
 
-use korr_ecs::{EntityId, FloorId, Handle};
-use korr_grid::{Dir, Grid, Pos, StepError};
+use korr_ecs::{Component, EntityId, FloorId, Handle, Own, Store};
+use korr_grid::{CellColumn, Dir, Grid, Pos, StepError};
 use korr_random::{DrawIndex, ModuleKey, Phase, Seed, Stream, Subject};
 
+use crate::build::Ask;
+use crate::ruleset::{ModuleEntry, Ruleset};
 use crate::time::Tick;
+
+/// The ruleset, and how a command reaches its server: built once per floor
+/// and round, so a turn copies one pointer rather than both closures.
+pub(crate) struct Routes<'a> {
+    pub(crate) ruleset: &'a Ruleset,
+    /// The `check` of the module at a visit ordinal, on one cell value.
+    pub(crate) check: &'a dyn Fn(u16, u8) -> Option<u8>,
+    /// The `apply` of the module at a visit ordinal, on one cell value.
+    pub(crate) apply: &'a dyn Fn(u16, u8) -> u8,
+}
+
+/// The column a command's server binds; the build ensures it binds one.
+fn served(modules: &[ModuleEntry], module: u16) -> usize {
+    let column = modules[usize::from(module)]
+        .column
+        .expect("a module that serves a command binds a cell column");
+    usize::from(column)
+}
 
 /// The draws of one subject at one time: an actor's action, or a cell's tick.
 #[derive(Debug, Clone, Copy)]
@@ -54,7 +75,6 @@ pub(crate) fn departed(departures: &[Departure], actor: Handle) -> bool {
     departures.last().is_some_and(|d| d.actor == actor)
 }
 
-#[derive(Debug)]
 pub struct PrepCtx<'a> {
     pub(crate) grid: &'a Grid,
     pub(crate) actor: Handle,
@@ -62,12 +82,31 @@ pub struct PrepCtx<'a> {
     pub(crate) floor: FloorId,
     pub(crate) draws: Draws,
     pub(crate) now: Tick,
+    pub(crate) columns: &'a [CellColumn],
+    pub(crate) routes: &'a Routes<'a>,
+}
+
+impl fmt::Debug for PrepCtx<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PrepCtx")
+            .field("actor", &self.id)
+            .field("floor", &self.floor)
+            .field("now", &self.now)
+            .finish_non_exhaustive()
+    }
 }
 
 impl PrepCtx<'_> {
     #[must_use]
     pub fn actor(&self) -> EntityId {
         self.id
+    }
+
+    /// # Panics
+    /// When the actor is not placed: a due actor always is.
+    #[must_use]
+    pub fn pos(&self) -> Pos {
+        self.grid.pos(self.actor).expect("a due actor is placed")
     }
 
     #[must_use]
@@ -82,6 +121,9 @@ impl PrepCtx<'_> {
 
     /// # Errors
     /// Why the actor cannot step in `dir`.
+    // With a second caller LTO calls it out of line from wander's prepare:
+    // +7% per round on the wander benches.
+    #[inline]
     pub fn check_step(&self, dir: Dir) -> Result<Pos, StepError> {
         self.grid.check_step(self.actor, dir)
     }
@@ -90,16 +132,57 @@ impl PrepCtx<'_> {
     pub fn below(&self, draw: impl Into<DrawIndex>, bound: NonZeroU32) -> u32 {
         self.draws.below(draw, bound)
     }
+
+    /// The server's reply to `C` at `at`; `None` when it refuses, or `at` is
+    /// off the floor.
+    #[must_use]
+    pub fn check<C>(&self, ask: Ask<C>, at: Pos) -> Option<u8> {
+        let at = self.grid.shape().idx(at)?;
+        let value = self.columns[served(&self.routes.ruleset.modules, ask.module)].get(at);
+        (self.routes.check)(ask.module, value)
+    }
 }
 
-#[derive(Debug)]
 pub struct CommitCtx<'a> {
     pub(crate) grid: &'a mut Grid,
     pub(crate) actor: Handle,
     pub(crate) departures: &'a mut Vec<Departure>,
+    pub(crate) store: &'a mut Store,
+    pub(crate) columns: &'a mut [CellColumn],
+    pub(crate) routes: &'a Routes<'a>,
+}
+
+impl fmt::Debug for CommitCtx<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CommitCtx")
+            .field("actor", &self.actor)
+            .finish_non_exhaustive()
+    }
 }
 
 impl CommitCtx<'_> {
+    /// The actor's own row of `key`.
+    ///
+    /// # Panics
+    /// When `key` comes from another schema.
+    pub fn get_mut<T: Component>(&mut self, key: &Own<T>) -> Option<&mut T> {
+        self.store.get_mut(key, self.actor)
+    }
+
+    /// Applies `C` at `at` through its server.
+    ///
+    /// # Panics
+    /// When `at` is off the floor: its prepare must have checked it.
+    pub fn order<C>(&mut self, ask: Ask<C>, at: Pos) {
+        let at = self
+            .grid
+            .shape()
+            .idx(at)
+            .expect("commit of an order its prepare did not check");
+        let column = &mut self.columns[served(&self.routes.ruleset.modules, ask.module)];
+        column.set(at, (self.routes.apply)(ask.module, column.get(at)));
+    }
+
     /// # Panics
     /// When the step is refused: its prepare must have checked it.
     pub fn step(&mut self, dir: Dir) -> Pos {

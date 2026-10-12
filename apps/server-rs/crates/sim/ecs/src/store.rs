@@ -1,5 +1,6 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::any::Any;
 use core::fmt::{self, Debug};
 
 use crate::codec::Component;
@@ -93,6 +94,21 @@ impl Store {
     pub fn insert<T: Component>(&mut self, key: &Own<T>, h: Handle, value: T) -> Option<T> {
         assert!(self.is_alive(h), "insert on a dead handle");
         self.column_mut(key).insert(h.slot, value)
+    }
+
+    /// Inserts through a key found by name: for setup by a host that holds
+    /// no write key. Returns the value `h` held before.
+    ///
+    /// # Panics
+    /// When `h` is dead, `key` comes from another schema, or its column does not hold `T`.
+    pub fn init<T: Component>(&mut self, key: AnyRead, h: Handle, value: T) -> Option<T> {
+        assert!(self.is_alive(h), "init on a dead handle");
+        let index = self.checked(key.id, key.prefix);
+        let column: &mut dyn Any = &mut *self.columns[index];
+        column
+            .downcast_mut::<Column<T>>()
+            .expect("init with a type its column does not hold")
+            .insert(h.slot, value)
     }
 
     /// # Panics

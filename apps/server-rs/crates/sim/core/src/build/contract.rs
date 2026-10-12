@@ -1,0 +1,111 @@
+use alloc::boxed::Box;
+use core::any::{Any, TypeId};
+use core::fmt;
+use core::marker::PhantomData;
+
+use korr_ecs::{Component, SchemaBuilder};
+
+/// A component that one module provides and any module may read, under one
+/// world-wide name.
+pub trait Contract: Component {
+    const NAME: &'static str;
+}
+
+/// A cell column that one module provides and any module may read, under
+/// one world-wide name.
+pub trait CellContract: 'static {
+    const NAME: &'static str;
+}
+
+/// One contract a module declares in `Module::PROVIDES`.
+pub struct Provided {
+    pub(super) name: &'static str,
+    pub(super) ty: TypeId,
+    pub(super) kind: Kind,
+}
+
+/// A contract's write key, then its read key.
+type Keys = (Box<dyn Any>, Box<dyn Any>);
+
+pub(super) enum Kind {
+    Component(fn(&mut SchemaBuilder) -> Keys),
+    Cells,
+}
+
+impl fmt::Debug for Provided {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Provided").field(&self.name).finish()
+    }
+}
+
+#[must_use]
+pub const fn provides<C: Contract>() -> Provided {
+    Provided {
+        name: C::NAME,
+        ty: TypeId::of::<C>(),
+        kind: Kind::Component(register::<C>),
+    }
+}
+
+#[must_use]
+pub const fn provides_cells<C: CellContract>() -> Provided {
+    Provided {
+        name: C::NAME,
+        ty: TypeId::of::<C>(),
+        kind: Kind::Cells,
+    }
+}
+
+fn register<C: Contract>(schema: &mut SchemaBuilder) -> Keys {
+    let own = schema.register::<C>(C::NAME);
+    let read = own.read();
+    (Box::new(own), Box::new(read))
+}
+
+/// The read side of a cell column, for `Senses::cells`.
+#[derive(Debug, Clone, Copy)]
+pub struct ReadCells {
+    pub(crate) slot: u16,
+}
+
+/// A request that one module serves on its own cell column: it checks a
+/// cell in the asker's prepare and applies the request in its commit.
+pub trait Command: 'static {
+    const NAME: &'static str;
+}
+
+/// The command a module declares in `Module::SERVES`.
+#[derive(Debug, Clone, Copy)]
+pub struct Served {
+    pub(super) name: &'static str,
+    pub(super) ty: TypeId,
+}
+
+#[must_use]
+pub const fn serves<C: Command>() -> Served {
+    Served {
+        name: C::NAME,
+        ty: TypeId::of::<C>(),
+    }
+}
+
+/// The right to send `C` to the module that serves it.
+pub struct Ask<C> {
+    /// The server's visit ordinal.
+    pub(crate) module: u16,
+    pub(super) kind: PhantomData<fn() -> C>,
+}
+
+impl<C> Clone for Ask<C> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<C> Copy for Ask<C> {}
+
+impl<C> fmt::Debug for Ask<C> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Ask").field(&self.module).finish()
+    }
+}

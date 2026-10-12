@@ -686,6 +686,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "korr-contracts"
+version = "0.0.0"
+dependencies = [
+ "korr-core",
+]
+
+[[package]]
 name = "korr-core"
 version = "0.0.0"
 dependencies = [
@@ -727,6 +734,7 @@ version = "0.0.0"
 dependencies = [
  "korr-core",
  "korr-flora",
+ "korr-hunger",
  "korr-wander",
 ]
 
@@ -734,6 +742,7 @@ dependencies = [
 name = "korr-flora"
 version = "0.0.0"
 dependencies = [
+ "korr-contracts",
  "korr-core",
 ]
 
@@ -747,6 +756,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "korr-hunger"
+version = "0.0.0"
+dependencies = [
+ "korr-contracts",
+ "korr-core",
+]
+
+[[package]]
 name = "korr-random"
 version = "0.0.0"
 
@@ -754,11 +771,13 @@ version = "0.0.0"
 name = "korr-scenarios"
 version = "0.0.0"
 dependencies = [
+ "korr-contracts",
  "korr-core",
  "korr-ecs",
  "korr-engine",
  "korr-flora",
  "korr-grid",
+ "korr-hunger",
 ]
 
 [[package]]

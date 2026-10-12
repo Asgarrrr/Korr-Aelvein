@@ -162,3 +162,21 @@ fn join_mut_with_a_mismatched_key_panics() {
     let (mismatched, _) = foreign_keys();
     store.join_mut(&a, &mismatched, |_, _: &mut A, _: &mut A| {});
 }
+
+#[test]
+fn join_mut_pairs_rows_by_owner_when_dense_orders_differ() {
+    let (mut store, a, b) = lone_store();
+    let handles: Vec<Handle> = (0..4).map(|_| store.spawn()).collect();
+    for (i, &h) in (0_u32..).zip(&handles) {
+        store.insert(&a, h, A(i));
+    }
+    for (i, &h) in (0_u32..4).zip(&handles).rev() {
+        store.insert(&b, h, B(10 * i));
+    }
+    store.join_mut(&a, &b, |_, a, b| a.0 += b.0);
+    let sums: Vec<u32> = handles
+        .iter()
+        .map(|&h| store.get(a.read(), h).expect("every handle holds a").0)
+        .collect();
+    assert_eq!(sums, [0, 11, 22, 33]);
+}

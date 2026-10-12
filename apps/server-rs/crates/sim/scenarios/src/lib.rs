@@ -10,12 +10,12 @@ mod scripted;
 mod shy;
 
 use korr_core::{
-    host::{Floor, Game, Mechanics, Pos, Ruleset, Runner, Seed, Sequential, World},
+    host::{Floor, Game, Mechanics, Pos, Recipe, Ruleset, Runner, Seed, Sequential, World},
     mechanic::{
         Action, Band, CommitCtx, Cost, Dir, Module, PrepCtx, Prepared, Proposals, Senses, Target,
     },
 };
-use korr_ecs::{FloorId, SchemaBuilder};
+use korr_ecs::FloorId;
 use korr_grid::Shape;
 
 pub use leave::Leave;
@@ -23,15 +23,25 @@ pub use ring::Ring;
 pub use scripted::{Act, Answer, Fake, Scripted};
 pub use shy::{Shy, random_step};
 
-/// Declares `$module`, a module named `$name` with no action.
+/// Declares `$module`, a module named `$name` with no action. With `cells`,
+/// its `build` binds a cell column named `$name.cells`, for `keyed`.
 #[macro_export]
 macro_rules! actionless {
-    ($module:ident, $name:literal $(, CELL_COLUMN = $column:literal)?) => {
+    ($module:ident, $name:literal, cells) => {
+        $crate::actionless!($module, $name);
+
+        impl $module {
+            fn build(b: &mut ::korr_core::mechanic::Builder<'_>) -> Self {
+                b.cells("cells");
+                Self
+            }
+        }
+    };
+    ($module:ident, $name:literal) => {
         struct $module;
 
         impl ::korr_core::mechanic::Module for $module {
             const NAME: &'static str = $name;
-            $(const CELL_COLUMN: bool = $column;)?
             type Action = ::core::convert::Infallible;
             type Plan = ::core::convert::Infallible;
 
@@ -47,8 +57,10 @@ macro_rules! actionless {
                 action: ::core::convert::Infallible,
                 _: ::korr_core::mechanic::Target,
                 _: &::korr_core::mechanic::PrepCtx<'_>,
-            ) -> ::korr_core::mechanic::Prepared<::core::convert::Infallible, ::core::convert::Infallible>
-            {
+            ) -> ::korr_core::mechanic::Prepared<
+                ::core::convert::Infallible,
+                ::core::convert::Infallible,
+            > {
                 match action {}
             }
 
@@ -82,10 +94,10 @@ pub fn reload(ruleset: &Ruleset, floor: &Floor) -> Floor {
 
 /// # Panics
 /// When two modules share a name, two actions share an `ActionKey`, or
-/// an action requires a component the schema does not register.
+/// the recipe breaks a contract rule.
 #[must_use]
-pub fn game<M: Mechanics>(mechanics: M, seed: Seed) -> Game<M> {
-    Game::new(SchemaBuilder::default(), mechanics, seed)
+pub fn game<R: Recipe>(recipe: R, seed: Seed) -> Game<R::Mechanics> {
+    Game::new(recipe, seed)
 }
 
 /// Every actor off floor 0 departs for its centre.

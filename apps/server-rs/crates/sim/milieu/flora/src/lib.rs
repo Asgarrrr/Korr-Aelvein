@@ -1,6 +1,7 @@
 //! Flora: the plants on the cells of a floor. A cell's value is its plant, 0
 //! for bare ground. Each round a plant grows one step until ripe, and bare
 //! ground beside ripe plants may sprout. A plant off walkable ground withers.
+//! A grazed plant leaves bare ground.
 #![no_std]
 #![deny(clippy::float_arithmetic)]
 
@@ -8,8 +9,10 @@ mod config;
 
 use core::convert::Infallible;
 
+use korr_contracts::{Graze, Plants};
 use korr_core::mechanic::{
-    CommitCtx, DrawIndex, Draws, Module, PrepCtx, Prepared, Proposals, Senses, Stencil, Target,
+    Builder, CommitCtx, DrawIndex, Draws, Module, PrepCtx, Prepared, Proposals, Provided, Senses,
+    Served, Stencil, Target, provides_cells, serves,
 };
 
 use crate::config::{RIPE, SPROUT_CHANCE, SPROUT_ODDS};
@@ -30,11 +33,20 @@ impl From<Draw> for DrawIndex {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Flora;
 
+impl Flora {
+    #[must_use]
+    pub fn build(b: &mut Builder<'_>) -> Self {
+        b.provide_cells::<Plants>();
+        Self
+    }
+}
+
 impl Module for Flora {
     const NAME: &'static str = "flora";
     type Action = Infallible;
     type Plan = Infallible;
-    const CELL_COLUMN: bool = true;
+    const PROVIDES: &'static [Provided] = &[provides_cells::<Plants>()];
+    const SERVES: Option<Served> = Some(serves::<Graze>());
 
     #[inline]
     fn tick(&self, cell: Stencil<'_>, draws: Draws) -> u8 {
@@ -57,6 +69,14 @@ impl Module for Flora {
             let ripe = u32::try_from(ripe).expect("a cell has eight neighbours");
             u8::from(draws.below(Draw::Sprout, SPROUT_ODDS) < ripe * SPROUT_CHANCE)
         }
+    }
+
+    fn check(&self, value: u8) -> Option<u8> {
+        (value > 0).then_some(value)
+    }
+
+    fn apply(&self, _: u8) -> u8 {
+        0
     }
 
     fn propose(&self, _: &Senses<'_>, _: &mut Proposals<'_, Infallible>) {}

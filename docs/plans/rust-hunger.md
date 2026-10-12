@@ -40,8 +40,10 @@ The project rule stays: the game runs with any mechanic removed.
 
 ## 1. Building the modules
 
-- `Module` gains `fn build(b: &mut Builder) -> Self`. A module keeps the
-  keys it receives in its own struct.
+- A module with keys exposes an inherent `pub fn build(b: &mut Builder) -> Self`
+  and keeps the keys it receives in its own struct. `Module` has no required
+  `build`: a keyless module builds as it is, and `keyed(M::build)` or the
+  registry passes the builder to one that has keys.
 - `b.own::<T>(name) -> Own<T>`: a private component. The builder prefixes
   the name with `M::NAME`, so a module cannot take another's name. The
   string is persistent, like a `ModuleKey`: it never follows a rename.
@@ -62,13 +64,18 @@ The project rule stays: the game runs with any mechanic removed.
   never taken, a name registered twice, a contract name bound to two types.
 - `TypeId` only pairs a contract with its provider. It never enters a hash
   or a sort: its order changes between rustc releases.
-- Cell columns follow the same rules: `b.cells::<T>(name)`,
-  `provide_cells`, `contract_cells`. They replace `CELL_COLUMN: bool`.
+- Cell columns follow the same rules: `b.cells(name)`, `provide_cells`,
+  `contract_cells`. They replace `CELL_COLUMN: bool`. A cell is an untyped
+  `u8`, so `cells` takes no type parameter: a cell contract carries only
+  its name.
 - `requires` returns keys the module holds, not strings.
 - `Game::new` no longer takes a `SchemaBuilder`: the schema follows from the
   registry. Scenario fixtures that register `test.*` components become small
   test modules.
 - The registry is a `macro_rules!` list: one line per mechanic.
+- A module declares no events at build yet: core emits `Died` and
+  `Spawned` only (§4). Module-declared events wait for their first reader,
+  in `docs/ideas.md`.
 - `korr_core::mechanic` re-exports `Own`, `Read`, `Component`, `Reader`,
   `Writer` and `Builder`. A mechanic depends on `korr-core` and
   `korr-contracts` only.
@@ -84,9 +91,13 @@ The project rule stays: the game runs with any mechanic removed.
 - `Senses` extends to things (`Remains`) and to the contract cell columns
   within `SIGHT`.
 - Owner commands, as planned in `rust-core-wander.md`: a contract declares a
-  command; the owner validates it in its `prepare` and applies it in its
-  `commit`, in the same action. Both happen or neither does. First case:
-  hunger's `Graze` to flora.
+  command; the owner validates it during the asker's `prepare` and applies
+  it during the asker's `commit`, in the same action. Both happen or
+  neither does. First case: hunger's `Graze` to flora. The owner runs no
+  `prepare` or `commit` of its own: it implements `Module::check` and
+  `Module::apply` on one cell value, and `PrepCtx::check` and
+  `CommitCtx::order` reach them through two erased closures built per
+  turn, one dyn call per command.
 - A per-entity bulk tick joins the per-cell tick: a monomorphic loop over
   the module's own column, run in the environment phase. It writes only
   the row it iterates and pushes `harm`; kills and spawns stay deferred.
@@ -150,8 +161,8 @@ Crate `korr-hunger` in `biology/physiology/hunger`.
   - `Appetite { urgency: u8, eats: u8 }`, written by hunger's tick.
     Readers (combat, fear) get the urgency without knowing hunger's
     thresholds.
-  - `Edible { class: u8, nutrition: u16 }`, set on edible species; fear
-    reads it for its danger masks.
+  - No `Edible` contract: no module reads it before fear. It waits in
+    `docs/ideas.md`.
 - Private: `Satiety`.
 - Contracts read: flora's cell column (optional) and core `Remains`.
 - Tick: `satiety -= decay`, recompute `Appetite.urgency`, and at zero push

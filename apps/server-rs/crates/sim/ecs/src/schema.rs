@@ -1,4 +1,6 @@
+use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
+use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
 use core::marker::PhantomData;
@@ -11,7 +13,7 @@ pub(crate) struct ComponentId(pub(crate) u32);
 
 #[derive(Debug)]
 pub(crate) struct ComponentInfo {
-    pub(crate) name: &'static str,
+    pub(crate) name: String,
     pub(crate) prefix: u64,
     pub(crate) new_column: fn() -> Box<dyn ErasedColumn>,
 }
@@ -55,6 +57,15 @@ impl<T> fmt::Debug for Read<T> {
 pub struct AnyRead {
     pub(crate) id: ComponentId,
     pub(crate) prefix: u64,
+}
+
+impl<T> From<Read<T>> for AnyRead {
+    fn from(key: Read<T>) -> Self {
+        Self {
+            id: key.id,
+            prefix: key.prefix,
+        }
+    }
 }
 
 /// The write half of a component key, minted once by `register`. It is not
@@ -161,7 +172,7 @@ impl SchemaBuilder {
     /// # Panics
     /// When `name` is empty, longer than `u16::MAX` bytes, or already
     /// registered.
-    pub fn register<T: Component>(&mut self, name: &'static str) -> Own<T> {
+    pub fn register<T: Component>(&mut self, name: &str) -> Own<T> {
         assert!(!name.is_empty(), "component name must not be empty");
         let len = u16::try_from(name.len()).expect("component name longer than u16::MAX bytes");
         assert!(
@@ -175,7 +186,7 @@ impl SchemaBuilder {
             &T::VERSION.to_le_bytes(),
         );
         self.components.push(ComponentInfo {
-            name,
+            name: name.to_owned(),
             prefix: self.prefix,
             new_column: new_column::<T>,
         });

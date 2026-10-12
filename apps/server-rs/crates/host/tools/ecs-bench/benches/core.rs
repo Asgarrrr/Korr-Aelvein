@@ -14,10 +14,9 @@
 //! barrier's share.
 
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use korr_core::host::{Floor, Game, Job, Mechanics, Pos, Ruleset, Runner, Seed, World};
+use korr_core::host::{Floor, Game, Job, Pos, Recipe, Ruleset, Runner, Seed, World, keyed};
 use korr_ecs::FloorId;
-use korr_engine::Registry;
-use korr_flora::Flora;
+use korr_engine::{Modules, Registry};
 use korr_scenarios::{Ring, Shy, actionless, floor, game};
 use korr_server::Threads;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -100,8 +99,8 @@ impl<R: Runner> Runner for Timed<'_, R> {
     }
 }
 
-fn build<M: Mechanics>(mechanics: M, layouts: &[Layout]) -> (World, Game<M>) {
-    let game = game(mechanics, Seed(1));
+fn build<R: Recipe>(recipe: R, layouts: &[Layout]) -> (World, Game<R::Mechanics>) {
+    let game = game(recipe, Seed(1));
     let floors = layouts
         .iter()
         .enumerate()
@@ -113,7 +112,7 @@ fn build<M: Mechanics>(mechanics: M, layouts: &[Layout]) -> (World, Game<M>) {
     (World::new(floors), game)
 }
 
-actionless!(Still, "still", CELL_COLUMN = true);
+actionless!(Still, "still", cells);
 
 /// The `k`-th of `n` cells spread evenly over the interior, row-major.
 fn spread(side: u16, k: u32, n: u32) -> Pos {
@@ -128,8 +127,13 @@ fn spread(side: u16, k: u32, n: u32) -> Pos {
 
 type Group<'a> = criterion::BenchmarkGroup<'a, criterion::measurement::WallTime>;
 
-fn round(group: &mut Group<'_>, id: BenchmarkId, layout: Layout, mechanics: impl Mechanics + Sync) {
-    let (mut world, game) = build(mechanics, &[layout]);
+fn round(
+    group: &mut Group<'_>,
+    id: BenchmarkId,
+    layout: Layout,
+    recipe: impl Recipe<Mechanics: Sync>,
+) {
+    let (mut world, game) = build(recipe, &[layout]);
     group.throughput(Throughput::Elements(layout.entities()));
     group.bench_function(id, |b| b.iter(|| game.run_round(&mut world)));
 }
@@ -137,11 +141,11 @@ fn round(group: &mut Group<'_>, id: BenchmarkId, layout: Layout, mechanics: impl
 fn parallel_round(
     group: &mut Group<'_>,
     id: BenchmarkId,
-    mechanics: impl Mechanics + Sync,
+    recipe: impl Recipe<Mechanics: Sync>,
     layouts: &[Layout],
     runner: &impl Runner,
 ) {
-    let (mut world, game) = build(mechanics, layouts);
+    let (mut world, game) = build(recipe, layouts);
     group.throughput(Throughput::Elements(
         u64::try_from(layouts.len()).expect("the floor count fits u64"),
     ));
@@ -192,12 +196,12 @@ fn sweep(c: &mut Criterion) {
     group.finish();
 }
 
-fn planted(game: &Game<Registry>, world: &World, side: u16) -> u32 {
+fn planted(game: &Game<Modules>, world: &World, side: u16) -> u32 {
     let last = side.cast_signed() - 2;
     let f = world.floor(FloorId(0));
     (1..=last)
         .flat_map(|y| (1..=last).map(move |x| Pos { x, y }))
-        .map(|at| u32::from(f.cell_value::<Flora>(game.ruleset(), at) != 0))
+        .map(|at| u32::from(f.cell(game.ruleset(), "plants", at) != 0))
         .sum()
 }
 
@@ -210,7 +214,7 @@ fn flora_sweep(c: &mut Criterion) {
     for (side, percent) in cases {
         let game = game(
             Registry {
-                wander: None,
+                wander: false,
                 ..Registry::default()
             },
             Seed(1),
@@ -219,7 +223,7 @@ fn flora_sweep(c: &mut Criterion) {
         let plants = inside * inside * percent / 100;
         let mut f = floor(game.ruleset(), FloorId(0), side, side);
         for k in 0..plants {
-            f.set_cell_value::<Flora>(game.ruleset(), spread(side, k, plants), u8::MAX);
+            f.set_cell(game.ruleset(), "plants", spread(side, k, plants), u8::MAX);
         }
         let bytes = game.save(&World::new(vec![f]));
         let mut sown = game.load(&bytes).expect("own save loads");
@@ -271,7 +275,7 @@ fn floors(c: &mut Criterion) {
         parallel_round(
             &mut group,
             BenchmarkId::new("trivial", n),
-            Still,
+            keyed(Still::build),
             &layouts,
             &threads,
         );

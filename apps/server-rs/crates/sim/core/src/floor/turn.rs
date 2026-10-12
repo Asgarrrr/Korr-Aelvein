@@ -3,7 +3,7 @@ use korr_grid::Pos;
 use korr_random::Seed;
 
 use crate::config::{IDLE, MAX_INSTEAD, SIGHT};
-use crate::ctx::{CommitCtx, Draws, PrepCtx, departed};
+use crate::ctx::{CommitCtx, Draws, PrepCtx, Routes, departed};
 use crate::decision::{Candidate, Candidates, Intent};
 use crate::floor::Floor;
 use crate::module::{Action, Mechanics, Module, Prepared, Proposals, Visit, index_of, module_key};
@@ -15,9 +15,33 @@ impl Floor {
     /// Every actor due this round acts on the current state, one at a
     /// time. A departed actor leaves the schedule; its rows travel with it.
     pub(crate) fn run_actors(&mut self, seed: Seed, ruleset: &Ruleset, mechanics: &impl Mechanics) {
+        let check = |module, value| {
+            let mut visit = CheckVisit {
+                module,
+                value,
+                ordinal: 0,
+                reply: None,
+            };
+            mechanics.each(&mut visit);
+            visit.reply
+        };
+        let apply = |module, value| {
+            let mut visit = ApplyVisit {
+                module,
+                value,
+                ordinal: 0,
+            };
+            mechanics.each(&mut visit);
+            visit.value
+        };
+        let routes = Routes {
+            ruleset,
+            check: &check,
+            apply: &apply,
+        };
         let end = Tick::start_of(self.round.next());
         while let Some((now, id, actor)) = self.schedule.pop_before(end) {
-            let cost = self.turn(seed, ruleset, mechanics, now, id, actor);
+            let cost = self.turn(seed, mechanics, &routes, now, id, actor);
             if departed(&self.departures, actor) {
                 continue;
             }
@@ -31,12 +55,13 @@ impl Floor {
     fn turn(
         &mut self,
         seed: Seed,
-        ruleset: &Ruleset,
         mechanics: &impl Mechanics,
+        routes: &Routes<'_>,
         now: Tick,
         id: EntityId,
         actor: Handle,
     ) -> Cost {
+        let ruleset = routes.ruleset;
         let pos = self.grid.pos(actor).expect("a due actor is placed");
         self.seen.clear();
         if ruleset.perceives {
@@ -45,7 +70,14 @@ impl Floor {
         self.candidates.clear();
         mechanics.each(&mut ProposeVisit {
             ruleset,
-            senses: Senses::new(pos, &self.seen),
+            senses: Senses::new(
+                pos,
+                &self.seen,
+                &self.store,
+                actor,
+                self.grid.shape(),
+                &self.columns,
+            ),
             out: &mut self.candidates,
             ordinal: 0,
         });
@@ -60,6 +92,7 @@ impl Floor {
                 id,
                 actor,
                 pick,
+                routes,
                 ordinal: 0,
                 routed: false,
                 cost: None,
@@ -127,6 +160,7 @@ struct RunVisit<'a> {
     id: EntityId,
     actor: Handle,
     pick: Candidate,
+    routes: &'a Routes<'a>,
     ordinal: usize,
     routed: bool,
     /// The cost of a run that ends in `Go` or `Blocked`; `None` when it fails.
@@ -167,6 +201,8 @@ impl RunVisit<'_> {
                 floor,
                 draws,
                 now: self.now,
+                columns: &self.floor.columns,
+                routes: self.routes,
             };
             match module.prepare(action, target, &prep) {
                 Prepared::Go { cost, plan } => {
@@ -174,6 +210,9 @@ impl RunVisit<'_> {
                         grid: &mut self.floor.grid,
                         actor: self.actor,
                         departures: &mut self.floor.departures,
+                        store: &mut self.floor.store,
+                        columns: &mut self.floor.columns,
+                        routes: self.routes,
                     };
                     module.commit(plan, &mut commit);
                     return Some(cost);
@@ -194,5 +233,38 @@ impl RunVisit<'_> {
                 Prepared::Fail => return None,
             }
         }
+    }
+}
+
+/// Asks the module at `module` its `check` of `value`.
+struct CheckVisit {
+    module: u16,
+    value: u8,
+    ordinal: u16,
+    reply: Option<u8>,
+}
+
+impl Visit for CheckVisit {
+    fn module<M: Module>(&mut self, module: &M) {
+        if self.ordinal == self.module {
+            self.reply = module.check(self.value);
+        }
+        self.ordinal += 1;
+    }
+}
+
+/// Replaces `value` with the `apply` of the module at `module`.
+struct ApplyVisit {
+    module: u16,
+    value: u8,
+    ordinal: u16,
+}
+
+impl Visit for ApplyVisit {
+    fn module<M: Module>(&mut self, module: &M) {
+        if self.ordinal == self.module {
+            self.value = module.apply(self.value);
+        }
+        self.ordinal += 1;
     }
 }

@@ -1,6 +1,6 @@
-use korr_ecs::SchemaBuilder;
 use korr_random::Seed;
 
+use crate::build::Recipe;
 use crate::module::Mechanics;
 use crate::ruleset::Ruleset;
 use crate::runner::{Runner, Sequential};
@@ -17,10 +17,10 @@ pub struct Game<M> {
 impl<M: Mechanics> Game<M> {
     /// # Panics
     /// When two modules share a name, two actions share an `ActionKey`, or
-    /// an action requires a component the schema does not register.
+    /// the recipe breaks a contract rule.
     #[must_use]
-    pub fn new(schema: SchemaBuilder, mechanics: M, seed: Seed) -> Self {
-        let ruleset = Ruleset::new(schema, &mechanics);
+    pub fn new<R: Recipe<Mechanics = M>>(recipe: R, seed: Seed) -> Self {
+        let (ruleset, mechanics) = Ruleset::new(recipe);
         Self {
             ruleset,
             mechanics,

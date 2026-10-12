@@ -32,6 +32,9 @@ the spec is updated to include it.
 - Echoes of past runs that replay their actions.
 - Bites through `harm` and carcasses: predation wounds instead of killing, and the body stays as food.
 - Creatures avoid stepping into fire even without fear, when they move for another reason.
+- An `Edible { class, nutrition }` contract on edible species, once fear reads it for its danger masks (`docs/plans/rust-hunger.md` §5).
+- Module-declared events, registered at build beside core's `Died` and `Spawned`, once a host reader needs one (`docs/plans/rust-hunger.md` §4).
+- Pathfinding for creatures that approach a target: hunger's `Approach` takes one greedy step and fails against a wall (`docs/plans/rust-hunger.md` §5).
 
 ## Tooling
 
