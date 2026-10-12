@@ -99,13 +99,13 @@ impl Module for Grazed {
 
 #[test]
 #[should_panic(expected = "test.grazed serves graze without a cell column")]
-fn a_command_is_served_on_a_cell_column() {
+fn a_request_is_served_on_a_cell_column() {
     let _ = game(keyed(Grazed::bare), SEED);
 }
 
 #[test]
-#[should_panic(expected = "command graze served by flora and test.grazed")]
-fn one_module_serves_a_command() {
+#[should_panic(expected = "request graze served by flora and test.grazed")]
+fn one_module_serves_a_request() {
     let _ = game(Then(Registry::default(), keyed(Grazed::build)), SEED);
 }
 

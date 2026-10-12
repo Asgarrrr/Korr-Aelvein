@@ -24,7 +24,7 @@ mod world;
 /// What a mechanic may name: the module seam and the values it trades in.
 pub mod mechanic {
     pub use crate::build::{
-        Ask, Builder, CellContract, Command, Contract, Provided, ReadCells, Served, provides,
+        Ask, Builder, CellContract, Contract, Provided, ReadCells, Request, Served, provides,
         provides_cells, serves,
     };
     pub use crate::ctx::{CommitCtx, Draws, PrepCtx};

@@ -90,7 +90,7 @@ impl<'a> Senses<'a> {
     /// # Panics
     /// When `key` comes from another ruleset.
     pub fn cells(&self, key: ReadCells) -> impl Iterator<Item = (Pos, u8)> + use<'a> {
-        let column = &self.columns[usize::from(key.slot)];
+        let column = &self.columns[key.column.index()];
         let shape = self.grid.shape();
         shape
             .neighbourhood(self.pos, SIGHT)

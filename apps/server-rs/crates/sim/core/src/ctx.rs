@@ -12,7 +12,7 @@ use crate::life::{Cause, Harm};
 use crate::ruleset::{ModuleEntry, Ruleset};
 use crate::time::Tick;
 
-/// The ruleset, and how a command reaches its server: built once per floor
+/// The ruleset, and how a request reaches its server: built once per floor
 /// and round, so a turn copies one pointer rather than both closures.
 pub(crate) struct Routes<'a> {
     pub(crate) ruleset: &'a Ruleset,
@@ -22,12 +22,12 @@ pub(crate) struct Routes<'a> {
     pub(crate) apply: &'a dyn Fn(u16, u8) -> u8,
 }
 
-/// The column a command's server binds; the build ensures it binds one.
+/// The column a request's server binds; the build ensures it binds one.
 fn served(modules: &[ModuleEntry], module: u16) -> usize {
-    let column = modules[usize::from(module)]
+    modules[usize::from(module)]
         .column
-        .expect("a module that serves a command binds a cell column");
-    usize::from(column)
+        .expect("a module that serves a request binds a cell column")
+        .index()
 }
 
 /// The draws of one subject at one time: an actor's action, or a cell's tick.

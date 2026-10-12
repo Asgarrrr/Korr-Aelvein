@@ -1,9 +1,9 @@
 //! Components and cell columns that one mechanic provides and others read,
-//! and the commands one mechanic serves to others.
+//! and the requests one mechanic serves to others.
 #![no_std]
 #![deny(clippy::float_arithmetic)]
 
-use korr_core::mechanic::{CellContract, Command, Component, Contract, ImageError, Reader, Writer};
+use korr_core::mechanic::{CellContract, Component, Contract, ImageError, Reader, Request, Writer};
 
 /// How urgently a creature needs to eat: 0 when sated, 255 when starving;
 /// and what it eats, a mask of the foods below.
@@ -51,6 +51,6 @@ impl CellContract for Plants {
 #[derive(Debug)]
 pub struct Graze;
 
-impl Command for Graze {
+impl Request for Graze {
     const NAME: &'static str = "graze";
 }

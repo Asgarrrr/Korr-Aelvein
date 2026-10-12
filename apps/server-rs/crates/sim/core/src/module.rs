@@ -34,7 +34,7 @@ pub trait Module {
     type Plan;
     /// The contracts the module's build must provide, one `provides::<C>()` each.
     const PROVIDES: &'static [Provided] = &[];
-    /// The command the module serves on its cell column, one `serves::<C>()`.
+    /// The request the module serves on its cell column, one `serves::<C>()`.
     const SERVES: Option<Served> = None;
     /// The next value of the module's cell column at one cell, from the previous
     /// round's column; called once per cell and round, only when the build
@@ -42,12 +42,12 @@ pub trait Module {
     fn tick(&self, cell: Stencil<'_>, _: Draws) -> u8 {
         cell.value()
     }
-    /// The reply to the served command at a cell holding `value`, in the
+    /// The reply to the served request at a cell holding `value`, in the
     /// asker's prepare; `None` refuses it.
     fn check(&self, _value: u8) -> Option<u8> {
         None
     }
-    /// The cell's value once the served command is applied, in the asker's commit.
+    /// The cell's value once the served request is applied, in the asker's commit.
     fn apply(&self, value: u8) -> u8 {
         value
     }

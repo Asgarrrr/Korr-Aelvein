@@ -78,7 +78,7 @@ impl Hunger {
             satiety: b.own("satiety"),
             appetite: b.provide(),
             plants: b.contract_cells::<Plants>(),
-            graze: b.command(),
+            graze: b.request(),
         }
     }
 }

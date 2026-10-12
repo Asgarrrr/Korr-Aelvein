@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use korr_ecs::{AnyRead, Own, Schema, SchemaBuilder, checksum};
 use korr_random::ModuleKey;
 
-use crate::build::{Recipe, assemble};
+use crate::build::{ColumnIdx, Recipe, assemble};
 use crate::decision::Intent;
 use crate::life::{Remains, Vitality};
 use crate::module::{Action, ActionKey, Mechanics, Module, Visit, module_key};
@@ -17,8 +17,8 @@ pub(crate) struct ModuleEntry {
     pub(crate) name: &'static str,
     pub(crate) actions: Vec<ActionKey>,
     pub(crate) requires: Vec<Vec<AnyRead>>,
-    /// The slot of the cell column the module binds.
-    pub(crate) column: Option<u16>,
+    /// The cell column the module binds.
+    pub(crate) column: Option<ColumnIdx>,
 }
 
 /// What every floor of a world shares: the schema, the module table and the core's keys.
@@ -34,7 +34,7 @@ pub struct Ruleset {
     pub(crate) modules: Vec<ModuleEntry>,
     /// Whether any module reads `Senses::seen`.
     pub(crate) perceives: bool,
-    /// The names of the cell columns, in slot order.
+    /// The names of the cell columns, in `ColumnIdx` order.
     pub(crate) columns: Vec<String>,
     fingerprint: u64,
 }
@@ -43,7 +43,7 @@ struct Table {
     modules: Vec<ModuleEntry>,
     perceives: bool,
     /// The column each module binds, in visit order.
-    owners: Vec<Option<u16>>,
+    owners: Vec<Option<ColumnIdx>>,
     /// Every action key with its module ordinal and name, to report a collision.
     keys: Vec<(ActionKey, usize, &'static str)>,
 }
@@ -117,11 +117,11 @@ impl Ruleset {
             }
             match module.column {
                 None => bytes.push(0),
-                Some(slot) => {
-                    let name = &columns.names[usize::from(slot)];
+                Some(column) => {
+                    let name = &columns.names[column.index()];
                     let name_len = u32::try_from(name.len()).expect("a column name fits u32 bytes");
                     bytes.push(1);
-                    bytes.extend_from_slice(&slot.to_le_bytes());
+                    bytes.extend_from_slice(&column.to_le_bytes());
                     bytes.extend_from_slice(&name_len.to_le_bytes());
                     bytes.extend_from_slice(name.as_bytes());
                 }

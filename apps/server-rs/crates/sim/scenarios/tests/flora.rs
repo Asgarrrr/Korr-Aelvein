@@ -341,7 +341,7 @@ impl Probe {
     )]
     fn build(b: &mut Builder<'_>) -> Self {
         Self {
-            graze: b.command(),
+            graze: b.request(),
             replies: Mutex::default(),
         }
     }

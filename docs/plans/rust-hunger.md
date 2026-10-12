@@ -90,14 +90,14 @@ The project rule stays: the game runs with any mechanic removed.
   (about 340 of fear's 450 ns per turn in TS).
 - `Senses` extends to things (`Remains`) and to the contract cell columns
   within `SIGHT`.
-- Owner commands, as planned in `rust-core-wander.md`: a contract declares a
-  command; the owner validates it during the asker's `prepare` and applies
+- Owner requests, as planned in `rust-core-wander.md`: a contract declares a
+  request; the owner validates it during the asker's `prepare` and applies
   it during the asker's `commit`, in the same action. Both happen or
   neither does. First case: hunger's `Graze` to flora. The owner runs no
   `prepare` or `commit` of its own: it implements `Module::check` and
   `Module::apply` on one cell value, and `PrepCtx::check` and
   `CommitCtx::order` reach them through two erased closures built per
-  turn, one dyn call per command.
+  turn, one dyn call per request.
 - A per-entity bulk tick joins the per-cell tick: a monomorphic loop over
   the module's own column, run in the environment phase. It writes only
   the row it iterates and pushes `harm`; kills and spawns stay deferred.

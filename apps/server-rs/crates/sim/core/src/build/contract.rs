@@ -62,19 +62,40 @@ fn register<C: Contract>(schema: &mut SchemaBuilder) -> Keys {
     (Box::new(own), Box::new(read))
 }
 
+/// A cell column's place in its ruleset; `Columns` sets the order.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ColumnIdx(u16);
+
+impl ColumnIdx {
+    /// # Panics
+    /// When `at` does not fit `u16`.
+    pub(crate) fn new(at: usize) -> Self {
+        Self(u16::try_from(at).expect("cell columns fit u16"))
+    }
+
+    #[inline]
+    pub(crate) const fn index(self) -> usize {
+        self.0 as usize
+    }
+
+    pub(crate) const fn to_le_bytes(self) -> [u8; 2] {
+        self.0.to_le_bytes()
+    }
+}
+
 /// The read side of a cell column, for `Senses::cells`.
 #[derive(Debug, Clone, Copy)]
 pub struct ReadCells {
-    pub(crate) slot: u16,
+    pub(crate) column: ColumnIdx,
 }
 
 /// A request that one module serves on its own cell column: it checks a
 /// cell in the asker's prepare and applies the request in its commit.
-pub trait Command: 'static {
+pub trait Request: 'static {
     const NAME: &'static str;
 }
 
-/// The command a module declares in `Module::SERVES`.
+/// The request a module declares in `Module::SERVES`.
 #[derive(Debug, Clone, Copy)]
 pub struct Served {
     pub(super) name: &'static str,
@@ -82,7 +103,7 @@ pub struct Served {
 }
 
 #[must_use]
-pub const fn serves<C: Command>() -> Served {
+pub const fn serves<C: Request>() -> Served {
     Served {
         name: C::NAME,
         ty: TypeId::of::<C>(),

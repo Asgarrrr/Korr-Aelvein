@@ -67,10 +67,10 @@ struct TickVisit<'a> {
 
 impl Visit for TickVisit<'_> {
     fn module<M: Module>(&mut self, module: &M) {
-        if let Some(slot) = self.ruleset.modules[self.ordinal].column {
+        if let Some(column) = self.ruleset.modules[self.ordinal].column {
             let time = Tick::start_of(self.round).0;
             let stream = Stream::new(self.seed, module_key::<M>(), Phase::Tick, time);
-            let column = &mut self.columns[usize::from(slot)];
+            let column = &mut self.columns[column.index()];
             let scratch = self
                 .scratch
                 .as_deref_mut()
