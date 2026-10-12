@@ -9,3 +9,5 @@ pub(crate) const INERTIA: u16 = 5;
 pub(crate) const MAX_INSTEAD: u8 = 4;
 /// The Chebyshev radius `Senses` covers: the reference world's.
 pub const SIGHT: u16 = 3;
+/// The mass `Remains` lose each round.
+pub const ROT_PER_ROUND: u16 = 1;

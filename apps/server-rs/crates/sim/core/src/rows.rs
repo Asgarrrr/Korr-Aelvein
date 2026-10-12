@@ -1,4 +1,9 @@
+use alloc::vec::Vec;
+
 use korr_ecs::{Component, Own, Store};
+use korr_random::ModuleKey;
+
+use crate::life::{Cause, Harm};
 
 /// The entity rows of one floor, for a module's bulk tick: a write needs
 /// the write key, so a tick writes only the columns its module owns.
@@ -37,6 +42,7 @@ use korr_ecs::{Component, Own, Store};
 ///         rows.join(&self.fat, &self.lean, |fat: &mut Fat, lean: &mut Lean| {
 ///             fat.0 = fat.0.saturating_sub(1);
 ///             lean.0 = lean.0.saturating_add(1);
+///             0
 ///         });
 ///     }
 /// #   fn propose(&self, _: &Senses<'_>, _: &mut Proposals<'_, Infallible>) {}
@@ -95,6 +101,7 @@ use korr_ecs::{Component, Own, Store};
 ///         rows.join(&self.fat.read(), &self.lean, |fat: &mut Fat, lean: &mut Lean| {
 ///             fat.0 = fat.0.saturating_sub(1);
 ///             lean.0 = lean.0.saturating_add(1);
+///             0
 ///         });
 ///     }
 /// #   fn propose(&self, _: &Senses<'_>, _: &mut Proposals<'_, Infallible>) {}
@@ -121,16 +128,24 @@ use korr_ecs::{Component, Own, Store};
 #[derive(Debug)]
 pub struct Rows<'a> {
     store: &'a mut Store,
+    harms: &'a mut Vec<Harm>,
+    module: ModuleKey,
 }
 
 impl<'a> Rows<'a> {
-    pub(crate) fn new(store: &'a mut Store) -> Self {
-        Self { store }
+    pub(crate) fn new(store: &'a mut Store, harms: &'a mut Vec<Harm>, module: ModuleKey) -> Self {
+        Self {
+            store,
+            harms,
+            module,
+        }
     }
 }
 
 impl Rows<'_> {
-    /// Calls `f` on every row that holds both `a` and `b`, in the dense order of `a`.
+    /// Calls `f` on every row that holds both `a` and `b`, in the dense order
+    /// of `a`. A non-zero return harms the row's entity by that amount, as
+    /// the module's doing.
     ///
     /// # Panics
     /// When `a` and `b` are the same key, or a key comes from another schema.
@@ -139,8 +154,19 @@ impl Rows<'_> {
         &mut self,
         a: &Own<A>,
         b: &Own<B>,
-        mut f: impl FnMut(&mut A, &mut B),
+        mut f: impl FnMut(&mut A, &mut B) -> u16,
     ) {
-        self.store.join_mut(a, b, |_, a, b| f(a, b));
+        let mut harmed = Vec::new();
+        self.store.join_mut(a, b, |h, a, b| {
+            let amount = f(a, b);
+            if amount > 0 {
+                harmed.push((h, amount));
+            }
+        });
+        let cause = Cause::Mechanic(self.module);
+        for (h, amount) in harmed {
+            let id = self.store.id(h).expect("a joined row is alive");
+            self.harms.push((id, cause, amount));
+        }
     }
 }

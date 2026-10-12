@@ -1,6 +1,7 @@
 mod environment;
 mod image;
 mod inbox;
+mod life;
 mod membership;
 mod schedule;
 mod sections;
@@ -17,6 +18,7 @@ use crate::decision::Candidates;
 use crate::floor::inbox::{Flight, Inbox};
 use crate::floor::membership::Joiner;
 use crate::floor::schedule::Schedule;
+use crate::life::{Event, Harm, Remains};
 use crate::ruleset::Ruleset;
 use crate::senses::Seen;
 use crate::time::{Round, Tick};
@@ -43,6 +45,10 @@ pub struct Floor {
     candidates: Candidates,
     /// Scratch of one turn, cleared before every scan.
     seen: Vec<Seen>,
+    /// Harms since the last drain; empty between turns and at every save.
+    harms: Vec<Harm>,
+    /// What happened since the round started; never saved or hashed.
+    events: Vec<Event>,
 }
 
 impl Floor {
@@ -64,6 +70,8 @@ impl Floor {
             inbox: Inbox::default(),
             candidates: Candidates::default(),
             seen: Vec::new(),
+            harms: Vec::new(),
+            events: Vec::new(),
         }
     }
 
@@ -162,6 +170,23 @@ impl Floor {
 
     pub(crate) fn next_counter(&self) -> u64 {
         self.store.next_counter()
+    }
+
+    /// The deaths and spawns of the last round, in the order they happened.
+    #[must_use]
+    pub fn events(&self) -> &[Event] {
+        &self.events
+    }
+
+    /// The remains named `id`, while they lie on this floor.
+    ///
+    /// # Panics
+    /// When `ruleset` is not the one that built this floor.
+    #[must_use]
+    pub fn remains(&self, ruleset: &Ruleset, id: EntityId) -> Option<&Remains> {
+        self.check_ruleset(ruleset);
+        let h = self.store.handle_of(id)?;
+        self.store.get(ruleset.remains.read(), h)
     }
 
     /// Travellers waiting for a free cell on this floor.

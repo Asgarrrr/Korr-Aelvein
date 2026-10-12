@@ -8,6 +8,7 @@ use korr_random::{DrawIndex, ModuleKey, Phase, Seed, Stream, Subject};
 
 use crate::build::Ask;
 use crate::config::SIGHT;
+use crate::life::{Cause, Harm};
 use crate::ruleset::{ModuleEntry, Ruleset};
 use crate::time::Tick;
 
@@ -157,10 +158,12 @@ impl PrepCtx<'_> {
 pub struct CommitCtx<'a> {
     pub(crate) grid: &'a mut Grid,
     pub(crate) actor: Handle,
+    pub(crate) id: EntityId,
     pub(crate) departures: &'a mut Vec<Departure>,
     pub(crate) store: &'a mut Store,
     pub(crate) columns: &'a mut [CellColumn],
     pub(crate) routes: &'a Routes<'a>,
+    pub(crate) harms: &'a mut Vec<Harm>,
 }
 
 impl fmt::Debug for CommitCtx<'_> {
@@ -216,6 +219,13 @@ impl CommitCtx<'_> {
             to,
             at,
         });
+    }
+
+    /// Harms `target` by `amount`, as the actor's doing, once its turn ends.
+    pub fn harm(&mut self, target: EntityId, amount: u16) {
+        if amount > 0 {
+            self.harms.push((target, Cause::Entity(self.id), amount));
+        }
     }
 }
 

@@ -6,6 +6,8 @@ pub const DECAY: u16 = 2;
 pub const PECKISH: u16 = 300;
 /// Below this satiety hunger outranks every routine.
 pub const STARVING: u16 = 100;
+/// Health lost per round on an empty stomach.
+pub const STARVE_DAMAGE: u16 = 1;
 /// The most a stomach holds.
 pub const FULL: u16 = 1000;
 /// Satiety gained per growth step of a grazed plant: one ripe plant sates.

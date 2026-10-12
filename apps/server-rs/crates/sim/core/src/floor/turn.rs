@@ -13,7 +13,8 @@ use crate::time::{Cost, Tick};
 
 impl Floor {
     /// Every actor due this round acts on the current state, one at a
-    /// time. A departed actor leaves the schedule; its rows travel with it.
+    /// time, and its harms land before the next acts. A departed or dead
+    /// actor leaves the schedule; a departed one's rows travel with it.
     pub(crate) fn run_actors(&mut self, seed: Seed, ruleset: &Ruleset, mechanics: &impl Mechanics) {
         let check = |module, value| {
             let mut visit = CheckVisit {
@@ -41,8 +42,19 @@ impl Floor {
         };
         let end = Tick::start_of(self.round.next());
         while let Some((now, id, actor)) = self.schedule.pop_before(end) {
-            let cost = self.turn(seed, mechanics, &routes, now, id, actor);
-            if departed(&self.departures, actor) {
+            // The link compares generations: a due of the dead or of a recycled slot is unplaced.
+            let Some(pos) = self.grid.pos(actor) else {
+                continue;
+            };
+            let placed = Placed {
+                now,
+                id,
+                actor,
+                pos,
+            };
+            let cost = self.turn(seed, mechanics, &routes, placed);
+            self.drain(ruleset);
+            if !self.store.is_alive(actor) || departed(&self.departures, actor) {
                 continue;
             }
             let next = now.after(cost);
@@ -57,12 +69,15 @@ impl Floor {
         seed: Seed,
         mechanics: &impl Mechanics,
         routes: &Routes<'_>,
-        now: Tick,
-        id: EntityId,
-        actor: Handle,
+        placed: Placed,
     ) -> Cost {
+        let Placed {
+            now,
+            id,
+            actor,
+            pos,
+        } = placed;
         let ruleset = routes.ruleset;
-        let pos = self.grid.pos(actor).expect("a due actor is placed");
         self.seen.clear();
         if ruleset.perceives {
             self.look(actor, pos);
@@ -132,6 +147,15 @@ impl Floor {
             }
         });
     }
+}
+
+/// A popped due whose actor is still placed.
+#[derive(Clone, Copy)]
+struct Placed {
+    now: Tick,
+    id: EntityId,
+    actor: Handle,
+    pos: Pos,
 }
 
 /// Hands each module a `Proposals` bound to its ordinal and action keys.
@@ -214,10 +238,12 @@ impl RunVisit<'_> {
                     let mut commit = CommitCtx {
                         grid: &mut self.floor.grid,
                         actor: self.actor,
+                        id: self.id,
                         departures: &mut self.floor.departures,
                         store: &mut self.floor.store,
                         columns: &mut self.floor.columns,
                         routes: self.routes,
+                        harms: &mut self.floor.harms,
                     };
                     module.commit(plan, &mut commit);
                     return Some(cost);

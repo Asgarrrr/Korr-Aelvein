@@ -11,6 +11,7 @@ mod decision;
 mod error;
 mod floor;
 mod game;
+mod life;
 mod module;
 mod rows;
 mod ruleset;
@@ -40,15 +41,16 @@ pub mod mechanic {
 /// What runs a world: the game, its floors, their saves and the registry seam.
 pub mod host {
     pub use crate::build::{Assembly, Both, Declarations, Keyed, Recipe, Then, keyed};
-    pub use crate::config::{SIGHT, TICKS_PER_ROUND};
+    pub use crate::config::{ROT_PER_ROUND, SIGHT, TICKS_PER_ROUND};
     pub use crate::error::{LoadError, WorldError};
     pub use crate::floor::{FlightImage, Floor, Sections};
     pub use crate::game::Game;
+    pub use crate::life::{Cause, Event, Remains, Vitality};
     pub use crate::module::{ActionKey, Mechanics, Visit};
     pub use crate::ruleset::Ruleset;
     pub use crate::runner::{Job, Runner, Sequential};
     pub use crate::time::Round;
     pub use crate::world::World;
     pub use korr_grid::Pos;
-    pub use korr_random::Seed;
+    pub use korr_random::{ModuleKey, Seed};
 }

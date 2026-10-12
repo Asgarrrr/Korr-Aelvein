@@ -18,7 +18,9 @@ use korr_core::mechanic::{
     provides,
 };
 
-use config::{APPROACH_COST, DECAY, EAT_COST, FULL, PECKISH, PLANT_NUTRITION, STARVING};
+use config::{
+    APPROACH_COST, DECAY, EAT_COST, FULL, PECKISH, PLANT_NUTRITION, STARVE_DAMAGE, STARVING,
+};
 
 /// What is left in the stomach.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,6 +101,7 @@ impl Module for Hunger {
         rows.join(&self.satiety, &self.appetite, |satiety, appetite| {
             satiety.0 = satiety.0.saturating_sub(DECAY);
             appetite.urgency = urgency(satiety.0);
+            if satiety.0 == 0 { STARVE_DAMAGE } else { 0 }
         });
     }
 

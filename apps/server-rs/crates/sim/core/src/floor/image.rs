@@ -153,6 +153,8 @@ impl Floor {
             inbox,
             candidates: Candidates::default(),
             seen: Vec::new(),
+            harms: Vec::new(),
+            events: Vec::new(),
         })
     }
 }

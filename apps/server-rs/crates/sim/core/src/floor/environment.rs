@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use core::mem;
 
 use korr_ecs::{FloorId, Store};
@@ -6,6 +7,7 @@ use korr_random::{Phase, Seed, Stream};
 
 use crate::ctx::Draws;
 use crate::floor::Floor;
+use crate::life::Harm;
 use crate::module::{Mechanics, Module, Visit, module_key};
 use crate::rows::Rows;
 use crate::ruleset::Ruleset;
@@ -13,7 +15,9 @@ use crate::time::{Round, Tick};
 
 impl Floor {
     /// Phase 1 of a round: every module that binds a cell column ticks each of
-    /// its cells, then every module ticks its entity rows.
+    /// its cells, then every module ticks its entity rows, then remains rot.
+    /// The harms land once, after all of it, so registry order never picks
+    /// the cause of a death.
     ///
     /// # Panics
     /// When `ruleset` is not the one that built this floor.
@@ -24,6 +28,7 @@ impl Floor {
         mechanics: &impl Mechanics,
     ) {
         self.check_ruleset(ruleset);
+        self.events.clear();
         let floor = self.id();
         mechanics.each(&mut TickVisit {
             seed,
@@ -34,8 +39,11 @@ impl Floor {
             columns: &mut self.columns,
             scratch: self.scratch.as_mut(),
             store: &mut self.store,
+            harms: &mut self.harms,
             ordinal: 0,
         });
+        self.rot(ruleset);
+        self.drain(ruleset);
     }
 }
 
@@ -51,6 +59,7 @@ struct TickVisit<'a> {
     /// `None` when the ruleset has no cell column.
     scratch: Option<&'a mut CellColumn>,
     store: &'a mut Store,
+    harms: &'a mut Vec<Harm>,
     ordinal: usize,
 }
 
@@ -69,7 +78,7 @@ impl Visit for TickVisit<'_> {
             });
             mem::swap(column, scratch);
         }
-        module.tick_rows(&mut Rows::new(self.store));
+        module.tick_rows(&mut Rows::new(self.store, self.harms, module_key::<M>()));
         self.ordinal += 1;
     }
 }

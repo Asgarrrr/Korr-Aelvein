@@ -6,6 +6,7 @@ use korr_random::ModuleKey;
 
 use crate::build::{Recipe, assemble};
 use crate::decision::Intent;
+use crate::life::{Remains, Vitality};
 use crate::module::{Action, ActionKey, Mechanics, Module, Visit, module_key};
 use crate::time::Tick;
 
@@ -27,6 +28,8 @@ pub struct Ruleset {
     pub(crate) intent: Own<Intent>,
     /// When the actor acts next: the schedule is rebuilt from it on load.
     pub(crate) clock: Own<Tick>,
+    pub(crate) vitality: Own<Vitality>,
+    pub(crate) remains: Own<Remains>,
     /// In visit order: a candidate's module ordinal indexes it.
     pub(crate) modules: Vec<ModuleEntry>,
     /// Whether any module reads `Senses::seen`.
@@ -91,6 +94,8 @@ impl Ruleset {
         let mut schema = SchemaBuilder::default();
         let intent = schema.register::<Intent>("core.intent");
         let clock = schema.register::<Tick>("core.clock");
+        let vitality = schema.register::<Vitality>("core.vitality");
+        let remains = schema.register::<Remains>("core.remains");
         let (mechanics, columns) = assemble(recipe, &mut schema);
         let schema = schema.build();
         let mut table = Table {
@@ -141,6 +146,8 @@ impl Ruleset {
             schema,
             intent,
             clock,
+            vitality,
+            remains,
             modules,
             perceives,
             columns: columns.names,

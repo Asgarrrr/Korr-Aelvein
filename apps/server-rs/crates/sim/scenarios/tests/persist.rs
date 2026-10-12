@@ -7,7 +7,7 @@ use korr_scenarios::{Pace, actionless, floor, game, run};
 
 const SEED: Seed = Seed(7);
 /// Re-pin on every intended change to the image format or to behaviour.
-const PINNED: u64 = 0x93cd_b873_5eb0_37d1;
+const PINNED: u64 = 0x3d66_b458_c272_c931;
 
 /// 40 actors, two per row. The fast even id starts at x = 3: blocked by the
 /// wall from tick 570, its clock stays off the round boundary. The slow odd
@@ -51,7 +51,7 @@ fn save_load_replay_matches_the_pinned_run() {
 
 /// The whole image under wander: its saved intent and ruleset fingerprint,
 /// which positions alone miss. Any behaviour or floor image change moves it.
-const PINNED_WANDER: u64 = 0xe995_37b7_9c28_3a08;
+const PINNED_WANDER: u64 = 0xd714_b38e_411f_271b;
 
 #[test]
 fn wander_world_hash_pins_the_image() {
@@ -205,10 +205,11 @@ fn forge_store(bytes: &[u8], edit: impl FnOnce(&mut Vec<u8>)) -> Vec<u8> {
 }
 
 /// The offset of the clock column's row count in a store image that holds one
-/// clock. Core registers the clock last, so its one row of owner slot (4 bytes)
-/// and tick (8 bytes) ends the image, before the checksum.
+/// clock and no vitality or remains. Core registers the clock, then those two:
+/// its one row of owner slot (4 bytes) and tick (8 bytes) precedes two empty
+/// columns of prefix (8 bytes) and count (4 bytes), then the checksum.
 fn clock_count_at(store: &[u8]) -> usize {
-    let at = store.len() - 8 - 12 - 4;
+    let at = store.len() - 8 - 2 * 12 - 12 - 4;
     assert_eq!(
         store[at..at + 4],
         1u32.to_le_bytes(),
