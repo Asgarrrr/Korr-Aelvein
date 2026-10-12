@@ -28,7 +28,8 @@ fn a_diet_with_an_unknown_food_is_corrupt() {
 #[test]
 fn satiety_survives_a_save() {
     let game = grazing(vec![], true);
-    let start = || meadow(&game, PECKISH, &[Pos { x: 4, y: 4 }], &[]).0;
+    let plant = [(Pos { x: 6, y: 4 }, 3)];
+    let start = || meadow(&game, PECKISH + 5 * DECAY, &[Pos { x: 4, y: 4 }], &plant).0;
     let mut uninterrupted = start();
     run(&game, &mut uninterrupted, 4);
     let world = start();

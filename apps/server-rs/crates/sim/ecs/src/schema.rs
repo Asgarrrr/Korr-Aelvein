@@ -222,17 +222,6 @@ impl Schema {
             .last()
             .map_or(FNV_OFFSET, |info| info.prefix)
     }
-
-    #[must_use]
-    pub fn find(&self, name: &str) -> Option<AnyRead> {
-        (0..)
-            .zip(&self.components)
-            .find(|(_, info)| info.name == name)
-            .map(|(id, info)| AnyRead {
-                id: ComponentId(id),
-                prefix: info.prefix,
-            })
-    }
 }
 
 fn new_column<T: Component>() -> Box<dyn ErasedColumn> {

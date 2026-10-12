@@ -162,11 +162,11 @@ Crate `korr-hunger` in `biology/physiology/hunger`.
 - Private: `Satiety`, and `Diet`, a mask of `PLANTS = 1` and
   `REMAINS = 2`. Reading unknown bits from a save is corrupt.
 - Contracts read: flora's cell column (optional) and core `Remains`.
-- Tick: `satiety -= decay`, and at zero push
-  `harm(self, starve, Cause::Mechanic(hunger))`.
-- Food: ripe plants, eaten through `Graze` (flora checks ripeness in its
-  `prepare`, resets the cell in its `commit`, and returns the nutrition),
-  and `Remains`, whose eaten mass is removed. No live prey: that is
+- Tick: for a creature with both `Satiety` and `Diet`, `satiety -= decay`,
+  and at zero push `harm(self, starve, Cause::Mechanic(hunger))`.
+- Food: any plant, eaten through `Graze` (flora's check accepts a cell with
+  growth, its apply clears the cell and replies with the growth), and
+  `Remains`, whose eaten mass is removed. No live prey: that is
   combat's.
 - Decision: no proposal without `Satiety` and `Diet`, or at urgency 0.
   Urgency is computed from satiety in `propose`. Target: the
