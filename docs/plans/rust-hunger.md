@@ -31,9 +31,9 @@ The project rule stays: the game runs with any mechanic removed.
 - Approach A, typed keys at build, over Bevy-style `Has<T>` trait bounds
   (same power, far more type machinery) and over module state outside the
   ECS (breaks the uniform `Traveller` row, save and hash).
-- Hunger publishes an `Appetite` contract and never kills. Predation waits
-  for the `combat` crate, which reads `Appetite` and proposes `attack`.
-  Until then, carnivores eat `Remains` only.
+- Hunger never kills. Predation waits for the `combat` crate, which
+  proposes `attack`. Until then, carnivores eat `Remains` only. Hunger
+  publishes no contract yet: see Deviations.
 - Entity targets carry an `EntityId`, resolved by a per-floor index.
 - Every death goes through `harm`, starvation included, and leaves
   `Remains`.
@@ -94,8 +94,8 @@ The project rule stays: the game runs with any mechanic removed.
   request; the owner validates it during the asker's `prepare` and applies
   it during the asker's `commit`, in the same action. Both happen or
   neither does. First case: hunger's `Graze` to flora. The owner runs no
-  `prepare` or `commit` of its own: it implements `Module::check` and
-  `Module::apply` on one cell value, and `PrepCtx::check` and
+  `prepare` or `commit` of its own: its `SERVES` carries a `check` and an
+  `apply` on one cell value, and `PrepCtx::check` and
   `CommitCtx::order` reach them through two erased closures built per
   turn, one dyn call per request.
 - A per-entity bulk tick joins the per-cell tick: a monomorphic loop over
@@ -157,21 +157,19 @@ The project rule stays: the game runs with any mechanic removed.
 
 Crate `korr-hunger` in `biology/physiology/hunger`.
 
-- Contracts provided:
-  - `Appetite { urgency: u8, eats: u8 }`, written by hunger's tick.
-    Readers (combat, fear) get the urgency without knowing hunger's
-    thresholds.
-  - No `Edible` contract: no module reads it before fear. It waits in
-    `docs/ideas.md`.
-- Private: `Satiety`.
+- Contracts provided: none. No `Edible` contract: no module reads it
+  before fear. It waits in `docs/ideas.md`.
+- Private: `Satiety`, and `Diet`, a mask of `PLANTS = 1` and
+  `REMAINS = 2`. Reading unknown bits from a save is corrupt.
 - Contracts read: flora's cell column (optional) and core `Remains`.
-- Tick: `satiety -= decay`, recompute `Appetite.urgency`, and at zero push
+- Tick: `satiety -= decay`, and at zero push
   `harm(self, starve, Cause::Mechanic(hunger))`.
 - Food: ripe plants, eaten through `Graze` (flora checks ripeness in its
   `prepare`, resets the cell in its `commit`, and returns the nutrition),
   and `Remains`, whose eaten mass is removed. No live prey: that is
   combat's.
-- Decision: no proposal without `Satiety` or at urgency 0. Target: the
+- Decision: no proposal without `Satiety` and `Diet`, or at urgency 0.
+  Urgency is computed from satiety in `propose`. Target: the
   nearest compatible food, ties broken by nutrition then id or position.
   Band `Routine`, weight from urgency; `Vigilance` below a critical
   threshold.
@@ -226,6 +224,17 @@ Budget, in the `core` bench (not part of `verify`, reported in the PR):
   entity decision.
 - The id index under churn and lookup, measured before it is adopted (the
   `BTreeMap` lookup measured 43 ns).
+
+## Deviations
+
+- One cell column and at most one served request per module. A served
+  request carries its `check` and `apply`: `serves::<C>(check, apply)`.
+  A module cannot declare `SERVES` and keep a silent refusal.
+- The mass of `Remains` is the dead creature's `Vitality.max`.
+- `Appetite` left `korr-contracts` and became hunger's private `Diet`.
+  Its `urgency` had no reader, so it is deleted. A type moves to
+  `contracts/` only once a second module reads it: combat or fear will
+  decide what they need.
 
 ## Open, deferred to combat
 

@@ -11,12 +11,12 @@ pub mod config;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::Reverse;
+use core::ops::BitOr;
 
-use korr_contracts::{Appetite, Graze, Plants};
+use korr_contracts::{Graze, Plants};
 use korr_core::mechanic::{
     Action, AnyRead, Ask, Band, Builder, CommitCtx, Component, Dir, EntityId, ImageError, Module,
-    Own, Pos, PrepCtx, Prepared, Proposals, Provided, ReadCells, Reader, Rows, Senses, Target,
-    Writer, provides,
+    Own, Pos, PrepCtx, Prepared, Proposals, Read, ReadCells, Reader, Rows, Senses, Target, Writer,
 };
 
 use config::{
@@ -37,6 +37,44 @@ impl Component for Satiety {
 
     fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> {
         r.read_u16().map(Self)
+    }
+}
+
+/// What a creature eats: a set of foods.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Diet(u8);
+
+impl Diet {
+    pub const PLANTS: Self = Self(1);
+    pub const REMAINS: Self = Self(2);
+
+    #[must_use]
+    pub const fn contains(self, food: Self) -> bool {
+        self.0 & food.0 == food.0
+    }
+}
+
+impl BitOr for Diet {
+    type Output = Self;
+
+    fn bitor(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+impl Component for Diet {
+    const VERSION: u16 = 0;
+
+    fn write(&self, w: &mut Writer) {
+        w.write_u8(self.0);
+    }
+
+    fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> {
+        let bits = r.read_u8()?;
+        if bits & !(Self::PLANTS.0 | Self::REMAINS.0) != 0 {
+            return Err(ImageError::Corrupt("diet"));
+        }
+        Ok(Self(bits))
     }
 }
 
@@ -67,7 +105,7 @@ pub enum Meal {
 #[derive(Debug)]
 pub struct Hunger {
     satiety: Own<Satiety>,
-    appetite: Own<Appetite>,
+    diet: Own<Diet>,
     plants: Option<ReadCells>,
     graze: Option<Ask<Graze>>,
 }
@@ -76,10 +114,20 @@ impl Hunger {
     pub fn build(b: &mut Builder<'_>) -> Self {
         Self {
             satiety: b.own("satiety"),
-            appetite: b.provide(),
+            diet: b.own("diet"),
             plants: b.contract_cells::<Plants>(),
             graze: b.request(),
         }
+    }
+
+    #[must_use]
+    pub fn satiety(&self) -> Read<Satiety> {
+        self.satiety.read()
+    }
+
+    #[must_use]
+    pub fn diet(&self) -> Read<Diet> {
+        self.diet.read()
     }
 }
 
@@ -116,20 +164,18 @@ fn approach(ctx: &PrepCtx<'_>, pos: Pos, at: Pos) -> Prepared<Eating, Meal> {
 
 impl Module for Hunger {
     const NAME: &'static str = "hunger";
-    const PROVIDES: &'static [Provided] = &[provides::<Appetite>()];
     type Action = Eating;
     type Plan = Meal;
 
     fn tick_rows(&self, rows: &mut Rows<'_>) {
-        rows.join(&self.satiety, &self.appetite, |satiety, appetite| {
+        rows.join(&self.satiety, &self.diet, |satiety, _| {
             satiety.0 = satiety.0.saturating_sub(DECAY);
-            appetite.urgency = urgency(satiety.0);
             if satiety.0 == 0 { STARVE_DAMAGE } else { 0 }
         });
     }
 
     fn requires(&self, _: Eating) -> Vec<AnyRead> {
-        vec![self.satiety.read().into(), self.appetite.read().into()]
+        vec![self.satiety.read().into(), self.diet.read().into()]
     }
 
     fn propose(&self, senses: &Senses<'_>, out: &mut Proposals<'_, Eating>) {
@@ -140,19 +186,20 @@ impl Module for Hunger {
         if urgency == 0 {
             return;
         }
-        let Some(&Appetite { eats, .. }) = senses.get(self.appetite.read()) else {
+        let Some(&diet) = senses.get(self.diet.read()) else {
             return;
         };
         let pos = senses.pos();
         let plant = match (self.plants, self.graze) {
-            (Some(plants), Some(_)) if eats & Appetite::PLANTS != 0 => senses
+            (Some(plants), Some(_)) if diet.contains(Diet::PLANTS) => senses
                 .cells(plants)
                 .filter(|&(_, growth)| growth > 0)
                 .map(|(at, growth)| choice(pos, at, u16::from(growth) * PLANT_NUTRITION, None))
                 .min(),
             _ => None,
         };
-        let remains = (eats & Appetite::REMAINS != 0)
+        let remains = diet
+            .contains(Diet::REMAINS)
             .then(|| {
                 senses
                     .remains()
@@ -227,10 +274,6 @@ impl Hunger {
             .get_mut(&self.satiety)
             .expect("the run requires satiety");
         satiety.0 = satiety.0.saturating_add(gain).min(FULL);
-        let satiety = satiety.0;
-        ctx.get_mut(&self.appetite)
-            .expect("the run requires appetite")
-            .urgency = urgency(satiety);
     }
 }
 

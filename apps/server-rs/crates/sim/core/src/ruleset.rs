@@ -1,7 +1,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use korr_ecs::{AnyRead, Own, Schema, SchemaBuilder, checksum};
+use korr_ecs::{AnyRead, Own, Read, Schema, SchemaBuilder, checksum};
 use korr_random::ModuleKey;
 
 use crate::build::{ColumnIdx, Recipe, assemble};
@@ -162,5 +162,17 @@ impl Ruleset {
     #[must_use]
     pub fn fingerprint(&self) -> u64 {
         self.fingerprint
+    }
+
+    /// For setup through `Floor::init`: in a round, only `harm` writes vitality.
+    #[must_use]
+    pub fn vitality(&self) -> Read<Vitality> {
+        self.vitality.read()
+    }
+
+    /// For setup through `Floor::init`: in a round, only a death lays remains.
+    #[must_use]
+    pub fn remains(&self) -> Read<Remains> {
+        self.remains.read()
     }
 }

@@ -1,7 +1,7 @@
 use core::convert::Infallible;
 
 use korr_core::{
-    host::{Cause, Event, ModuleKey, Recipe, Seed, Then, World, keyed},
+    host::{Both, Cause, Event, Mechanics, ModuleKey, Recipe, Seed, Then, World, keyed},
     mechanic::{
         Builder, CommitCtx, Component, ImageError, Module, Own, Pos, PrepCtx, Prepared, Proposals,
         Reader, Rows, Senses, Target, Writer,
@@ -35,6 +35,10 @@ impl Component for Clot {
     }
 }
 
+trait Bleeds: Module {
+    fn keys(&self) -> (&Own<Wound>, &Own<Clot>);
+}
+
 /// Declares `$module`, named `$name`: its tick harms every holder of its
 /// wound and clot by `$amount`.
 macro_rules! bleed {
@@ -50,6 +54,12 @@ macro_rules! bleed {
                     wound: b.own("wound"),
                     clot: b.own("clot"),
                 }
+            }
+        }
+
+        impl Bleeds for $module {
+            fn keys(&self) -> (&Own<Wound>, &Own<Clot>) {
+                (&self.wound, &self.clot)
             }
         }
 
@@ -85,14 +95,18 @@ bleed!(Ooze, "ooze", 4);
 
 /// The cause of the one death after a round where both bleeds harm an
 /// actor that neither alone kills.
-fn bled<R: Recipe<Mechanics: Sync>>(recipe: R) -> Cause {
+fn bled<A: Bleeds, B: Bleeds>(recipe: impl Recipe<Mechanics = Both<A, B>>) -> Cause
+where
+    Both<A, B>: Mechanics + Sync,
+{
     let game = game(recipe, Seed(1));
     let ruleset = game.ruleset();
     let mut f = floor(ruleset, GROUND, 5, 5);
     let h = mortal(&mut f, ruleset, Pos { x: 2, y: 2 }, 7, 0);
-    for module in ["bleed", "ooze"] {
-        f.init(ruleset, h, &format!("{module}.wound"), Wound);
-        f.init(ruleset, h, &format!("{module}.clot"), Clot);
+    let Both(a, b) = game.mechanics();
+    for (wound, clot) in [a.keys(), b.keys()] {
+        f.insert(wound, h, Wound);
+        f.insert(clot, h, Clot);
     }
     let mut world = World::new(vec![f]);
     run(&game, &mut world, 1);
@@ -114,15 +128,28 @@ fn the_lowest_cause_kills_whatever_the_registry_order() {
 
 /// The events of a round where `low` bleeds the higher id and `high` the
 /// lower one, both to death.
-fn bled_both<R: Recipe<Mechanics: Sync>>(recipe: R, low: &str, high: &str) -> Vec<Event> {
+fn bled_both<A: Bleeds, B: Bleeds>(
+    recipe: impl Recipe<Mechanics = Both<A, B>>,
+    low: &str,
+    high: &str,
+) -> Vec<Event>
+where
+    Both<A, B>: Mechanics + Sync,
+{
     let game = game(recipe, Seed(1));
     let ruleset = game.ruleset();
     let mut f = floor(ruleset, GROUND, 5, 5);
     let first = mortal(&mut f, ruleset, Pos { x: 1, y: 2 }, 3, MAX);
     let second = mortal(&mut f, ruleset, Pos { x: 3, y: 2 }, 3, MAX);
+    let Both(a, b) = game.mechanics();
     for (h, module) in [(first, high), (second, low)] {
-        f.init(ruleset, h, &format!("{module}.wound"), Wound);
-        f.init(ruleset, h, &format!("{module}.clot"), Clot);
+        let (wound, clot) = if A::NAME == module {
+            a.keys()
+        } else {
+            b.keys()
+        };
+        f.insert(wound, h, Wound);
+        f.insert(clot, h, Clot);
     }
     let mut world = World::new(vec![f]);
     run(&game, &mut world, 1);

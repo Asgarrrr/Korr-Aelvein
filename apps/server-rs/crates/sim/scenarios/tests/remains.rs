@@ -1,19 +1,18 @@
 use core::convert::Infallible;
 
-use korr_contracts::Appetite;
 use korr_core::{
     host::{
         Event, Floor, Game, Mechanics, ROT_PER_ROUND, Round, Seed, Then, Vitality, World, keyed,
     },
     mechanic::{
-        Builder, CommitCtx, Component, Contract, ImageError, Module, Own, Pos, PrepCtx, Prepared,
-        Proposals, Reader, Rows, Senses, Target, Writer,
+        Builder, CommitCtx, Component, ImageError, Module, Own, Pos, PrepCtx, Prepared, Proposals,
+        Reader, Rows, Senses, Target, Writer,
     },
 };
 use korr_ecs::{EntityId, FloorId, Handle};
 use korr_engine::{Modules, Registry};
-use korr_hunger::Satiety;
 use korr_hunger::config::{BITE, DECAY, PECKISH, REMAINS_NUTRITION, STARVE_DAMAGE};
+use korr_hunger::{Diet, Satiety};
 use korr_scenarios::{floor, game, reload, run};
 
 const FIELD: FloorId = FloorId(0);
@@ -34,29 +33,33 @@ fn carnivorous(flora: bool) -> Game<Modules> {
     )
 }
 
-fn eater(f: &mut Floor, game: &Game<impl Mechanics>, at: Pos, satiety: u16, eats: u8) -> Handle {
-    let ruleset = game.ruleset();
-    let h = f.spawn_actor(ruleset, at);
-    f.init(ruleset, h, "hunger.satiety", Satiety(satiety));
-    f.init(ruleset, h, Appetite::NAME, Appetite { urgency: 0, eats });
+fn eater(f: &mut Floor, game: &Game<Modules>, at: Pos, satiety: u16, diet: Diet) -> Handle {
+    let hunger = game
+        .mechanics()
+        .hunger
+        .as_ref()
+        .expect("the registry runs hunger");
+    let h = f.spawn_actor(game.ruleset(), at);
+    f.init(hunger.satiety(), h, Satiety(satiety));
+    f.init(hunger.diet(), h, diet);
     h
 }
 
 /// A 9x9 floor where each donor starves in round 1, leaving remains of its
 /// mass, then one creature at each eater's position, satiety and diet.
 fn field(
-    game: &Game<impl Mechanics>,
+    game: &Game<Modules>,
     donors: &[(Pos, u16)],
-    eaters: &[(Pos, u16, u8)],
+    eaters: &[(Pos, u16, Diet)],
 ) -> (World, Vec<Handle>) {
     fed_field(game, donors, eaters, &[])
 }
 
 /// A `field` with plants of the given growth.
 fn fed_field(
-    game: &Game<impl Mechanics>,
+    game: &Game<Modules>,
     donors: &[(Pos, u16)],
-    eaters: &[(Pos, u16, u8)],
+    eaters: &[(Pos, u16, Diet)],
     plants: &[(Pos, u8)],
 ) -> (World, Vec<Handle>) {
     let mut f = floor(game.ruleset(), FIELD, 9, 9);
@@ -64,16 +67,16 @@ fn fed_field(
         f.set_cell(game.ruleset(), "plants", at, growth);
     }
     for &(at, mass) in donors {
-        let h = eater(&mut f, game, at, 0, Appetite::PLANTS);
+        let h = eater(&mut f, game, at, 0, Diet::PLANTS);
         let vitality = Vitality {
             hp: STARVE_DAMAGE,
             max: mass,
         };
-        f.init(game.ruleset(), h, "core.vitality", vitality);
+        f.init(game.ruleset().vitality(), h, vitality);
     }
     let eaters = eaters
         .iter()
-        .map(|&(at, satiety, eats)| eater(&mut f, game, at, satiety, eats))
+        .map(|&(at, satiety, diet)| eater(&mut f, game, at, satiety, diet))
         .collect();
     (World::new(vec![f]), eaters)
 }
@@ -99,9 +102,9 @@ fn mass(game: &Game<impl Mechanics>, world: &World, id: EntityId) -> Option<u16>
 }
 
 /// The mass of the one remains after each of `rounds`, eaten by a starving
-/// creature of diet `eats` beside it.
-fn masses(game: &Game<Modules>, eats: u8, rounds: usize) -> Vec<Option<u16>> {
-    let (mut world, _) = field(game, &[(CARCASS, MASS)], &[(Pos { x: 5, y: 4 }, 0, eats)]);
+/// creature of `diet` beside it.
+fn masses(game: &Game<Modules>, diet: Diet, rounds: usize) -> Vec<Option<u16>> {
+    let (mut world, _) = field(game, &[(CARCASS, MASS)], &[(Pos { x: 5, y: 4 }, 0, diet)]);
     run(game, &mut world, 1);
     let [remains] = laid(&world)[..] else {
         panic!("one donor, one remains");
@@ -117,7 +120,7 @@ fn masses(game: &Game<Modules>, eats: u8, rounds: usize) -> Vec<Option<u16>> {
 #[test]
 fn a_carnivore_eats_remains_away() {
     assert_eq!(
-        masses(&carnivorous(true), Appetite::REMAINS, 3),
+        masses(&carnivorous(true), Diet::REMAINS, 3),
         [
             Some(MASS - BITE),
             Some(MASS - 2 * BITE - ROT_PER_ROUND),
@@ -129,7 +132,7 @@ fn a_carnivore_eats_remains_away() {
 #[test]
 fn a_herbivore_never_feeds_on_remains() {
     assert_eq!(
-        masses(&carnivorous(true), Appetite::PLANTS, 3),
+        masses(&carnivorous(true), Diet::PLANTS, 3),
         [
             Some(MASS),
             Some(MASS - ROT_PER_ROUND),
@@ -141,21 +144,21 @@ fn a_herbivore_never_feeds_on_remains() {
 #[test]
 fn without_flora_a_carnivore_still_feeds() {
     assert_eq!(
-        masses(&carnivorous(false), Appetite::REMAINS, 1),
+        masses(&carnivorous(false), Diet::REMAINS, 1),
         [Some(MASS - BITE)]
     );
 }
 
 /// The remains' mass and the plant's growth after round 1, when a starving
-/// creature of diet `eats` lies between the remains and a plant of
+/// creature of `diet` lies between the remains and a plant of
 /// `growth`, which grows one step before it acts.
-fn first_meal(eats: u8, growth: u8) -> (Option<u16>, u8) {
+fn first_meal(diet: Diet, growth: u8) -> (Option<u16>, u8) {
     let game = carnivorous(true);
     let plant = Pos { x: 6, y: 4 };
     let mut world = fed_field(
         &game,
         &[(CARCASS, MASS)],
-        &[(Pos { x: 5, y: 4 }, 0, eats)],
+        &[(Pos { x: 5, y: 4 }, 0, diet)],
         &[(plant, growth)],
     )
     .0;
@@ -167,21 +170,23 @@ fn first_meal(eats: u8, growth: u8) -> (Option<u16>, u8) {
     (mass(&game, &world, remains), growth)
 }
 
-const OMNIVORE: u8 = Appetite::PLANTS | Appetite::REMAINS;
+fn omnivore() -> Diet {
+    Diet::PLANTS | Diet::REMAINS
+}
 
 #[test]
 fn of_foods_as_near_and_as_nourishing_the_first_in_row_order_is_eaten() {
-    assert_eq!(first_meal(OMNIVORE, 1), (Some(MASS - BITE), 2));
+    assert_eq!(first_meal(omnivore(), 1), (Some(MASS - BITE), 2));
 }
 
 #[test]
 fn a_plant_more_nourishing_than_a_bite_is_eaten_first() {
-    assert_eq!(first_meal(OMNIVORE, 2), (Some(MASS), 0));
+    assert_eq!(first_meal(omnivore(), 2), (Some(MASS), 0));
 }
 
 #[test]
 fn a_carnivore_never_grazes() {
-    assert_eq!(first_meal(Appetite::REMAINS, 2), (Some(MASS - BITE), 3));
+    assert_eq!(first_meal(Diet::REMAINS, 2), (Some(MASS - BITE), 3));
 }
 
 #[test]
@@ -189,7 +194,7 @@ fn one_bite_that_sates_ends_the_meal() {
     let game = carnivorous(true);
     // One bite lifts it to `PECKISH` after the next decay.
     let satiety = PECKISH + 2 * DECAY - BITE * REMAINS_NUTRITION;
-    let eater = (Pos { x: 5, y: 4 }, satiety, Appetite::REMAINS);
+    let eater = (Pos { x: 5, y: 4 }, satiety, Diet::REMAINS);
     let (mut world, _) = field(&game, &[(CARCASS, MASS)], &[eater]);
     run(&game, &mut world, 1);
     let [remains] = laid(&world)[..] else {
@@ -212,7 +217,7 @@ fn of_two_carnivores_one_eats_the_last_unit() {
     let (mut world, carnivores) = field(
         &game,
         &[(CARCASS, 1), (Pos { x: 4, y: 1 }, MASS)],
-        &sides.map(|at| (at, satiety, Appetite::REMAINS)),
+        &sides.map(|at| (at, satiety, Diet::REMAINS)),
     );
     run(&game, &mut world, 1);
     let [last, far] = laid(&world)[..] else {
@@ -233,7 +238,7 @@ fn of_two_carnivores_one_eats_the_last_unit() {
 /// whether the remains are gone by then.
 fn approached(reloaded: bool) -> (u64, bool) {
     let game = carnivorous(true);
-    let eater = (Pos { x: 7, y: 4 }, 0, Appetite::REMAINS);
+    let eater = (Pos { x: 7, y: 4 }, 0, Diet::REMAINS);
     let (mut world, _) = field(&game, &[(CARCASS, MASS)], &[eater]);
     run(&game, &mut world, 1);
     let [remains] = laid(&world)[..] else {
@@ -334,9 +339,10 @@ fn the_game_runs_with_remains_and_without_hunger() {
     let ruleset = game.ruleset();
     let mut f = floor(ruleset, FIELD, 9, 9);
     let h = f.spawn_actor(ruleset, CARCASS);
-    f.init(ruleset, h, "core.vitality", Vitality { hp: 1, max: MASS });
-    f.init(ruleset, h, "bleed.wound", Wound);
-    f.init(ruleset, h, "bleed.clot", Clot);
+    f.init(ruleset.vitality(), h, Vitality { hp: 1, max: MASS });
+    let bleed = &game.mechanics().0;
+    f.insert(&bleed.wound, h, Wound);
+    f.insert(&bleed.clot, h, Clot);
     f.spawn_actor(ruleset, Pos { x: 5, y: 4 });
     let mut world = World::new(vec![f]);
     run(&game, &mut world, 1);

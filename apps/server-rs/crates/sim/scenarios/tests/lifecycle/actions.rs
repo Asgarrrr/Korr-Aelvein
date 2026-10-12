@@ -138,7 +138,7 @@ fn an_actor_killed_after_it_departs_stays_dead() {
     let mut upper = floor(ruleset, UPPER, 5, 5);
     let victim = mortal(&mut upper, ruleset, Pos { x: 1, y: 1 }, MAX, MAX);
     let striker = upper.spawn_actor(ruleset, Pos { x: 2, y: 1 });
-    upper.init(ruleset, striker, "striker.fang", Fang);
+    upper.insert(&game.mechanics().0.fang, striker, Fang);
     let mut world = World::new(vec![ground, upper]);
     run(&game, &mut world, 1);
     let (ground, upper) = (world.floor(GROUND), world.floor(UPPER));

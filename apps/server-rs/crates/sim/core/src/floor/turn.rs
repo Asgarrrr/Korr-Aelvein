@@ -270,7 +270,7 @@ impl RunVisit<'_> {
     }
 }
 
-/// Asks the module at `module` its `check` of `value`.
+/// Asks the module at `module` the `check` it serves, of `value`.
 struct CheckVisit {
     module: u16,
     value: u8,
@@ -279,15 +279,15 @@ struct CheckVisit {
 }
 
 impl Visit for CheckVisit {
-    fn module<M: Module>(&mut self, module: &M) {
+    fn module<M: Module>(&mut self, _: &M) {
         if self.ordinal == self.module {
-            self.reply = module.check(self.value);
+            self.reply = M::SERVES.and_then(|served| (served.check)(self.value));
         }
         self.ordinal += 1;
     }
 }
 
-/// Replaces `value` with the `apply` of the module at `module`.
+/// Replaces `value` with the `apply` the module at `module` serves.
 struct ApplyVisit {
     module: u16,
     value: u8,
@@ -295,9 +295,11 @@ struct ApplyVisit {
 }
 
 impl Visit for ApplyVisit {
-    fn module<M: Module>(&mut self, module: &M) {
-        if self.ordinal == self.module {
-            self.value = module.apply(self.value);
+    fn module<M: Module>(&mut self, _: &M) {
+        if self.ordinal == self.module
+            && let Some(served) = M::SERVES
+        {
+            self.value = (served.apply)(self.value);
         }
         self.ordinal += 1;
     }

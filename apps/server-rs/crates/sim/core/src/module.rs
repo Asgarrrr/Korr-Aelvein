@@ -34,22 +34,13 @@ pub trait Module {
     type Plan;
     /// The contracts the module's build must provide, one `provides::<C>()` each.
     const PROVIDES: &'static [Provided] = &[];
-    /// The request the module serves on its cell column, one `serves::<C>()`.
+    /// The request the module serves on its cell column, one `serves::<C>(check, apply)`.
     const SERVES: Option<Served> = None;
     /// The next value of the module's cell column at one cell, from the previous
     /// round's column; called once per cell and round, only when the build
     /// binds a column. Its draws come from the cell's own stream.
     fn tick(&self, cell: Stencil<'_>, _: Draws) -> u8 {
         cell.value()
-    }
-    /// The reply to the served request at a cell holding `value`, in the
-    /// asker's prepare; `None` refuses it.
-    fn check(&self, _value: u8) -> Option<u8> {
-        None
-    }
-    /// The cell's value once the served request is applied, in the asker's commit.
-    fn apply(&self, value: u8) -> u8 {
-        value
     }
     /// The module's bulk tick over entity rows, once per floor and round, after its cells.
     fn tick_rows(&self, _: &mut Rows<'_>) {}

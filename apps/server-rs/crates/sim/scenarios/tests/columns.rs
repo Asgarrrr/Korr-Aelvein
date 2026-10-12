@@ -77,7 +77,7 @@ impl Grazed {
 
 impl Module for Grazed {
     const NAME: &'static str = "test.grazed";
-    const SERVES: Option<Served> = Some(serves::<Graze>());
+    const SERVES: Option<Served> = Some(serves::<Graze>(Some, |value| value));
     type Action = Infallible;
     type Plan = Infallible;
 

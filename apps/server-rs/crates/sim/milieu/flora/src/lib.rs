@@ -30,6 +30,15 @@ impl From<Draw> for DrawIndex {
     }
 }
 
+/// Any plant may be grazed, and the reply is its growth.
+fn graze(plant: u8) -> Option<u8> {
+    (plant > 0).then_some(plant)
+}
+
+fn grazed(_: u8) -> u8 {
+    0
+}
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Flora;
 
@@ -46,7 +55,7 @@ impl Module for Flora {
     type Action = Infallible;
     type Plan = Infallible;
     const PROVIDES: &'static [Provided] = &[provides_cells::<Plants>()];
-    const SERVES: Option<Served> = Some(serves::<Graze>());
+    const SERVES: Option<Served> = Some(serves::<Graze>(graze, grazed));
 
     #[inline]
     fn tick(&self, cell: Stencil<'_>, draws: Draws) -> u8 {
@@ -69,14 +78,6 @@ impl Module for Flora {
             let ripe = u32::try_from(ripe).expect("a cell has eight neighbours");
             u8::from(draws.below(Draw::Sprout, SPROUT_ODDS) < ripe * SPROUT_CHANCE)
         }
-    }
-
-    fn check(&self, value: u8) -> Option<u8> {
-        (value > 0).then_some(value)
-    }
-
-    fn apply(&self, _: u8) -> u8 {
-        0
     }
 
     fn propose(&self, _: &Senses<'_>, _: &mut Proposals<'_, Infallible>) {}

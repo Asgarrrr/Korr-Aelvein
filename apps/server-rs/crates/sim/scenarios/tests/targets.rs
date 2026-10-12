@@ -154,9 +154,9 @@ fn tail_follows_the_highest_mark() {
     let mut f = floor(ruleset, GROUND, 11, 11);
     let follower = f.spawn_actor(ruleset, Pos { x: 5, y: 5 });
     let low = f.spawn_actor(ruleset, Pos { x: 4, y: 5 });
-    f.init(ruleset, low, "tail.mark", Mark(1));
+    f.insert(&game.mechanics().mark, low, Mark(1));
     let high = f.spawn_actor(ruleset, Pos { x: 7, y: 5 });
-    f.init(ruleset, high, "tail.mark", Mark(2));
+    f.insert(&game.mechanics().mark, high, Mark(2));
     let mut world = World::new(vec![f]);
     run(&game, &mut world, 1);
     assert_eq!(world.floor(GROUND).pos(follower), Some(Pos { x: 6, y: 5 }));
@@ -237,7 +237,7 @@ fn marked(game: &Game<Tail>) -> World {
     ];
     for (n, (x, y)) in (0..).zip(spawns) {
         let h = f.spawn_actor(ruleset, Pos { x, y });
-        f.init(ruleset, h, "tail.mark", Mark(n % 3));
+        f.insert(&game.mechanics().mark, h, Mark(n % 3));
     }
     World::new(vec![f])
 }

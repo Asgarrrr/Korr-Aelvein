@@ -3,40 +3,7 @@
 #![no_std]
 #![deny(clippy::float_arithmetic)]
 
-use korr_core::mechanic::{CellContract, Component, Contract, ImageError, Reader, Request, Writer};
-
-/// How urgently a creature needs to eat: 0 when sated, 255 when starving;
-/// and what it eats, a mask of the foods below.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Appetite {
-    pub urgency: u8,
-    pub eats: u8,
-}
-
-impl Appetite {
-    pub const PLANTS: u8 = 1;
-    pub const REMAINS: u8 = 2;
-}
-
-impl Component for Appetite {
-    const VERSION: u16 = 1;
-
-    fn write(&self, w: &mut Writer) {
-        w.write_u8(self.urgency);
-        w.write_u8(self.eats);
-    }
-
-    fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> {
-        Ok(Self {
-            urgency: r.read_u8()?,
-            eats: r.read_u8()?,
-        })
-    }
-}
-
-impl Contract for Appetite {
-    const NAME: &'static str = "appetite";
-}
+use korr_core::mechanic::{CellContract, Request};
 
 /// The plants of a floor: a cell's value is its plant's growth, 0 for bare ground.
 #[derive(Debug)]

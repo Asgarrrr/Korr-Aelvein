@@ -101,7 +101,7 @@ impl Module for Sniffer {
     }
 }
 
-/// Provides `Scent` and keeps no key: the test writes it through `Floor::init`.
+/// Provides `Scent` and keeps no key: the test seeds it through the sniffer's key.
 #[derive(Debug)]
 struct Scenter;
 
@@ -123,10 +123,15 @@ fn a_reader_listed_before_its_provider_reads_the_contract() {
     let game = game(Then(keyed(Sniffer::build), keyed(Scenter::build)), Seed(1));
     let ruleset = game.ruleset();
     let mut f = floor(ruleset, FloorId(0), 9, 9);
+    let scent = game
+        .mechanics()
+        .0
+        .scent
+        .expect("scenter provides the scent");
     let scented = f.spawn_actor(ruleset, Pos { x: 2, y: 2 });
-    f.init(ruleset, scented, "test.scent", Scent(3));
+    f.init(scent, scented, Scent(3));
     let faint = f.spawn_actor(ruleset, Pos { x: 2, y: 5 });
-    f.init(ruleset, faint, "test.scent", Scent(2));
+    f.init(scent, faint, Scent(2));
     let mut world = World::new(vec![f]);
     run(&game, &mut world, 1);
     let f = world.floor(FloorId(0));

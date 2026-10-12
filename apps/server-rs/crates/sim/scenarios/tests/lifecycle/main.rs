@@ -1,24 +1,19 @@
-use korr_contracts::Appetite;
 use korr_core::{
     host::{
         Cause, Event, Floor, Game, Mechanics, ModuleKey, ROT_PER_ROUND, Remains, Round, Ruleset,
         Seed, Then, Vitality, World, keyed,
     },
-    mechanic::{Contract, Pos},
+    mechanic::Pos,
 };
 use korr_ecs::{EntityId, FloorId, Handle};
 use korr_hunger::config::STARVE_DAMAGE;
-use korr_hunger::{Hunger, Satiety};
+use korr_hunger::{Diet, Hunger, Satiety};
 use korr_scenarios::{Pace, floor, game, run};
 
 const GROUND: FloorId = FloorId(0);
 const UPPER: FloorId = FloorId(1);
 const HUNGER: Cause = Cause::Mechanic(ModuleKey::of("hunger"));
 const MAX: u16 = 10;
-const HERBIVORE: Appetite = Appetite {
-    urgency: 0,
-    eats: Appetite::PLANTS,
-};
 
 mod actions;
 mod causes;
@@ -30,13 +25,13 @@ fn nth(floor: FloorId, n: u64) -> EntityId {
 
 fn mortal(f: &mut Floor, ruleset: &Ruleset, at: Pos, hp: u16, max: u16) -> Handle {
     let h = f.spawn_actor(ruleset, at);
-    f.init(ruleset, h, "core.vitality", Vitality { hp, max });
+    f.init(ruleset.vitality(), h, Vitality { hp, max });
     h
 }
 
-fn starve(f: &mut Floor, ruleset: &Ruleset, h: Handle) {
-    f.init(ruleset, h, "hunger.satiety", Satiety(0));
-    f.init(ruleset, h, Appetite::NAME, HERBIVORE);
+fn starve(f: &mut Floor, hunger: &Hunger, h: Handle) {
+    f.init(hunger.satiety(), h, Satiety(0));
+    f.init(hunger.diet(), h, Diet::PLANTS);
 }
 
 fn hunger() -> Game<Hunger> {
@@ -44,11 +39,11 @@ fn hunger() -> Game<Hunger> {
 }
 
 /// One empty stomach on a 5x5 floor, with `hp` and `MAX`.
-fn starving<M: Mechanics>(game: &Game<M>, hp: u16) -> (World, Handle) {
+fn starving<M: Mechanics>(game: &Game<M>, hunger: &Hunger, hp: u16) -> (World, Handle) {
     let ruleset = game.ruleset();
     let mut f = floor(ruleset, GROUND, 5, 5);
     let h = mortal(&mut f, ruleset, Pos { x: 2, y: 2 }, hp, MAX);
-    starve(&mut f, ruleset, h);
+    starve(&mut f, hunger, h);
     (World::new(vec![f]), h)
 }
 
@@ -64,7 +59,7 @@ fn starved(game: &Game<Hunger>, world: &mut World) -> EntityId {
 #[test]
 fn a_starving_creature_dies_and_leaves_remains() {
     let game = hunger();
-    let (mut world, h) = starving(&game, 2 * STARVE_DAMAGE);
+    let (mut world, h) = starving(&game, game.mechanics(), 2 * STARVE_DAMAGE);
     run(&game, &mut world, 1);
     assert!(world.floor(GROUND).pos(h).is_some());
     assert_eq!(world.floor(GROUND).events(), []);
@@ -95,7 +90,7 @@ fn a_starving_creature_dies_and_leaves_remains() {
 #[test]
 fn remains_rot_away() {
     let game = hunger();
-    let (mut world, _) = starving(&game, 2 * STARVE_DAMAGE);
+    let (mut world, _) = starving(&game, game.mechanics(), 2 * STARVE_DAMAGE);
     let remains = starved(&game, &mut world);
     let rounds = u64::from(MAX.div_ceil(ROT_PER_ROUND));
     run(&game, &mut world, rounds - 1);
@@ -112,7 +107,7 @@ fn remains_rot_away() {
 #[test]
 fn starvation_in_the_bulk_phase_before_the_due_pops_does_not_panic() {
     let game = game(Then(Pace, keyed(Hunger::build)), Seed(1));
-    let (mut world, h) = starving(&game, STARVE_DAMAGE);
+    let (mut world, h) = starving(&game, &game.mechanics().1, STARVE_DAMAGE);
     run(&game, &mut world, 1);
     assert_eq!(world.floor(GROUND).pos(h), None);
     assert!(matches!(
@@ -130,13 +125,13 @@ fn starvation_in_the_bulk_phase_before_the_due_pops_does_not_panic() {
 
 /// Six creatures that starve one by one, every third round from round 3,
 /// each leaving remains that outlast a few rounds.
-fn famine(game: &Game<impl Mechanics>) -> World {
+fn famine(game: &Game<impl Mechanics>, hunger: &Hunger) -> World {
     let ruleset = game.ruleset();
     let mut f = floor(ruleset, GROUND, 9, 9);
     for k in 1..=6 {
         let y = i16::try_from(k).expect("a row fits i16");
         let h = mortal(&mut f, ruleset, Pos { x: 1, y }, 3 * k * STARVE_DAMAGE, 5);
-        starve(&mut f, ruleset, h);
+        starve(&mut f, hunger, h);
     }
     World::new(vec![f])
 }
@@ -144,9 +139,9 @@ fn famine(game: &Game<impl Mechanics>) -> World {
 #[test]
 fn a_save_mid_famine_replays_the_uninterrupted_run() {
     let game = game(Then(Pace, keyed(Hunger::build)), Seed(1));
-    let mut unbroken = famine(&game);
+    let mut unbroken = famine(&game, &game.mechanics().1);
     run(&game, &mut unbroken, 20);
-    let mut resumed = famine(&game);
+    let mut resumed = famine(&game, &game.mechanics().1);
     run(&game, &mut resumed, 10);
     let mut resumed = game.load(&game.save(&resumed)).expect("own save loads");
     run(&game, &mut resumed, 10);

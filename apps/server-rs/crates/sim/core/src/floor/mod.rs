@@ -10,7 +10,7 @@ mod turn;
 use alloc::vec::Vec;
 use core::mem;
 
-use korr_ecs::{Component, EntityId, FloorId, Handle, Own, Store};
+use korr_ecs::{Component, EntityId, FloorId, Handle, Own, Read, Store};
 use korr_grid::{CellColumn, Grid, Interior, Layer, Material, Pos, Shape};
 
 use crate::ctx::Departure;
@@ -137,25 +137,13 @@ impl Floor {
         self.store.insert(key, h, value)
     }
 
-    /// Species setup by the host, through a component found by name: the one
-    /// write without the write key, so content seeds rows a module owns.
-    /// Returns the value `h` held before.
+    /// Species setup by the host, through a read key: the one write without
+    /// the write key, so content seeds rows a module owns. Returns the value
+    /// `h` held before.
     ///
     /// # Panics
-    /// When `ruleset` is not the one that built this floor, registers no
-    /// component `name`, or its column does not hold `T`, or `h` is dead.
-    pub fn init<T: Component>(
-        &mut self,
-        ruleset: &Ruleset,
-        h: Handle,
-        name: &str,
-        value: T,
-    ) -> Option<T> {
-        self.check_ruleset(ruleset);
-        let key = ruleset
-            .schema
-            .find(name)
-            .unwrap_or_else(|| panic!("no component named {name}"));
+    /// When `h` is dead, or `key` comes from another schema.
+    pub fn init<T: Component>(&mut self, key: Read<T>, h: Handle, value: T) -> Option<T> {
         self.store.init(key, h, value)
     }
 

@@ -95,18 +95,44 @@ pub trait Request: 'static {
     const NAME: &'static str;
 }
 
-/// The request a module declares in `Module::SERVES`.
+/// The request a module declares in `Module::SERVES`, with the two halves
+/// that serve it: a server cannot declare one without them.
 #[derive(Debug, Clone, Copy)]
 pub struct Served {
     pub(super) name: &'static str,
     pub(super) ty: TypeId,
+    /// The reply at a cell holding a value, in the asker's prepare; `None` refuses.
+    pub(crate) check: fn(u8) -> Option<u8>,
+    /// The cell's value once the request is applied, in the asker's commit.
+    pub(crate) apply: fn(u8) -> u8,
 }
 
+/// ```
+/// # use korr_core::mechanic::{Request, Served, serves};
+/// struct Graze;
+/// impl Request for Graze {
+///     const NAME: &'static str = "graze";
+/// }
+/// const SERVES: Option<Served> = Some(serves::<Graze>(|v| Some(v), |_| 0));
+/// ```
+///
+/// A served request without its check and apply does not compile:
+///
+/// ```compile_fail
+/// # use korr_core::mechanic::{Request, Served, serves};
+/// struct Graze;
+/// impl Request for Graze {
+///     const NAME: &'static str = "graze";
+/// }
+/// const SERVES: Option<Served> = Some(serves::<Graze>());
+/// ```
 #[must_use]
-pub const fn serves<C: Request>() -> Served {
+pub const fn serves<C: Request>(check: fn(u8) -> Option<u8>, apply: fn(u8) -> u8) -> Served {
     Served {
         name: C::NAME,
         ty: TypeId::of::<C>(),
+        check,
+        apply,
     }
 }
 
