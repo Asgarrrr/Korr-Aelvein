@@ -1,8 +1,9 @@
 //! One round of the reference world: a 128x128 floor with 8k actors and 2k
 //! things. The budget, about 200 ns per entity, holds for wander, which also
 //! walks flora's bare column; perceiving prices sight with every actor looking,
-//! at half density. The sweep repeats the round at other sizes and densities,
-//! so a gain is not one point's luck. The flora sweep prices the environment
+//! at half density; feeding prices hunger's search with every actor starving.
+//! The sweep repeats the round at other sizes and densities, so a gain is not
+//! one point's luck. The flora sweep prices the environment
 //! phase alone per interior cell, budget 5 ns, from ripe plants beside bare ground.
 //! The floors group runs 64 tower floors per round on 1..N threads, for wander, for
 //! perceiving and for a trivial per-cell tick. Efficiency is thrpt(N) / (N x thrpt(1)), which
@@ -12,6 +13,8 @@
 //! 64 tower floors moves to the next floor each round: 32k flights per barrier, the
 //! serial barrier at its busiest. Divided by floors/wander/N, it bounds the
 //! barrier's share.
+
+mod feeding;
 
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use korr_core::host::{Floor, Game, Job, Pos, Recipe, Ruleset, Runner, Seed, World, keyed};
@@ -166,6 +169,7 @@ fn core(c: &mut Criterion) {
         REFERENCE,
         Shy,
     );
+    feeding::feeding(&mut group);
     group.finish();
 }
 

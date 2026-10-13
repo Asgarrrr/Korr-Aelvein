@@ -235,6 +235,10 @@ Budget, in the `core` bench (not part of `verify`, reported in the PR):
   Its `urgency` had no reader, so it is deleted. A type moves to
   `contracts/` only once a second module reads it: combat or fear will
   decide what they need.
+- The component-contract seam (`provides::<C>()`, `Builder::provide`,
+  `Builder::contract`, the getter view) stays with no production
+  provider. Its second implementation is the test fake in `tests/seam.rs`.
+  Fear or combat will be its first real reader.
 
 ## Open, deferred to combat
 

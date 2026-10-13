@@ -722,6 +722,7 @@ dependencies = [
  "korr-engine",
  "korr-flora",
  "korr-grid",
+ "korr-hunger",
  "korr-random",
  "korr-scenarios",
  "korr-server",

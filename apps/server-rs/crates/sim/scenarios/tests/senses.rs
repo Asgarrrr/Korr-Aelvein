@@ -5,9 +5,10 @@
 use std::sync::Mutex;
 
 use korr_core::{
-    host::{SIGHT, Seed, World},
+    host::{ROT_PER_ROUND, Remains, SIGHT, Seed, World},
     mechanic::{
-        Action, CommitCtx, Module, Pos, PrepCtx, Prepared, Proposals, Seen, Senses, Target,
+        Action, CommitCtx, Module, Pos, PrepCtx, Prepared, Proposals, Seen, SeenRemains, Senses,
+        Target,
     },
 };
 use korr_ecs::{EntityId, FloorId};
@@ -22,6 +23,7 @@ use korr_scenarios::{Shy, floor, game};
 struct Watcher {
     perceives: bool,
     shown: Mutex<Vec<(Pos, Vec<Seen>)>>,
+    remains: Mutex<Vec<(Pos, Vec<SeenRemains>)>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,6 +51,12 @@ impl Module for Watcher {
             .lock()
             .expect("no propose panicked while holding the lock")
             .push((senses.pos(), senses.seen().to_vec()));
+        let mut remains: Vec<SeenRemains> = senses.remains().collect();
+        remains.sort_by_key(|r| r.id);
+        self.remains
+            .lock()
+            .expect("no propose panicked while holding the lock")
+            .push((senses.pos(), remains));
     }
 
     fn prepare(&self, action: Nothing, _: Target, _: &PrepCtx<'_>) -> Prepared<Nothing, Nothing> {
@@ -87,6 +95,7 @@ fn shown_around(perceives: bool, spawns: impl IntoIterator<Item = Pos>) -> Vec<(
         Watcher {
             perceives,
             shown: Mutex::default(),
+            remains: Mutex::default(),
         },
         Seed(1),
     );
@@ -151,6 +160,100 @@ fn non_perceiving_mechanics_are_shown_nobody() {
     let shown = shown_in_a_round(false);
     assert_eq!(shown.len(), 5);
     assert!(shown.iter().all(|(_, seen)| seen.is_empty()));
+}
+
+const ROOM: u16 = 16;
+/// Two corners, an edge and the centre of `ROOM`.
+const SNIFFERS: [Pos; 4] = [
+    Pos { x: 1, y: 1 },
+    Pos { x: 14, y: 14 },
+    Pos { x: 8, y: 1 },
+    Pos { x: 8, y: 8 },
+];
+
+fn chebyshev(a: Pos, b: Pos) -> u16 {
+    a.x.abs_diff(b.x).max(a.y.abs_diff(b.y))
+}
+
+/// What each sniffer is shown of `n` remains of distinct masses, laid on a
+/// fixed pseudo-random layout of `ROOM` with some cells holding several,
+/// and the remains as they lie when the sniffers act.
+#[expect(
+    clippy::disallowed_types,
+    reason = "a test observer, not engine state: it only records what propose is shown"
+)]
+fn remains_shown(n: u16) -> (Vec<(Pos, Vec<SeenRemains>)>, Vec<SeenRemains>) {
+    let game = game(
+        Watcher {
+            perceives: false,
+            shown: Mutex::default(),
+            remains: Mutex::default(),
+        },
+        Seed(1),
+    );
+    let ruleset = game.ruleset();
+    let mut f = floor(ruleset, FloorId(0), ROOM, ROOM);
+    for at in SNIFFERS {
+        f.spawn_actor(ruleset, at);
+    }
+    let inside = u64::from(ROOM - 2);
+    let coord = |v: u64| i16::try_from(v + 1).expect("an interior coordinate fits i16");
+    let mut state = u64::from(n);
+    let laid = (0..n)
+        .map(|k| {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            let cell = (state >> 33) % (inside * inside);
+            let at = Pos {
+                x: coord(cell % inside),
+                y: coord(cell / inside),
+            };
+            let mass = k + 2;
+            let h = f.spawn_thing(at);
+            let of = EntityId::new(FloorId(0), 0);
+            f.init(ruleset.remains(), h, Remains { of, mass });
+            SeenRemains {
+                id: EntityId::new(FloorId(0), u64::from(k) + 4),
+                pos: at,
+                mass: mass - ROT_PER_ROUND,
+            }
+        })
+        .collect();
+    let mut world = World::new(vec![f]);
+    game.run_round(&mut world);
+    let shown = std::mem::take(
+        &mut *game
+            .mechanics()
+            .remains
+            .lock()
+            .expect("no propose panicked while holding the lock"),
+    );
+    (shown, laid)
+}
+
+/// Few remains and many take different paths; the layouts put remains a
+/// sight away and one cell farther.
+#[test]
+fn every_remains_within_sight_is_sensed_and_no_other() {
+    let centre = SNIFFERS[3];
+    for n in [12, 49, 50, 300] {
+        let (shown, laid) = remains_shown(n);
+        let rings: Vec<u16> = laid.iter().map(|r| chebyshev(r.pos, centre)).collect();
+        assert!(
+            rings.contains(&SIGHT) && rings.contains(&(SIGHT + 1)),
+            "{n}"
+        );
+        assert_eq!(shown.len(), SNIFFERS.len());
+        for (at, sensed) in shown {
+            let near: Vec<SeenRemains> = laid
+                .iter()
+                .filter(|r| chebyshev(r.pos, at) <= SIGHT)
+                .copied()
+                .collect();
+            assert_eq!(sensed, near, "{n} remains, sniffer at {at:?}");
+        }
+    }
 }
 
 #[test]

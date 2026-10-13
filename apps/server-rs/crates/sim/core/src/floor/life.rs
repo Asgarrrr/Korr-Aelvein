@@ -78,15 +78,18 @@ impl Floor {
         }
     }
 
+    /// Lists the rotten in `emptied`, which is empty between turns.
     #[cold]
     fn clear_rotten(&mut self, ruleset: &Ruleset) {
-        let mut rotten: Vec<(EntityId, Handle)> = self
-            .store
-            .iter(ruleset.remains.read())
-            .filter(|(_, remains)| remains.mass == 0)
-            .map(|(h, _)| (self.store.id(h).expect("a stored row is alive"), h))
-            .collect();
+        let mut rotten = mem::take(&mut self.emptied);
+        rotten.extend(
+            self.store
+                .iter(ruleset.remains.read())
+                .filter(|(_, remains)| remains.mass == 0)
+                .map(|(h, _)| (self.store.id(h).expect("a stored row is alive"), h)),
+        );
         self.clear(&mut rotten);
+        self.emptied = rotten;
     }
 
     /// The remains the last action ate to nothing leave.

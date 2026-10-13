@@ -162,30 +162,17 @@ fn approach(ctx: &PrepCtx<'_>, pos: Pos, at: Pos) -> Prepared<Eating, Meal> {
     }
 }
 
-impl Module for Hunger {
-    const NAME: &'static str = "hunger";
-    type Action = Eating;
-    type Plan = Meal;
-
-    fn tick_rows(&self, rows: &mut Rows<'_>) {
-        rows.join(&self.satiety, &self.diet, |satiety, _| {
-            satiety.0 = satiety.0.saturating_sub(DECAY);
-            if satiety.0 == 0 { STARVE_DAMAGE } else { 0 }
-        });
-    }
-
-    fn requires(&self, _: Eating) -> Vec<AnyRead> {
-        vec![self.satiety.read().into(), self.diet.read().into()]
-    }
-
-    fn propose(&self, senses: &Senses<'_>, out: &mut Proposals<'_, Eating>) {
-        let Some(&Satiety(satiety)) = senses.get(self.satiety.read()) else {
-            return;
-        };
-        let urgency = urgency(satiety);
-        if urgency == 0 {
-            return;
-        }
+impl Hunger {
+    /// Out of line: inlined, the search grows the turn loop every actor runs,
+    /// sated or not.
+    #[inline(never)]
+    fn seek(
+        &self,
+        senses: &Senses<'_>,
+        satiety: u16,
+        urgency: u8,
+        out: &mut Proposals<'_, Eating>,
+    ) {
         let Some(&diet) = senses.get(self.diet.read()) else {
             return;
         };
@@ -217,6 +204,34 @@ impl Module for Hunger {
             Band::Routine
         };
         out.push(Eating::Eat, band, u16::from(urgency), target);
+    }
+}
+
+impl Module for Hunger {
+    const NAME: &'static str = "hunger";
+    type Action = Eating;
+    type Plan = Meal;
+
+    fn tick_rows(&self, rows: &mut Rows<'_>) {
+        rows.join(&self.satiety, &self.diet, |satiety, _| {
+            satiety.0 = satiety.0.saturating_sub(DECAY);
+            if satiety.0 == 0 { STARVE_DAMAGE } else { 0 }
+        });
+    }
+
+    fn requires(&self, _: Eating) -> Vec<AnyRead> {
+        vec![self.satiety.read().into(), self.diet.read().into()]
+    }
+
+    fn propose(&self, senses: &Senses<'_>, out: &mut Proposals<'_, Eating>) {
+        let Some(&Satiety(satiety)) = senses.get(self.satiety.read()) else {
+            return;
+        };
+        let urgency = urgency(satiety);
+        if urgency == 0 {
+            return;
+        }
+        self.seek(senses, satiety, urgency, out);
     }
 
     fn prepare(&self, action: Eating, target: Target, ctx: &PrepCtx<'_>) -> Prepared<Eating, Meal> {
