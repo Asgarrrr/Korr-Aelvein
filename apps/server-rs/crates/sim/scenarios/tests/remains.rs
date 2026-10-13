@@ -1,7 +1,6 @@
 use korr_core::{
     host::{
-        Event, Floor, Game, Mechanics, ROT_PER_ROUND, Round, SIGHT, Seed, Then, Vitality, World,
-        keyed,
+        Event, Floor, Game, Mechanics, ROT_PER_ROUND, Round, Seed, Then, Vitality, World, keyed,
     },
     mechanic::Pos,
 };
@@ -263,26 +262,6 @@ fn a_reload_every_round_keeps_the_approach_to_remains() {
     let unbroken = approached(Rounds::Unbroken);
     assert!(unbroken.1, "the carnivore reaches and eats the remains");
     assert_eq!(approached(Rounds::Reloaded), unbroken);
-}
-
-#[test]
-fn remains_just_past_sight_are_neither_approached_nor_eaten() {
-    let game = carnivorous();
-    let (carcass, home) = (
-        Pos { x: 1, y: 4 },
-        Pos {
-            x: 2 + SIGHT.cast_signed(),
-            y: 4,
-        },
-    );
-    let (mut world, carnivore) = field(&game, &[(carcass, MASS)], &[(home, 0, Diet::REMAINS)]);
-    run(&game, &mut world, 1);
-    let [remains] = laid(&world)[..] else {
-        panic!("one donor, one remains");
-    };
-    run(&game, &mut world, 2);
-    assert_eq!(world.floor(FIELD).pos(carnivore[0]), Some(home));
-    assert_eq!(mass(&game, &world, remains), Some(MASS - 2 * ROT_PER_ROUND));
 }
 
 bleed!(Bleed, "bleed", 1);

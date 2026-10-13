@@ -5,7 +5,8 @@ use crate::build::{Assembly, Builder, Declarations};
 use crate::module::{Mechanics, Module, Visit};
 
 /// What builds the mechanics of a game: declared first, so a module may read
-/// a contract whatever its place relative to the provider.
+/// a contract whatever its place relative to the provider. A request is
+/// different: its server must build before its asker.
 pub trait Recipe {
     type Mechanics: Mechanics;
     fn declare(&self, declarations: &mut Declarations);
