@@ -233,7 +233,7 @@ Budget, in the `core` bench (not part of `verify`, reported in the PR):
   A module cannot declare `SERVES` and keep a silent refusal.
 - A request's server builds before its asker: `Builder::request` copies
   the server's check, apply and cell column, and panics otherwise. Contracts
-  stay order-free; requests do not. Not yet approved by the user.
+  stay order-free; requests do not.
 - The mass of `Remains` is the dead creature's `Vitality.max`.
 - `Appetite` left `korr-contracts` and became hunger's private `Diet`.
   Its `urgency` had no reader, so it is deleted. A type moves to
