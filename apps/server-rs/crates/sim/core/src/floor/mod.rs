@@ -13,7 +13,7 @@ use core::mem;
 use korr_ecs::{Component, EntityId, FloorId, Handle, Own, Read, Store};
 use korr_grid::{CellColumn, Grid, Interior, Layer, Material, Pos, Shape};
 
-use crate::build::ReadCells;
+use crate::build::{FOREIGN_CELLS, ReadCells};
 use crate::ctx::Departure;
 use crate::decision::Candidates;
 use crate::floor::inbox::{Flight, Inbox};
@@ -90,23 +90,22 @@ impl Floor {
     }
 
     /// # Panics
-    /// When `ruleset` is not the one that built this floor, or `at` is not
-    /// an interior cell of this floor.
+    /// When `ruleset` is not the one that built this floor, `cells` comes
+    /// from another ruleset, or `at` is not an interior cell of this floor.
     #[must_use]
     pub fn cell(&self, ruleset: &Ruleset, cells: ReadCells, at: Pos) -> u8 {
-        self.check_ruleset(ruleset);
-        self.columns[cells.column.index()].get(self.interior(at))
+        self.columns[self.column(ruleset, cells)].get(self.interior(at))
     }
 
     /// For tests and setup: in a round, only the column's owner writes it.
     ///
     /// # Panics
-    /// When `ruleset` is not the one that built this floor, or `at` is not
-    /// an interior cell of this floor.
+    /// When `ruleset` is not the one that built this floor, `cells` comes
+    /// from another ruleset, or `at` is not an interior cell of this floor.
     pub fn set_cell(&mut self, ruleset: &Ruleset, cells: ReadCells, at: Pos, value: u8) {
-        self.check_ruleset(ruleset);
+        let column = self.column(ruleset, cells);
         let at = self.interior(at);
-        self.columns[cells.column.index()].set(at, value);
+        self.columns[column].set(at, value);
     }
 
     /// The actor first acts this round.
@@ -220,6 +219,12 @@ impl Floor {
 
     fn interior(&self, at: Pos) -> Interior {
         self.grid.shape().idx(at).expect("cell off the floor")
+    }
+
+    fn column(&self, ruleset: &Ruleset, cells: ReadCells) -> usize {
+        self.check_ruleset(ruleset);
+        assert!(cells.is_in(&ruleset.columns), "{FOREIGN_CELLS}");
+        cells.column.index()
     }
 
     fn check_ruleset(&self, ruleset: &Ruleset) {

@@ -29,6 +29,15 @@ fn a_diet_with_an_unknown_food_is_corrupt() {
 }
 
 #[test]
+fn a_diet_with_a_known_and_an_unknown_food_is_corrupt() {
+    // Plants, and an unknown food.
+    assert_eq!(
+        Diet::read(&mut Reader::new(&[5])),
+        Err(ImageError::Corrupt("diet"))
+    );
+}
+
+#[test]
 fn satiety_survives_a_save() {
     let game = grazing(vec![]);
     let plant = [(Pos { x: 6, y: 4 }, 3)];

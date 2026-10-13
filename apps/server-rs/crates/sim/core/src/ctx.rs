@@ -105,8 +105,8 @@ impl PrepCtx<'_> {
 
     /// # Errors
     /// Why the actor cannot step in `dir`.
-    // Must stay inline: with several callers LTO calls it out of line from
-    // wander's prepare, at a cost of 7% per round on the wander benches.
+    // Inlined: LTO outlines it from wander's prepare once it has several
+    // callers, costing 7% of a round on the wander benches.
     #[inline]
     pub fn check_step(&self, dir: Dir) -> Result<Pos, StepError> {
         self.grid.check_step(self.actor, dir)
@@ -129,7 +129,7 @@ impl PrepCtx<'_> {
     #[must_use]
     pub fn check<C>(&self, ask: Ask<C>, at: Pos) -> Option<u8> {
         let at = self.grid.shape().idx(at)?;
-        (ask.check)(self.columns[ask.column.index()].get(at))
+        (ask.service.check)(self.columns[ask.column.index()].get(at))
     }
 }
 
@@ -173,7 +173,7 @@ impl CommitCtx<'_> {
             .idx(at)
             .expect("commit of an order its prepare did not check");
         let column = &mut self.columns[ask.column.index()];
-        column.set(at, (ask.apply)(column.get(at)));
+        column.set(at, (ask.service.apply)(column.get(at)));
     }
 
     /// # Panics

@@ -23,7 +23,7 @@ fn mortal(f: &mut Floor, ruleset: &Ruleset, at: Pos, hp: u16, max: u16) -> Handl
     h
 }
 
-fn hunger() -> Game<Hunger> {
+fn hunger_only() -> Game<Hunger> {
     game(keyed(Hunger::build), Seed(1))
 }
 
@@ -47,7 +47,7 @@ fn starved(game: &Game<Hunger>, world: &mut World) -> EntityId {
 
 #[test]
 fn a_starving_creature_dies_and_leaves_remains() {
-    let game = hunger();
+    let game = hunger_only();
     let (mut world, h) = starving(&game, game.mechanics(), 2 * STARVE_DAMAGE);
     run(&game, &mut world, 1);
     assert!(world.floor(GROUND).pos(h).is_some());
@@ -78,7 +78,7 @@ fn a_starving_creature_dies_and_leaves_remains() {
 
 #[test]
 fn remains_rot_away() {
-    let game = hunger();
+    let game = hunger_only();
     let (mut world, _) = starving(&game, game.mechanics(), 2 * STARVE_DAMAGE);
     let remains = starved(&game, &mut world);
     let rounds = u64::from(MAX.div_ceil(ROT_PER_ROUND));

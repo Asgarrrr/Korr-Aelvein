@@ -62,8 +62,8 @@ impl Module for Wander {
         out.push(WanderAction::Roam, Band::Routine, ROAM_WEIGHT, Target::None);
     }
 
-    // Must stay inline: LTO calls it out of line as the registry grows, at
-    // a cost of 15-20% per round on the wander benches.
+    // Inlined: LTO outlines it as the registry grows, costing 15-20% of a
+    // round on the wander benches.
     #[inline]
     fn prepare(
         &self,

@@ -23,6 +23,8 @@ use korr_grid::Shape;
 use korr_hunger::{Diet, Hunger, Satiety};
 
 pub use bleed::{Bleeds, Clot, Wound};
+#[doc(hidden)]
+pub use korr_core as __core;
 pub use leave::Leave;
 pub use ring::Ring;
 pub use scripted::{Act, Answer, Fake, Scripted};
@@ -36,7 +38,7 @@ macro_rules! actionless {
         $crate::actionless!($module, $name);
 
         impl $module {
-            fn build(b: &mut ::korr_core::mechanic::Builder<'_>) -> Self {
+            fn build(b: &mut $crate::__core::mechanic::Builder<'_>) -> Self {
                 b.cells("cells");
                 Self
             }
@@ -45,24 +47,24 @@ macro_rules! actionless {
     ($module:ident, $name:literal) => {
         struct $module;
 
-        impl ::korr_core::mechanic::Module for $module {
+        impl $crate::__core::mechanic::Module for $module {
             const NAME: &'static str = $name;
             type Action = ::core::convert::Infallible;
             type Plan = ::core::convert::Infallible;
 
             fn propose(
                 &self,
-                _: &::korr_core::mechanic::Senses<'_>,
-                _: &mut ::korr_core::mechanic::Proposals<'_, ::core::convert::Infallible>,
+                _: &$crate::__core::mechanic::Senses<'_>,
+                _: &mut $crate::__core::mechanic::Proposals<'_, ::core::convert::Infallible>,
             ) {
             }
 
             fn prepare(
                 &self,
                 action: ::core::convert::Infallible,
-                _: ::korr_core::mechanic::Target,
-                _: &::korr_core::mechanic::PrepCtx<'_>,
-            ) -> ::korr_core::mechanic::Prepared<
+                _: $crate::__core::mechanic::Target,
+                _: &$crate::__core::mechanic::PrepCtx<'_>,
+            ) -> $crate::__core::mechanic::Prepared<
                 ::core::convert::Infallible,
                 ::core::convert::Infallible,
             > {
@@ -72,7 +74,7 @@ macro_rules! actionless {
             fn commit(
                 &self,
                 plan: ::core::convert::Infallible,
-                _: &mut ::korr_core::mechanic::CommitCtx<'_>,
+                _: &mut $crate::__core::mechanic::CommitCtx<'_>,
             ) {
                 match plan {}
             }

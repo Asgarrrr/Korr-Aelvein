@@ -81,6 +81,7 @@ impl Floor {
     /// Lists the rotten in `emptied`, which is empty between turns.
     #[cold]
     fn clear_rotten(&mut self, ruleset: &Ruleset) {
+        debug_assert!(self.emptied.is_empty());
         let mut rotten = mem::take(&mut self.emptied);
         rotten.extend(
             self.store

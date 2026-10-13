@@ -3,7 +3,7 @@ use core::any::{Any, TypeId};
 use core::fmt;
 use core::marker::PhantomData;
 
-use korr_ecs::{Component, SchemaBuilder};
+use korr_ecs::{Component, SchemaBuilder, checksum};
 
 /// A component that one module provides and any module may read, under one
 /// world-wide name.
@@ -83,10 +83,31 @@ impl ColumnIdx {
     }
 }
 
+/// A hash of a cell column's name: the ruleset's fingerprint does not exist
+/// yet when a `ReadCells` is made, so the key carries its column's name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ColumnName(u64);
+
+impl ColumnName {
+    pub(crate) fn of(name: &str) -> Self {
+        Self(checksum(name.as_bytes()))
+    }
+}
+
+pub(crate) const FOREIGN_CELLS: &str = "cell column key from another ruleset";
+
 /// The read side of a cell column, for `Senses::cells`.
 #[derive(Debug, Clone, Copy)]
 pub struct ReadCells {
     pub(crate) column: ColumnIdx,
+    pub(crate) name: ColumnName,
+}
+
+impl ReadCells {
+    /// Whether the column at this key's place in `names` is its own.
+    pub(crate) fn is_in(self, names: &[ColumnName]) -> bool {
+        names.get(self.column.index()) == Some(&self.name)
+    }
 }
 
 /// A request that one module serves on its own cell column: it checks a
@@ -101,6 +122,12 @@ pub trait Request: 'static {
 pub struct Served {
     pub(super) name: &'static str,
     pub(super) ty: TypeId,
+    pub(super) service: Service,
+}
+
+/// The two halves that serve a request.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Service {
     /// The reply at a cell holding a value, in the asker's prepare; `None` refuses.
     pub(crate) check: fn(u8) -> Option<u8>,
     /// The cell's value once the request is applied, in the asker's commit.
@@ -120,17 +147,15 @@ pub const fn serves<C: Request>(check: fn(u8) -> Option<u8>, apply: fn(u8) -> u8
     Served {
         name: C::NAME,
         ty: TypeId::of::<C>(),
-        check,
-        apply,
+        service: Service { check, apply },
     }
 }
 
 /// The right to send `C` to the module that serves it.
 pub struct Ask<C> {
-    pub(crate) check: fn(u8) -> Option<u8>,
-    pub(crate) apply: fn(u8) -> u8,
+    pub(crate) service: Service,
     pub(crate) column: ColumnIdx,
-    pub(super) kind: PhantomData<fn() -> C>,
+    pub(crate) kind: PhantomData<fn() -> C>,
 }
 
 impl<C> Clone for Ask<C> {

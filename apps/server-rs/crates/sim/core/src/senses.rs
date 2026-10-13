@@ -1,9 +1,10 @@
 use korr_ecs::{Component, EntityId, Handle, Read, Store};
 use korr_grid::{CellColumn, Grid, Interior, Pos, Shape};
 
-use crate::build::ReadCells;
+use crate::build::{ColumnName, FOREIGN_CELLS, ReadCells};
 use crate::config::SIGHT;
 use crate::life::Remains;
+use crate::ruleset::Ruleset;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Seen {
@@ -31,6 +32,7 @@ pub struct Senses<'a> {
     grid: &'a Grid,
     remains: Read<Remains>,
     columns: &'a [CellColumn],
+    names: &'a [ColumnName],
 }
 
 impl<'a> Senses<'a> {
@@ -40,8 +42,8 @@ impl<'a> Senses<'a> {
         store: &'a Store,
         actor: Handle,
         grid: &'a Grid,
-        remains: Read<Remains>,
         columns: &'a [CellColumn],
+        ruleset: &'a Ruleset,
     ) -> Self {
         Self {
             pos,
@@ -49,8 +51,9 @@ impl<'a> Senses<'a> {
             store,
             actor,
             grid,
-            remains,
+            remains: ruleset.remains.read(),
             columns,
+            names: &ruleset.columns,
         }
     }
 
@@ -88,8 +91,10 @@ impl<'a> Senses<'a> {
     /// column, row by row.
     ///
     /// # Panics
-    /// When `key` comes from another ruleset.
+    /// When `key` comes from another ruleset: checked in debug builds only;
+    /// release reads whatever column holds its index.
     pub fn cells(&self, key: ReadCells) -> impl Iterator<Item = (Pos, u8)> + use<'a> {
+        debug_assert!(key.is_in(self.names), "{FOREIGN_CELLS}");
         let column = &self.columns[key.column.index()];
         in_sight(self.grid.shape(), self.pos).map(move |(pos, at)| (pos, column.get(at)))
     }
@@ -100,19 +105,17 @@ impl<'a> Senses<'a> {
     pub fn remains(&self) -> impl Iterator<Item = SeenRemains> + use<'a> {
         let (grid, store, key, centre) = (self.grid, self.store, self.remains, self.pos);
         let side = 2 * usize::from(SIGHT) + 1;
-        let few = store.values(key).len() <= side * side;
-        let listed = few.then(|| {
-            store.iter(key).filter_map(move |(h, remains)| {
+        if store.values(key).len() <= side * side {
+            Lookup::Listed(store.iter(key).filter_map(move |(h, remains)| {
                 let pos = grid.pos(h)?;
                 (pos.chebyshev(centre) <= SIGHT).then_some(SeenRemains {
                     id: store.id(h)?,
                     pos,
                     mass: remains.mass,
                 })
-            })
-        });
-        let walked = (!few).then(|| {
-            in_sight(grid.shape(), centre).flat_map(move |(pos, at)| {
+            }))
+        } else {
+            Lookup::Walked(in_sight(grid.shape(), centre).flat_map(move |(pos, at)| {
                 grid.things(at.cell()).filter_map(move |h| {
                     Some(SeenRemains {
                         mass: store.get(key, h)?.mass,
@@ -120,12 +123,38 @@ impl<'a> Senses<'a> {
                         pos,
                     })
                 })
-            })
-        });
-        listed
-            .into_iter()
-            .flatten()
-            .chain(walked.into_iter().flatten())
+            }))
+        }
+    }
+}
+
+enum Lookup<L, W> {
+    Listed(L),
+    Walked(W),
+}
+
+impl<T, L: Iterator<Item = T>, W: Iterator<Item = T>> Iterator for Lookup<L, W> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<T> {
+        match self {
+            Self::Listed(listed) => listed.next(),
+            Self::Walked(walked) => walked.next(),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            Self::Listed(listed) => listed.size_hint(),
+            Self::Walked(walked) => walked.size_hint(),
+        }
+    }
+
+    fn fold<B, F: FnMut(B, T) -> B>(self, init: B, f: F) -> B {
+        match self {
+            Self::Listed(listed) => listed.fold(init, f),
+            Self::Walked(walked) => walked.fold(init, f),
+        }
     }
 }
 
@@ -141,5 +170,5 @@ fn in_sight(shape: Shape, centre: Pos) -> impl Iterator<Item = (Pos, Interior)> 
     let (top, bottom) = ((centre.y - sight).max(1), (centre.y + sight).min(last_y));
     (top..=bottom)
         .flat_map(move |y| (left..=right).map(move |x| Pos { x, y }))
-        .filter_map(move |pos| Some((pos, shape.idx(pos)?)))
+        .map(move |pos| (pos, shape.idx(pos).expect("clamped to the interior")))
 }

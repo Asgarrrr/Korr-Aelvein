@@ -1,14 +1,15 @@
 use core::convert::Infallible;
 
 use korr_contracts::Graze;
-use korr_core::host::{Floor, Game, LoadError, Pos, Sections, Seed, Then, World, keyed};
+use korr_core::host::{Both, Floor, Game, LoadError, Pos, Sections, Seed, Then, World, keyed};
 use korr_core::mechanic::{
-    Builder, CommitCtx, Module, PrepCtx, Prepared, Proposals, Senses, Served, Target, serves,
+    Builder, CellContract, CommitCtx, Module, PrepCtx, Prepared, Proposals, Provided, ReadCells,
+    Senses, Served, Target, provides_cells, serves,
 };
 use korr_ecs::{FloorId, ImageError};
 use korr_engine::{Modules, Registry};
-use korr_hunger::Hunger;
-use korr_scenarios::{actionless, floor, flora_only, game, plants, reload};
+use korr_hunger::{Diet, Hunger};
+use korr_scenarios::{actionless, floor, flora_only, game, hunger, plants, reload, run, stomach};
 
 const SEED: Seed = Seed(7);
 
@@ -68,6 +69,12 @@ impl Grazed {
         b.cells("cells");
         Self
     }
+
+    fn asking(b: &mut Builder<'_>) -> Self {
+        b.cells("cells");
+        let _ = b.request::<Graze>();
+        Self
+    }
 }
 
 impl Module for Grazed {
@@ -102,6 +109,12 @@ fn a_request_is_served_on_a_cell_column() {
 #[should_panic(expected = "hunger asks graze before its server builds")]
 fn a_request_is_asked_after_its_server_builds() {
     let _ = game(Then(keyed(Hunger::build), keyed(Grazed::build)), SEED);
+}
+
+#[test]
+#[should_panic(expected = "test.grazed asks its own request graze")]
+fn a_server_does_not_ask_its_own_request() {
+    let _ = game(keyed(Grazed::asking), SEED);
 }
 
 #[test]
@@ -205,4 +218,146 @@ fn a_cut_or_padded_column_section_is_refused() {
         Floor::load(ruleset, &padded.seal()).err(),
         Some(LoadError::Image(ImageError::Trailing(1)))
     );
+}
+
+struct Peat;
+
+impl CellContract for Peat {
+    const NAME: &'static str = "test.peat";
+}
+
+/// Provides a cell column, so a module declared before flora puts the
+/// plants second.
+struct Bog {
+    peat: ReadCells,
+}
+
+impl Bog {
+    fn build(b: &mut Builder<'_>) -> Self {
+        Self {
+            peat: b.provide_cells::<Peat>(),
+        }
+    }
+}
+
+impl Module for Bog {
+    const NAME: &'static str = "test.bog";
+    const PROVIDES: &'static [Provided] = &[provides_cells::<Peat>()];
+    type Action = Infallible;
+    type Plan = Infallible;
+
+    fn propose(&self, _: &Senses<'_>, _: &mut Proposals<'_, Infallible>) {}
+
+    fn prepare(
+        &self,
+        action: Infallible,
+        _: Target,
+        _: &PrepCtx<'_>,
+    ) -> Prepared<Infallible, Infallible> {
+        match action {}
+    }
+
+    fn commit(&self, plan: Infallible, _: &mut CommitCtx<'_>) {
+        match plan {}
+    }
+}
+
+#[test]
+fn a_graze_reaches_the_plants_when_they_are_not_the_first_column() {
+    let registry = Registry {
+        wander: false,
+        ..Registry::default()
+    };
+    let game = game(Then(keyed(Bog::build), registry), SEED);
+    let (ruleset, bog, modules) = (game.ruleset(), &game.mechanics().0, &game.mechanics().1);
+    let food = Pos { x: 5, y: 4 };
+    let mut f = floor(ruleset, FloorId(0), 9, 9);
+    f.set_cell(ruleset, plants(modules), food, 3);
+    f.set_cell(ruleset, bog.peat, food, 9);
+    let h = f.spawn_actor(ruleset, Pos { x: 4, y: 4 });
+    stomach(&mut f, hunger(modules), h, 0, Diet::PLANTS);
+    let mut world = World::new(vec![f]);
+    run(&game, &mut world, 1);
+    let f = world.floor(FloorId(0));
+    assert_eq!(f.cell(ruleset, plants(modules), food), 0);
+    assert_eq!(f.cell(ruleset, bog.peat, food), 9);
+}
+
+/// A ruleset whose first cell column is the peat, not the plants.
+fn bogged() -> Game<Both<Bog, Modules>> {
+    game(Then(keyed(Bog::build), Registry::default()), SEED)
+}
+
+#[test]
+#[should_panic(expected = "cell column key from another ruleset")]
+fn a_cell_key_of_another_ruleset_reads_no_cell() {
+    let foreign = bogged();
+    let game = flora_only(SEED);
+    let f = floor(game.ruleset(), FloorId(0), 4, 4);
+    let _ = f.cell(
+        game.ruleset(),
+        foreign.mechanics().0.peat,
+        Pos { x: 1, y: 1 },
+    );
+}
+
+#[test]
+#[should_panic(expected = "cell column key from another ruleset")]
+fn a_cell_key_of_another_ruleset_writes_no_cell() {
+    let foreign = bogged();
+    let game = flora_only(SEED);
+    let mut f = floor(game.ruleset(), FloorId(0), 4, 4);
+    f.set_cell(
+        game.ruleset(),
+        foreign.mechanics().0.peat,
+        Pos { x: 1, y: 1 },
+        1,
+    );
+}
+
+/// Reads every cell in sight through `cells`.
+struct Peeker {
+    cells: ReadCells,
+}
+
+impl Module for Peeker {
+    const NAME: &'static str = "test.peeker";
+    type Action = Infallible;
+    type Plan = Infallible;
+
+    fn propose(&self, senses: &Senses<'_>, _: &mut Proposals<'_, Infallible>) {
+        let _ = senses.cells(self.cells).count();
+    }
+
+    fn prepare(
+        &self,
+        action: Infallible,
+        _: Target,
+        _: &PrepCtx<'_>,
+    ) -> Prepared<Infallible, Infallible> {
+        match action {}
+    }
+
+    fn commit(&self, plan: Infallible, _: &mut CommitCtx<'_>) {
+        match plan {}
+    }
+}
+
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic(expected = "cell column key from another ruleset")]
+fn senses_read_no_cell_through_a_key_of_another_ruleset() {
+    let foreign = flora_only(SEED);
+    let game = game(
+        Then(
+            keyed(Bog::build),
+            Peeker {
+                cells: plants(foreign.mechanics()),
+            },
+        ),
+        SEED,
+    );
+    let mut f = floor(game.ruleset(), FloorId(0), 4, 4);
+    f.spawn_actor(game.ruleset(), Pos { x: 1, y: 1 });
+    game.run_round(&mut World::new(vec![f]));
 }

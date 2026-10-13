@@ -1,10 +1,9 @@
-use alloc::string::String;
 use alloc::vec::Vec;
 
 use korr_ecs::{AnyRead, Own, Read, Schema, SchemaBuilder, checksum};
 use korr_random::ModuleKey;
 
-use crate::build::{ColumnIdx, Recipe, assemble};
+use crate::build::{ColumnIdx, ColumnName, Recipe, assemble};
 use crate::decision::Intent;
 use crate::life::{Remains, Vitality};
 use crate::module::{Action, ActionKey, Mechanics, Module, Visit, module_key};
@@ -34,8 +33,8 @@ pub struct Ruleset {
     pub(crate) modules: Vec<ModuleEntry>,
     /// Whether any module reads `Senses::seen`.
     pub(crate) perceives: bool,
-    /// The names of the cell columns, in `ColumnIdx` order.
-    pub(crate) columns: Vec<String>,
+    /// The hashed name of each cell column, in `ColumnIdx` order.
+    pub(crate) columns: Vec<ColumnName>,
     fingerprint: u64,
 }
 
@@ -150,7 +149,11 @@ impl Ruleset {
             remains,
             modules,
             perceives,
-            columns: columns.names,
+            columns: columns
+                .names
+                .iter()
+                .map(|name| ColumnName::of(name))
+                .collect(),
             fingerprint,
         };
         (ruleset, mechanics)

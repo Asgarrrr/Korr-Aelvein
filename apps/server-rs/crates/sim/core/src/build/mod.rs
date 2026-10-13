@@ -19,8 +19,8 @@ pub use contract::{
 };
 pub use recipe::{Both, Keyed, Recipe, Then, keyed};
 
-pub(crate) use contract::ColumnIdx;
 use contract::Kind;
+pub(crate) use contract::{ColumnIdx, ColumnName, FOREIGN_CELLS};
 
 /// A registered contract: its write key, or the binding of its cell column,
 /// waits for its provider's build.
@@ -36,8 +36,16 @@ struct Registration {
 pub struct Declarations {
     modules: Vec<&'static str>,
     contracts: Vec<(&'static str, &'static Provided)>,
-    /// Each with its server's name and visit ordinal.
-    requests: Vec<(&'static str, Served, usize)>,
+    requests: Vec<Server>,
+}
+
+/// A declared request and the module that serves it.
+#[derive(Debug, Clone, Copy)]
+struct Server {
+    module: &'static str,
+    served: Served,
+    /// The module's place in build order.
+    ordinal: usize,
 }
 
 impl Declarations {
@@ -63,15 +71,20 @@ impl Declarations {
             self.contracts.push((M::NAME, provided));
         }
         if let Some(served) = M::SERVES {
-            for &(server, other, _) in &self.requests {
+            for server in &self.requests {
                 assert!(
-                    other.ty != served.ty,
-                    "request {} served by {server} and {}",
+                    server.served.ty != served.ty,
+                    "request {} served by {} and {}",
                     served.name,
+                    server.module,
                     M::NAME
                 );
             }
-            self.requests.push((M::NAME, served, self.modules.len()));
+            self.requests.push(Server {
+                module: M::NAME,
+                served,
+                ordinal: self.modules.len(),
+            });
         }
         self.modules.push(M::NAME);
     }
@@ -81,7 +94,7 @@ impl Declarations {
 pub struct Assembly<'a> {
     schema: &'a mut SchemaBuilder,
     declared: &'a [&'static str],
-    requests: &'a [(&'static str, Served, usize)],
+    requests: &'a [Server],
     registrations: &'a mut [Registration],
     columns: &'a mut Columns,
     next: usize,
@@ -161,7 +174,7 @@ pub(crate) struct Columns {
 pub struct Builder<'a> {
     schema: &'a mut SchemaBuilder,
     registrations: &'a mut [Registration],
-    requests: &'a [(&'static str, Served, usize)],
+    requests: &'a [Server],
     names: &'a mut Vec<String>,
     /// The column each built module binds, in visit order.
     owners: &'a [Option<ColumnIdx>],
@@ -237,23 +250,24 @@ impl Builder<'_> {
     /// `None` when no module of the recipe serves `C`.
     ///
     /// # Panics
-    /// When the server of `C` builds after this module.
+    /// When this module serves `C`, or the server of `C` builds after it.
     #[must_use]
     pub fn request<C: Request>(&self) -> Option<Ask<C>> {
         let ty = TypeId::of::<C>();
-        let &(_, served, ordinal) = self
-            .requests
-            .iter()
-            .find(|(_, served, _)| served.ty == ty)?;
-        let column = self.owners.get(ordinal).unwrap_or_else(|| {
-            panic!(
-                "{} asks {} before its server builds",
-                self.module, served.name
-            )
-        });
+        let server = self.requests.iter().find(|s| s.served.ty == ty)?;
+        let name = server.served.name;
+        // Built modules each push one owner, so this module's ordinal is their count.
+        assert!(
+            server.ordinal != self.owners.len(),
+            "{} asks its own request {name}",
+            self.module
+        );
+        let column = self
+            .owners
+            .get(server.ordinal)
+            .unwrap_or_else(|| panic!("{} asks {name} before its server builds", self.module));
         Some(Ask {
-            check: served.check,
-            apply: served.apply,
+            service: server.served.service,
             column: column.expect("a module that serves a request binds a cell column"),
             kind: PhantomData,
         })
@@ -307,7 +321,10 @@ pub(crate) fn assemble<R: Recipe>(
                 Kind::Cells => {
                     let column = ColumnIdx::new(columns.names.len());
                     columns.names.push(provided.name.to_string());
-                    let cells = ReadCells { column };
+                    let cells = ReadCells {
+                        column,
+                        name: ColumnName::of(provided.name),
+                    };
                     (
                         Box::new(cells) as Box<dyn Any>,
                         Box::new(cells) as Box<dyn Any>,
