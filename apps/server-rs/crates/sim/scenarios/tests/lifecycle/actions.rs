@@ -6,9 +6,9 @@ use korr_core::{
     },
 };
 use korr_ecs::EntityId;
-use korr_scenarios::{TO_GROUND, floor, game, run};
+use korr_scenarios::{GROUND, TO_GROUND, floor, game, nth, run};
 
-use super::{GROUND, MAX, UPPER, mortal, nth};
+use super::{MAX, UPPER, mortal};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Lethal {

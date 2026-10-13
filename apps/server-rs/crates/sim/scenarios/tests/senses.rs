@@ -171,10 +171,6 @@ const SNIFFERS: [Pos; 4] = [
     Pos { x: 8, y: 8 },
 ];
 
-fn chebyshev(a: Pos, b: Pos) -> u16 {
-    a.x.abs_diff(b.x).max(a.y.abs_diff(b.y))
-}
-
 /// What each sniffer is shown of `n` remains of distinct masses, laid on a
 /// fixed pseudo-random layout of `ROOM` with some cells holding several,
 /// and the remains as they lie when the sniffers act.
@@ -239,7 +235,7 @@ fn every_remains_within_sight_is_sensed_and_no_other() {
     let centre = SNIFFERS[3];
     for n in [12, 49, 50, 300] {
         let (shown, laid) = remains_shown(n);
-        let rings: Vec<u16> = laid.iter().map(|r| chebyshev(r.pos, centre)).collect();
+        let rings: Vec<u16> = laid.iter().map(|r| r.pos.chebyshev(centre)).collect();
         assert!(
             rings.contains(&SIGHT) && rings.contains(&(SIGHT + 1)),
             "{n}"
@@ -248,7 +244,7 @@ fn every_remains_within_sight_is_sensed_and_no_other() {
         for (at, sensed) in shown {
             let near: Vec<SeenRemains> = laid
                 .iter()
-                .filter(|r| chebyshev(r.pos, at) <= SIGHT)
+                .filter(|r| r.pos.chebyshev(at) <= SIGHT)
                 .copied()
                 .collect();
             assert_eq!(sensed, near, "{n} remains, sniffer at {at:?}");

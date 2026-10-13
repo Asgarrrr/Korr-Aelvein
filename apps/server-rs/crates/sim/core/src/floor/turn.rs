@@ -3,7 +3,7 @@ use korr_grid::Pos;
 use korr_random::Seed;
 
 use crate::config::{IDLE, MAX_INSTEAD, SIGHT};
-use crate::ctx::{CommitCtx, Draws, PrepCtx, Routes, departed};
+use crate::ctx::{CommitCtx, Draws, PrepCtx, departed};
 use crate::decision::{Candidate, Candidates, Intent};
 use crate::floor::Floor;
 use crate::module::{Action, Mechanics, Module, Prepared, Proposals, Visit, index_of, module_key};
@@ -16,30 +16,6 @@ impl Floor {
     /// time, and its harms land before the next acts. A departed or dead
     /// actor leaves the schedule; a departed one's rows travel with it.
     pub(crate) fn run_actors(&mut self, seed: Seed, ruleset: &Ruleset, mechanics: &impl Mechanics) {
-        let check = |module, value| {
-            let mut visit = CheckVisit {
-                module,
-                value,
-                ordinal: 0,
-                reply: None,
-            };
-            mechanics.each(&mut visit);
-            visit.reply
-        };
-        let apply = |module, value| {
-            let mut visit = ApplyVisit {
-                module,
-                value,
-                ordinal: 0,
-            };
-            mechanics.each(&mut visit);
-            visit.value
-        };
-        let routes = Routes {
-            ruleset,
-            check: &check,
-            apply: &apply,
-        };
         let end = Tick::start_of(self.round.next());
         while let Some((now, id, actor)) = self.schedule.pop_before(end) {
             // The link compares generations: a due of the dead or of a recycled slot is unplaced.
@@ -52,7 +28,7 @@ impl Floor {
                 actor,
                 pos,
             };
-            let cost = self.turn(seed, mechanics, &routes, placed);
+            let cost = self.turn(seed, ruleset, mechanics, placed);
             self.drain(ruleset);
             self.clear_emptied();
             if !self.store.is_alive(actor) || departed(&self.departures, actor) {
@@ -68,8 +44,8 @@ impl Floor {
     fn turn(
         &mut self,
         seed: Seed,
+        ruleset: &Ruleset,
         mechanics: &impl Mechanics,
-        routes: &Routes<'_>,
         placed: Placed,
     ) -> Cost {
         let Placed {
@@ -78,7 +54,6 @@ impl Floor {
             actor,
             pos,
         } = placed;
-        let ruleset = routes.ruleset;
         self.seen.clear();
         if ruleset.perceives {
             self.look(actor, pos);
@@ -109,7 +84,6 @@ impl Floor {
                 id,
                 actor,
                 pick,
-                routes,
                 ordinal: 0,
                 routed: false,
                 cost: None,
@@ -190,7 +164,6 @@ struct RunVisit<'a> {
     id: EntityId,
     actor: Handle,
     pick: Candidate,
-    routes: &'a Routes<'a>,
     ordinal: usize,
     routed: bool,
     /// The cost of a run that ends in `Go` or `Blocked`; `None` when it fails.
@@ -233,7 +206,6 @@ impl RunVisit<'_> {
                 draws,
                 now: self.now,
                 columns: &self.floor.columns,
-                routes: self.routes,
             };
             match module.prepare(action, target, &prep) {
                 Prepared::Go { cost, plan } => {
@@ -244,7 +216,7 @@ impl RunVisit<'_> {
                         departures: &mut self.floor.departures,
                         store: &mut self.floor.store,
                         columns: &mut self.floor.columns,
-                        routes: self.routes,
+                        ruleset: self.ruleset,
                         harms: &mut self.floor.harms,
                         emptied: &mut self.floor.emptied,
                     };
@@ -267,40 +239,5 @@ impl RunVisit<'_> {
                 Prepared::Fail => return None,
             }
         }
-    }
-}
-
-/// Asks the module at `module` the `check` it serves, of `value`.
-struct CheckVisit {
-    module: u16,
-    value: u8,
-    ordinal: u16,
-    reply: Option<u8>,
-}
-
-impl Visit for CheckVisit {
-    fn module<M: Module>(&mut self, _: &M) {
-        if self.ordinal == self.module {
-            self.reply = M::SERVES.and_then(|served| (served.check)(self.value));
-        }
-        self.ordinal += 1;
-    }
-}
-
-/// Replaces `value` with the `apply` the module at `module` serves.
-struct ApplyVisit {
-    module: u16,
-    value: u8,
-    ordinal: u16,
-}
-
-impl Visit for ApplyVisit {
-    fn module<M: Module>(&mut self, _: &M) {
-        if self.ordinal == self.module
-            && let Some(served) = M::SERVES
-        {
-            self.value = (served.apply)(self.value);
-        }
-        self.ordinal += 1;
     }
 }

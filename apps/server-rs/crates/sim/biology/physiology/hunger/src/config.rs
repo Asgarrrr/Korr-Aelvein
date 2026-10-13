@@ -18,3 +18,12 @@ pub const BITE: u16 = 5;
 pub const REMAINS_NUTRITION: u16 = 20;
 pub const EAT_COST: Cost = Cost::new(100);
 pub const APPROACH_COST: Cost = Cost::new(100);
+
+const _: () = assert!(
+    PLANT_NUTRITION.checked_mul(u8::MAX as u16).is_some(),
+    "the nutrition of any plant fits u16"
+);
+const _: () = assert!(
+    BITE.checked_mul(REMAINS_NUTRITION).is_some(),
+    "the nutrition of a bite fits u16"
+);

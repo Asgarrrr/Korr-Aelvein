@@ -9,6 +9,15 @@ pub struct Pos {
     pub y: i16,
 }
 
+impl Pos {
+    /// The distance in king moves.
+    #[inline]
+    #[must_use]
+    pub fn chebyshev(self, other: Self) -> u16 {
+        self.x.abs_diff(other.x).max(self.y.abs_diff(other.y))
+    }
+}
+
 /// Any cell of the padded frame, ring included, in row-major order.
 /// Carries the width of its shape: an index means the same cell on every
 /// shape of that width, so a width check catches a cell of another floor.

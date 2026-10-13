@@ -37,6 +37,14 @@ fn pos_inverts_idx() {
 }
 
 #[test]
+fn chebyshev_is_the_longer_axis_from_either_end() {
+    let (a, b) = (Pos { x: 1, y: 6 }, Pos { x: 4, y: 5 });
+    assert_eq!((a.chebyshev(b), b.chebyshev(a)), (3, 3));
+    let (low, high) = (Pos { x: i16::MIN, y: 0 }, Pos { x: i16::MAX, y: 0 });
+    assert_eq!(low.chebyshev(high), u16::MAX);
+}
+
+#[test]
 fn shape_bounds() {
     assert_eq!(Shape::new(2, 5), None);
     assert!(Shape::new(3, 3).is_some());

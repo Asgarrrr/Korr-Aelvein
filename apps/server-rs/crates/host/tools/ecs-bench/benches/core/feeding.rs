@@ -4,7 +4,7 @@ use korr_ecs::{EntityId, FloorId};
 use korr_engine::{Modules, Registry};
 use korr_hunger::config::STARVING;
 use korr_hunger::{Diet, Satiety};
-use korr_scenarios::{floor, game};
+use korr_scenarios::{floor, game, plants};
 
 use crate::{Group, Layout, REFERENCE, spread};
 
@@ -26,9 +26,9 @@ fn feeding_floor(game: &Game<Modules>) -> Floor {
     } = REFERENCE;
     let mut f = floor(ruleset, FloorId(0), side, side);
     let inside = u32::from(side - 2);
-    let plants = inside * inside / 4;
+    let (cells, plants) = (plants(game.mechanics()), inside * inside / 4);
     for k in 0..plants {
-        f.set_cell(ruleset, "plants", spread(side, k, plants), u8::MAX);
+        f.set_cell(ruleset, cells, spread(side, k, plants), u8::MAX);
     }
     for k in 0..actors {
         let h = f.spawn_actor(ruleset, spread(side, k, actors));
@@ -59,8 +59,8 @@ fn feeds_both_diets(game: &Game<Modules>, world: &World) -> bool {
         things,
     } = REFERENCE;
     let inside = u32::from(side - 2);
-    let plants = inside * inside / 4;
-    let grazed = (0..plants).any(|k| f.cell(ruleset, "plants", spread(side, k, plants)) == 0);
+    let (cells, plants) = (plants(game.mechanics()), inside * inside / 4);
+    let grazed = (0..plants).any(|k| f.cell(ruleset, cells, spread(side, k, plants)) == 0);
     let fed_on = (1..things).step_by(2).any(|k| {
         let id = EntityId::new(FloorId(0), u64::from(actors + k));
         f.remains(ruleset, id)

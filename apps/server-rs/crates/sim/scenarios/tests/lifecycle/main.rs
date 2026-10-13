@@ -7,10 +7,9 @@ use korr_core::{
 };
 use korr_ecs::{EntityId, FloorId, Handle};
 use korr_hunger::config::STARVE_DAMAGE;
-use korr_hunger::{Diet, Hunger, Satiety};
-use korr_scenarios::{Pace, floor, game, run};
+use korr_hunger::{Diet, Hunger};
+use korr_scenarios::{GROUND, Pace, floor, game, nth, run, stomach};
 
-const GROUND: FloorId = FloorId(0);
 const UPPER: FloorId = FloorId(1);
 const HUNGER: Cause = Cause::Mechanic(ModuleKey::of("hunger"));
 const MAX: u16 = 10;
@@ -18,20 +17,10 @@ const MAX: u16 = 10;
 mod actions;
 mod causes;
 
-/// Spawn order is id order.
-fn nth(floor: FloorId, n: u64) -> EntityId {
-    EntityId::new(floor, n)
-}
-
 fn mortal(f: &mut Floor, ruleset: &Ruleset, at: Pos, hp: u16, max: u16) -> Handle {
     let h = f.spawn_actor(ruleset, at);
     f.init(ruleset.vitality(), h, Vitality { hp, max });
     h
-}
-
-fn starve(f: &mut Floor, hunger: &Hunger, h: Handle) {
-    f.init(hunger.satiety(), h, Satiety(0));
-    f.init(hunger.diet(), h, Diet::PLANTS);
 }
 
 fn hunger() -> Game<Hunger> {
@@ -43,7 +32,7 @@ fn starving<M: Mechanics>(game: &Game<M>, hunger: &Hunger, hp: u16) -> (World, H
     let ruleset = game.ruleset();
     let mut f = floor(ruleset, GROUND, 5, 5);
     let h = mortal(&mut f, ruleset, Pos { x: 2, y: 2 }, hp, MAX);
-    starve(&mut f, hunger, h);
+    stomach(&mut f, hunger, h, 0, Diet::PLANTS);
     (World::new(vec![f]), h)
 }
 
@@ -131,7 +120,7 @@ fn famine(game: &Game<impl Mechanics>, hunger: &Hunger) -> World {
     for k in 1..=6 {
         let y = i16::try_from(k).expect("a row fits i16");
         let h = mortal(&mut f, ruleset, Pos { x: 1, y }, 3 * k * STARVE_DAMAGE, 5);
-        starve(&mut f, hunger, h);
+        stomach(&mut f, hunger, h, 0, Diet::PLANTS);
     }
     World::new(vec![f])
 }

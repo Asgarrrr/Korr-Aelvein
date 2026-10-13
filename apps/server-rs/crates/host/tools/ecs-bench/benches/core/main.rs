@@ -20,7 +20,7 @@ use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, 
 use korr_core::host::{Floor, Game, Job, Pos, Recipe, Ruleset, Runner, Seed, World, keyed};
 use korr_ecs::FloorId;
 use korr_engine::{Modules, Registry};
-use korr_scenarios::{Ring, Shy, actionless, floor, game};
+use korr_scenarios::{Ring, Shy, actionless, floor, game, plants};
 use korr_server::Threads;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::{ThreadPool, ThreadPoolBuilder};
@@ -202,10 +202,10 @@ fn sweep(c: &mut Criterion) {
 
 fn planted(game: &Game<Modules>, world: &World, side: u16) -> u32 {
     let last = side.cast_signed() - 2;
-    let f = world.floor(FloorId(0));
+    let (f, cells) = (world.floor(FloorId(0)), plants(game.mechanics()));
     (1..=last)
         .flat_map(|y| (1..=last).map(move |x| Pos { x, y }))
-        .map(|at| u32::from(f.cell(game.ruleset(), "plants", at) != 0))
+        .map(|at| u32::from(f.cell(game.ruleset(), cells, at) != 0))
         .sum()
 }
 
@@ -224,10 +224,10 @@ fn flora_sweep(c: &mut Criterion) {
             Seed(1),
         );
         let inside = u32::from(side - 2);
-        let plants = inside * inside * percent / 100;
+        let (cells, plants) = (plants(game.mechanics()), inside * inside * percent / 100);
         let mut f = floor(game.ruleset(), FloorId(0), side, side);
         for k in 0..plants {
-            f.set_cell(game.ruleset(), "plants", spread(side, k, plants), u8::MAX);
+            f.set_cell(game.ruleset(), cells, spread(side, k, plants), u8::MAX);
         }
         let bytes = game.save(&World::new(vec![f]));
         let mut sown = game.load(&bytes).expect("own save loads");

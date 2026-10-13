@@ -13,7 +13,7 @@ use korr_ecs::FloorId;
 use korr_engine::{Modules, Registry};
 use korr_flora::Flora;
 use korr_grid::Material;
-use korr_scenarios::{Fake, floor, game, run};
+use korr_scenarios::{Fake, floor, flora_only, game, plants, run};
 
 const FLOOR: FloorId = FloorId(0);
 const SEED: Seed = Seed(3);
@@ -22,19 +22,10 @@ const OTHER: Pos = Pos { x: 5, y: 5 };
 /// Above any ripe value: the first tick brings it down to ripe.
 const GROWN: u8 = 200;
 
-fn flora_only() -> Game<Modules> {
-    game(
-        Registry {
-            wander: false,
-            hunger: false,
-            ..Registry::default()
-        },
-        SEED,
-    )
-}
-
 fn plant(game: &Game<Modules>, world: &World, at: Pos) -> u8 {
-    world.floor(FLOOR).cell(game.ruleset(), "plants", at)
+    world
+        .floor(FLOOR)
+        .cell(game.ruleset(), plants(game.mechanics()), at)
 }
 
 fn around(at: Pos) -> Vec<Pos> {
@@ -52,7 +43,7 @@ fn around(at: Pos) -> Vec<Pos> {
 fn sown(game: &Game<Modules>, side: u16, value: u8) -> Floor {
     let mut f = floor(game.ruleset(), FLOOR, side, side);
     for at in lattice(side) {
-        f.set_cell(game.ruleset(), "plants", at, value);
+        f.set_cell(game.ruleset(), plants(game.mechanics()), at, value);
     }
     f
 }
@@ -81,9 +72,9 @@ fn planted_off(game: &Game<Modules>, world: &World, side: u16) -> usize {
 
 #[test]
 fn a_seedling_grows_one_step_per_round_then_stays_ripe() {
-    let game = flora_only();
+    let game = flora_only(SEED);
     let mut f = floor(game.ruleset(), FLOOR, 8, 8);
-    f.set_cell(game.ruleset(), "plants", SEEDLING, 1);
+    f.set_cell(game.ruleset(), plants(game.mechanics()), SEEDLING, 1);
     let mut world = World::new(vec![f]);
     let mut values = Vec::new();
     for _ in 0..300 {
@@ -101,10 +92,10 @@ fn a_seedling_grows_one_step_per_round_then_stays_ripe() {
 
 #[test]
 fn a_plant_on_a_wall_withers() {
-    let game = flora_only();
+    let game = flora_only(SEED);
     let mut f = floor(game.ruleset(), FLOOR, 8, 8);
-    f.set_cell(game.ruleset(), "plants", SEEDLING, 1);
-    f.set_cell(game.ruleset(), "plants", OTHER, 1);
+    f.set_cell(game.ruleset(), plants(game.mechanics()), SEEDLING, 1);
+    f.set_cell(game.ruleset(), plants(game.mechanics()), OTHER, 1);
     f.set_material(OTHER, Material::WALL);
     let mut world = World::new(vec![f]);
     run(&game, &mut world, 1);
@@ -114,14 +105,14 @@ fn a_plant_on_a_wall_withers() {
 
 #[test]
 fn seeds_never_take_on_a_wall() {
-    let game = flora_only();
+    let game = flora_only(SEED);
     let mut f = floor(game.ruleset(), FLOOR, 8, 8);
     let wall = |at: Pos| at.x == 4;
     for at in interior(8) {
         if wall(at) {
             f.set_material(at, Material::WALL);
         } else {
-            f.set_cell(game.ruleset(), "plants", at, GROWN);
+            f.set_cell(game.ruleset(), plants(game.mechanics()), at, GROWN);
         }
     }
     let mut world = World::new(vec![f]);
@@ -135,7 +126,7 @@ fn seeds_never_take_on_a_wall() {
 
 #[test]
 fn bare_ground_with_no_plant_near_stays_bare() {
-    let game = flora_only();
+    let game = flora_only(SEED);
     let f = floor(game.ruleset(), FLOOR, 8, 8);
     let mut world = World::new(vec![f]);
     run(&game, &mut world, 100);
@@ -148,9 +139,9 @@ fn bare_ground_with_no_plant_near_stays_bare() {
 
 #[test]
 fn a_seedling_does_not_spread_until_ripe() {
-    let game = flora_only();
+    let game = flora_only(SEED);
     let mut f = floor(game.ruleset(), FLOOR, 8, 8);
-    f.set_cell(game.ruleset(), "plants", SEEDLING, 1);
+    f.set_cell(game.ruleset(), plants(game.mechanics()), SEEDLING, 1);
     let mut world = World::new(vec![f]);
     let mut grown_before = plant(&game, &world, SEEDLING);
     let mut ripe = None;
@@ -176,9 +167,9 @@ fn a_seedling_does_not_spread_until_ripe() {
 
 #[test]
 fn each_cell_beside_a_ripe_plant_sprouts_on_its_own_draw() {
-    let game = flora_only();
+    let game = flora_only(SEED);
     let mut f = floor(game.ruleset(), FLOOR, 8, 8);
-    f.set_cell(game.ruleset(), "plants", SEEDLING, GROWN);
+    f.set_cell(game.ruleset(), plants(game.mechanics()), SEEDLING, GROWN);
     let mut world = World::new(vec![f]);
     for _ in 0..200 {
         game.run_round(&mut world);
@@ -196,10 +187,10 @@ fn each_cell_beside_a_ripe_plant_sprouts_on_its_own_draw() {
 
 #[test]
 fn a_cleared_cell_among_ripe_plants_regrows() {
-    let game = flora_only();
+    let game = flora_only(SEED);
     let mut f = floor(game.ruleset(), FLOOR, 8, 8);
     for at in around(SEEDLING) {
-        f.set_cell(game.ruleset(), "plants", at, GROWN);
+        f.set_cell(game.ruleset(), plants(game.mechanics()), at, GROWN);
     }
     let mut world = World::new(vec![f]);
     run(&game, &mut world, 100);
@@ -208,10 +199,10 @@ fn a_cleared_cell_among_ripe_plants_regrows() {
 
 #[test]
 fn the_same_cell_of_two_floors_draws_differently() {
-    let game = flora_only();
+    let game = flora_only(SEED);
     let floors = [FloorId(0), FloorId(1)].map(|id| {
         let mut f = floor(game.ruleset(), id, 8, 8);
-        f.set_cell(game.ruleset(), "plants", SEEDLING, GROWN);
+        f.set_cell(game.ruleset(), plants(game.mechanics()), SEEDLING, GROWN);
         f
     });
     let mut world = World::new(floors.into());
@@ -219,7 +210,11 @@ fn the_same_cell_of_two_floors_draws_differently() {
     let picture = |id: FloorId| -> Vec<u8> {
         (1..=6)
             .flat_map(|y| (1..=6).map(move |x| Pos { x, y }))
-            .map(|at| world.floor(id).cell(game.ruleset(), "plants", at))
+            .map(|at| {
+                world
+                    .floor(id)
+                    .cell(game.ruleset(), plants(game.mechanics()), at)
+            })
             .collect()
     };
     assert_ne!(picture(FloorId(0)), picture(FloorId(1)));
@@ -228,7 +223,7 @@ fn the_same_cell_of_two_floors_draws_differently() {
 #[test]
 fn seeds_fall_only_from_plants_ripe_before_the_round() {
     const SIDE: u16 = 64;
-    let game = flora_only();
+    let game = flora_only(SEED);
     let mut world = World::new(vec![sown(&game, SIDE, 1)]);
     let one = lattice(SIDE)[0];
     let mut rounds = Vec::new();
@@ -249,7 +244,7 @@ fn seeds_fall_only_from_plants_ripe_before_the_round() {
 #[test]
 fn some_but_not_all_bare_neighbours_sprout_each_round() {
     const SIDE: u16 = 64;
-    let game = flora_only();
+    let game = flora_only(SEED);
     let mut world = World::new(vec![sown(&game, SIDE, u8::MAX)]);
     let beside = 8 * lattice(SIDE).len();
     game.run_round(&mut world);
@@ -263,7 +258,7 @@ fn some_but_not_all_bare_neighbours_sprout_each_round() {
 #[test]
 fn a_plant_on_a_wall_never_seeds() {
     const SIDE: u16 = 64;
-    let game = flora_only();
+    let game = flora_only(SEED);
     let mut f = sown(&game, SIDE, u8::MAX);
     for at in lattice(SIDE) {
         f.set_material(at, Material::WALL);
@@ -276,7 +271,7 @@ fn a_plant_on_a_wall_never_seeds() {
 #[test]
 fn a_reload_mid_growth_replays_the_same_world() {
     const SIDE: u16 = 32;
-    let game = flora_only();
+    let game = flora_only(SEED);
     let picture = |world: &World| -> Vec<u8> {
         interior(SIDE)
             .into_iter()
@@ -372,7 +367,7 @@ impl Module for Probe {
 fn flora_accepts_a_graze_only_on_a_plant() {
     let game = game(Then(keyed(Flora::build), keyed(Probe::build)), SEED);
     let mut f = floor(game.ruleset(), FLOOR, 8, 8);
-    f.set_cell(game.ruleset(), "plants", SEEDLING, 1);
+    f.set_cell(game.ruleset(), game.mechanics().0.plants(), SEEDLING, 1);
     f.spawn_actor(game.ruleset(), Pos { x: 5, y: 5 });
     let mut world = World::new(vec![f]);
     run(&game, &mut world, 1);

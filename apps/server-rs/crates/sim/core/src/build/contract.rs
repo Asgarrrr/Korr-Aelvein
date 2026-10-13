@@ -115,17 +115,6 @@ pub struct Served {
 /// }
 /// const SERVES: Option<Served> = Some(serves::<Graze>(|v| Some(v), |_| 0));
 /// ```
-///
-/// A served request without its check and apply does not compile:
-///
-/// ```compile_fail
-/// # use korr_core::mechanic::{Request, Served, serves};
-/// struct Graze;
-/// impl Request for Graze {
-///     const NAME: &'static str = "graze";
-/// }
-/// const SERVES: Option<Served> = Some(serves::<Graze>());
-/// ```
 #[must_use]
 pub const fn serves<C: Request>(check: fn(u8) -> Option<u8>, apply: fn(u8) -> u8) -> Served {
     Served {
@@ -138,8 +127,9 @@ pub const fn serves<C: Request>(check: fn(u8) -> Option<u8>, apply: fn(u8) -> u8
 
 /// The right to send `C` to the module that serves it.
 pub struct Ask<C> {
-    /// The server's visit ordinal.
-    pub(crate) module: u16,
+    pub(crate) check: fn(u8) -> Option<u8>,
+    pub(crate) apply: fn(u8) -> u8,
+    pub(crate) column: ColumnIdx,
     pub(super) kind: PhantomData<fn() -> C>,
 }
 
@@ -153,6 +143,6 @@ impl<C> Copy for Ask<C> {}
 
 impl<C> fmt::Debug for Ask<C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("Ask").field(&self.module).finish()
+        f.debug_tuple("Ask").field(&self.column).finish()
     }
 }

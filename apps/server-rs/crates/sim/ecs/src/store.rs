@@ -122,7 +122,7 @@ impl Store {
     /// assert_eq!(store.get(satiety, h), Some(&Satiety(1)));
     /// ```
     ///
-    /// ```compile_fail
+    /// ```compile_fail,E0308
     /// # use korr_ecs::{Component, FloorId, ImageError, Reader, SchemaBuilder, Store, Writer};
     /// # struct Satiety(u8);
     /// # impl Component for Satiety {

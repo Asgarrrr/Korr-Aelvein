@@ -104,8 +104,7 @@ impl<'a> Senses<'a> {
         let listed = few.then(|| {
             store.iter(key).filter_map(move |(h, remains)| {
                 let pos = grid.pos(h)?;
-                let distance = pos.x.abs_diff(centre.x).max(pos.y.abs_diff(centre.y));
-                (distance <= SIGHT).then_some(SeenRemains {
+                (pos.chebyshev(centre) <= SIGHT).then_some(SeenRemains {
                     id: store.id(h)?,
                     pos,
                     mass: remains.mass,

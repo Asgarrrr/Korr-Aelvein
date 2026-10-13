@@ -9,26 +9,8 @@ use korr_random::{DrawIndex, ModuleKey, Phase, Seed, Stream, Subject};
 use crate::build::Ask;
 use crate::config::SIGHT;
 use crate::life::{Cause, Harm};
-use crate::ruleset::{ModuleEntry, Ruleset};
+use crate::ruleset::Ruleset;
 use crate::time::Tick;
-
-/// The ruleset, and how a request reaches its server: built once per floor
-/// and round, so a turn copies one pointer rather than both closures.
-pub(crate) struct Routes<'a> {
-    pub(crate) ruleset: &'a Ruleset,
-    /// The `check` of the module at a visit ordinal, on one cell value.
-    pub(crate) check: &'a dyn Fn(u16, u8) -> Option<u8>,
-    /// The `apply` of the module at a visit ordinal, on one cell value.
-    pub(crate) apply: &'a dyn Fn(u16, u8) -> u8,
-}
-
-/// The column a request's server binds; the build ensures it binds one.
-fn served(modules: &[ModuleEntry], module: u16) -> usize {
-    modules[usize::from(module)]
-        .column
-        .expect("a module that serves a request binds a cell column")
-        .index()
-}
 
 /// The draws of one subject at one time: an actor's action, or a cell's tick.
 #[derive(Debug, Clone, Copy)]
@@ -86,7 +68,6 @@ pub struct PrepCtx<'a> {
     pub(crate) draws: Draws,
     pub(crate) now: Tick,
     pub(crate) columns: &'a [CellColumn],
-    pub(crate) routes: &'a Routes<'a>,
 }
 
 impl fmt::Debug for PrepCtx<'_> {
@@ -124,8 +105,8 @@ impl PrepCtx<'_> {
 
     /// # Errors
     /// Why the actor cannot step in `dir`.
-    // With a second caller LTO calls it out of line from wander's prepare:
-    // +7% per round on the wander benches.
+    // Must stay inline: with several callers LTO calls it out of line from
+    // wander's prepare, at a cost of 7% per round on the wander benches.
     #[inline]
     pub fn check_step(&self, dir: Dir) -> Result<Pos, StepError> {
         self.grid.check_step(self.actor, dir)
@@ -135,9 +116,7 @@ impl PrepCtx<'_> {
     #[must_use]
     pub fn locate(&self, id: EntityId) -> Option<Pos> {
         let at = self.grid.pos(self.store.handle_of(id)?)?;
-        let pos = self.pos();
-        let distance = at.x.abs_diff(pos.x).max(at.y.abs_diff(pos.y));
-        (distance <= SIGHT).then_some(at)
+        (at.chebyshev(self.pos()) <= SIGHT).then_some(at)
     }
 
     #[must_use]
@@ -150,8 +129,7 @@ impl PrepCtx<'_> {
     #[must_use]
     pub fn check<C>(&self, ask: Ask<C>, at: Pos) -> Option<u8> {
         let at = self.grid.shape().idx(at)?;
-        let value = self.columns[served(&self.routes.ruleset.modules, ask.module)].get(at);
-        (self.routes.check)(ask.module, value)
+        (ask.check)(self.columns[ask.column.index()].get(at))
     }
 }
 
@@ -162,7 +140,7 @@ pub struct CommitCtx<'a> {
     pub(crate) departures: &'a mut Vec<Departure>,
     pub(crate) store: &'a mut Store,
     pub(crate) columns: &'a mut [CellColumn],
-    pub(crate) routes: &'a Routes<'a>,
+    pub(crate) ruleset: &'a Ruleset,
     pub(crate) harms: &'a mut Vec<Harm>,
     pub(crate) emptied: &'a mut Vec<(EntityId, Handle)>,
 }
@@ -194,8 +172,8 @@ impl CommitCtx<'_> {
             .shape()
             .idx(at)
             .expect("commit of an order its prepare did not check");
-        let column = &mut self.columns[served(&self.routes.ruleset.modules, ask.module)];
-        column.set(at, (self.routes.apply)(ask.module, column.get(at)));
+        let column = &mut self.columns[ask.column.index()];
+        column.set(at, (ask.apply)(column.get(at)));
     }
 
     /// # Panics
@@ -236,7 +214,7 @@ impl CommitCtx<'_> {
         let Some(h) = self.store.handle_of(id) else {
             return 0;
         };
-        let Some(remains) = self.store.get_mut(&self.routes.ruleset.remains, h) else {
+        let Some(remains) = self.store.get_mut(&self.ruleset.remains, h) else {
             return 0;
         };
         let eaten = amount.min(remains.mass);

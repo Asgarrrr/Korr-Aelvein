@@ -13,6 +13,7 @@ use core::mem;
 use korr_ecs::{Component, EntityId, FloorId, Handle, Own, Read, Store};
 use korr_grid::{CellColumn, Grid, Interior, Layer, Material, Pos, Shape};
 
+use crate::build::ReadCells;
 use crate::ctx::Departure;
 use crate::decision::Candidates;
 use crate::floor::inbox::{Flight, Inbox};
@@ -88,25 +89,24 @@ impl Floor {
         self.grid.set_material(at, m);
     }
 
-    /// For tests and setup: a round resolves no column by name.
-    ///
     /// # Panics
-    /// When `ruleset` is not the one that built this floor, has no cell
-    /// column `name`, or `at` is not an interior cell of this floor.
+    /// When `ruleset` is not the one that built this floor, or `at` is not
+    /// an interior cell of this floor.
     #[must_use]
-    pub fn cell(&self, ruleset: &Ruleset, name: &str, at: Pos) -> u8 {
-        self.columns[self.column_of(ruleset, name)].get(self.interior(at))
+    pub fn cell(&self, ruleset: &Ruleset, cells: ReadCells, at: Pos) -> u8 {
+        self.check_ruleset(ruleset);
+        self.columns[cells.column.index()].get(self.interior(at))
     }
 
-    /// For tests and setup: a round resolves no column by name.
+    /// For tests and setup: in a round, only the column's owner writes it.
     ///
     /// # Panics
-    /// When `ruleset` is not the one that built this floor, has no cell
-    /// column `name`, or `at` is not an interior cell of this floor.
-    pub fn set_cell(&mut self, ruleset: &Ruleset, name: &str, at: Pos, value: u8) {
+    /// When `ruleset` is not the one that built this floor, or `at` is not
+    /// an interior cell of this floor.
+    pub fn set_cell(&mut self, ruleset: &Ruleset, cells: ReadCells, at: Pos, value: u8) {
+        self.check_ruleset(ruleset);
         let at = self.interior(at);
-        let column = self.column_of(ruleset, name);
-        self.columns[column].set(at, value);
+        self.columns[cells.column.index()].set(at, value);
     }
 
     /// The actor first acts this round.
@@ -228,15 +228,6 @@ impl Floor {
             ruleset.fingerprint(),
             "ruleset is not the one that built this floor"
         );
-    }
-
-    fn column_of(&self, ruleset: &Ruleset, name: &str) -> usize {
-        self.check_ruleset(ruleset);
-        ruleset
-            .columns
-            .iter()
-            .position(|column| column == name)
-            .unwrap_or_else(|| panic!("no cell column named {name}"))
     }
 }
 

@@ -1,94 +1,10 @@
-use core::convert::Infallible;
-
 use korr_core::{
     host::{Both, Cause, Event, Mechanics, ModuleKey, Recipe, Seed, Then, World, keyed},
-    mechanic::{
-        Builder, CommitCtx, Component, ImageError, Module, Own, Pos, PrepCtx, Prepared, Proposals,
-        Reader, Rows, Senses, Target, Writer,
-    },
+    mechanic::Pos,
 };
-use korr_scenarios::{floor, game, run};
+use korr_scenarios::{Bleeds, Clot, GROUND, Wound, bleed, floor, game, nth, run};
 
-use super::{GROUND, MAX, mortal, nth};
-
-struct Wound;
-
-impl Component for Wound {
-    const VERSION: u16 = 0;
-
-    fn write(&self, _: &mut Writer) {}
-
-    fn read(_: &mut Reader<'_>) -> Result<Self, ImageError> {
-        Ok(Self)
-    }
-}
-
-struct Clot;
-
-impl Component for Clot {
-    const VERSION: u16 = 0;
-
-    fn write(&self, _: &mut Writer) {}
-
-    fn read(_: &mut Reader<'_>) -> Result<Self, ImageError> {
-        Ok(Self)
-    }
-}
-
-trait Bleeds: Module {
-    fn keys(&self) -> (&Own<Wound>, &Own<Clot>);
-}
-
-/// Declares `$module`, named `$name`: its tick harms every holder of its
-/// wound and clot by `$amount`.
-macro_rules! bleed {
-    ($module:ident, $name:literal, $amount:literal) => {
-        struct $module {
-            wound: Own<Wound>,
-            clot: Own<Clot>,
-        }
-
-        impl $module {
-            fn build(b: &mut Builder<'_>) -> Self {
-                Self {
-                    wound: b.own("wound"),
-                    clot: b.own("clot"),
-                }
-            }
-        }
-
-        impl Bleeds for $module {
-            fn keys(&self) -> (&Own<Wound>, &Own<Clot>) {
-                (&self.wound, &self.clot)
-            }
-        }
-
-        impl Module for $module {
-            const NAME: &'static str = $name;
-            type Action = Infallible;
-            type Plan = Infallible;
-
-            fn tick_rows(&self, rows: &mut Rows<'_>) {
-                rows.join(&self.wound, &self.clot, |_, _| $amount);
-            }
-
-            fn propose(&self, _: &Senses<'_>, _: &mut Proposals<'_, Infallible>) {}
-
-            fn prepare(
-                &self,
-                action: Infallible,
-                _: Target,
-                _: &PrepCtx<'_>,
-            ) -> Prepared<Infallible, Infallible> {
-                match action {}
-            }
-
-            fn commit(&self, plan: Infallible, _: &mut CommitCtx<'_>) {
-                match plan {}
-            }
-        }
-    };
-}
+use super::{MAX, mortal};
 
 bleed!(Bleed, "bleed", 3);
 bleed!(Ooze, "ooze", 4);

@@ -150,6 +150,16 @@ fn insert_on_a_dead_handle_panics() {
 }
 
 #[test]
+#[should_panic(expected = "init on a dead handle")]
+fn init_on_a_dead_handle_panics() {
+    let (schema, satiety) = hunger_only();
+    let mut store = Store::new(&schema, FloorId(0));
+    let h = store.spawn();
+    store.despawn(h);
+    store.init(satiety.read(), h, Satiety(1));
+}
+
+#[test]
 #[should_panic(expected = "component name registered twice: satiety")]
 fn duplicate_name_panics() {
     let mut builder = SchemaBuilder::default();

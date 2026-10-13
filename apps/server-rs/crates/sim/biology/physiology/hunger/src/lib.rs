@@ -11,7 +11,6 @@ pub mod config;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::Reverse;
-use core::ops::BitOr;
 
 use korr_contracts::{Graze, Plants};
 use korr_core::mechanic::{
@@ -47,18 +46,11 @@ pub struct Diet(u8);
 impl Diet {
     pub const PLANTS: Self = Self(1);
     pub const REMAINS: Self = Self(2);
+    pub const ALL: Self = Self(Self::PLANTS.0 | Self::REMAINS.0);
 
     #[must_use]
     pub const fn contains(self, food: Self) -> bool {
         self.0 & food.0 == food.0
-    }
-}
-
-impl BitOr for Diet {
-    type Output = Self;
-
-    fn bitor(self, other: Self) -> Self {
-        Self(self.0 | other.0)
     }
 }
 
@@ -71,7 +63,7 @@ impl Component for Diet {
 
     fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> {
         let bits = r.read_u8()?;
-        if bits & !(Self::PLANTS.0 | Self::REMAINS.0) != 0 {
+        if bits & !Self::ALL.0 != 0 {
             return Err(ImageError::Corrupt("diet"));
         }
         Ok(Self(bits))
@@ -138,16 +130,12 @@ fn urgency(satiety: u16) -> u8 {
     u8::try_from((missing * 255).div_ceil(u32::from(PECKISH))).expect("urgency fits u8")
 }
 
-fn chebyshev(a: Pos, b: Pos) -> u16 {
-    a.x.abs_diff(b.x).max(a.y.abs_diff(b.y))
-}
-
 /// The least is eaten first: nearest, then most nourishing, then by (y, x),
 /// then a plant (no id) before remains, then by id.
 type Choice = (u16, Reverse<u16>, i16, i16, Option<EntityId>);
 
 fn choice(from: Pos, at: Pos, nutrition: u16, remains: Option<EntityId>) -> Choice {
-    (chebyshev(from, at), Reverse(nutrition), at.y, at.x, remains)
+    (from.chebyshev(at), Reverse(nutrition), at.y, at.x, remains)
 }
 
 /// A greedy step from `pos` toward `at`.
@@ -213,6 +201,7 @@ impl Module for Hunger {
     type Plan = Meal;
 
     fn tick_rows(&self, rows: &mut Rows<'_>) {
+        // A creature without a diet does not hunger.
         rows.join(&self.satiety, &self.diet, |satiety, _| {
             satiety.0 = satiety.0.saturating_sub(DECAY);
             if satiety.0 == 0 { STARVE_DAMAGE } else { 0 }
@@ -261,24 +250,21 @@ impl Module for Hunger {
 
 impl Hunger {
     fn graze_at(&self, action: Eating, at: Pos, ctx: &PrepCtx<'_>) -> Prepared<Eating, Meal> {
-        let Some(graze) = self.graze else {
+        let Some(growth) = self.graze.and_then(|graze| ctx.check(graze, at)) else {
             return Prepared::Fail;
         };
         let pos = ctx.pos();
         match action {
-            Eating::Eat if chebyshev(pos, at) > 1 => Prepared::Instead {
+            Eating::Eat if pos.chebyshev(at) > 1 => Prepared::Instead {
                 action: Eating::Approach,
                 target: Target::Pos(at),
             },
-            Eating::Eat => match ctx.check(graze, at) {
-                Some(growth) => Prepared::Go {
-                    cost: EAT_COST,
-                    plan: Meal::Graze {
-                        at,
-                        gain: u16::from(growth) * PLANT_NUTRITION,
-                    },
+            Eating::Eat => Prepared::Go {
+                cost: EAT_COST,
+                plan: Meal::Graze {
+                    at,
+                    gain: u16::from(growth) * PLANT_NUTRITION,
                 },
-                None => Prepared::Fail,
             },
             Eating::Approach => approach(ctx, pos, at),
         }
@@ -295,7 +281,7 @@ impl Hunger {
 fn feed_on(action: Eating, id: EntityId, ctx: &PrepCtx<'_>) -> Prepared<Eating, Meal> {
     let pos = ctx.pos();
     match (action, ctx.locate(id)) {
-        (Eating::Eat, Some(at)) if chebyshev(pos, at) > 1 => Prepared::Instead {
+        (Eating::Eat, Some(at)) if pos.chebyshev(at) > 1 => Prepared::Instead {
             action: Eating::Approach,
             target: Target::Entity(id),
         },

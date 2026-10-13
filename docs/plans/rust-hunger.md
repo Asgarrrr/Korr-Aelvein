@@ -95,9 +95,10 @@ The project rule stays: the game runs with any mechanic removed.
   it during the asker's `commit`, in the same action. Both happen or
   neither does. First case: hunger's `Graze` to flora. The owner runs no
   `prepare` or `commit` of its own: its `SERVES` carries a `check` and an
-  `apply` on one cell value, and `PrepCtx::check` and
-  `CommitCtx::order` reach them through two erased closures built per
-  turn, one dyn call per request.
+  `apply` on one cell value. `Builder::request` copies both, with the
+  server's cell column, into the asker's `Ask`, so a server builds before
+  its askers. `PrepCtx::check` and `CommitCtx::order` call them through
+  one function pointer per request.
 - A per-entity bulk tick joins the per-cell tick: a monomorphic loop over
   the module's own column, run in the environment phase. It writes only
   the row it iterates and pushes `harm`; kills and spawns stay deferred.
@@ -144,9 +145,9 @@ The project rule stays: the game runs with any mechanic removed.
   heap. The heap is rebuilt from `clock` on load. An actor that dies in its
   own action is not rescheduled.
 - Spawns are deferred and sorted by (cause, key). Species initialisation is
-  a core-only erased row write keyed by component id, like a `Traveller`
-  attach: a documented exception to write authority. The catalogue feeds
-  it later; test species feed it now.
+  a typed write through the read keys a module exports for it, such as
+  `Hunger::satiety()` and `Hunger::diet()`: a documented exception to
+  write authority. The catalogue feeds it later; test species feed it now.
 - Events: one FIFO queue per floor, each event with its cause, a per-turn
   cap that panics, counted even when events are disabled. Core emits `Died`
   and `Spawned`; a module declares its own events at build. Only the host
@@ -165,7 +166,7 @@ Crate `korr-hunger` in `biology/physiology/hunger`.
 - Tick: for a creature with both `Satiety` and `Diet`, `satiety -= decay`,
   and at zero push `harm(self, starve, Cause::Mechanic(hunger))`.
 - Food: any plant, eaten through `Graze` (flora's check accepts a cell with
-  growth, its apply clears the cell and replies with the growth), and
+  growth and replies with the growth, its apply clears the cell), and
   `Remains`, whose eaten mass is removed. No live prey: that is
   combat's.
 - Decision: no proposal without `Satiety` and `Diet`, or at urgency 0.

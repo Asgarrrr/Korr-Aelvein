@@ -37,7 +37,7 @@ pub struct Declarations {
     modules: Vec<&'static str>,
     contracts: Vec<(&'static str, &'static Provided)>,
     /// Each with its server's name and visit ordinal.
-    requests: Vec<(&'static str, Served, u16)>,
+    requests: Vec<(&'static str, Served, usize)>,
 }
 
 impl Declarations {
@@ -71,8 +71,7 @@ impl Declarations {
                     M::NAME
                 );
             }
-            let ordinal = u16::try_from(self.modules.len()).expect("a module table fits u16");
-            self.requests.push((M::NAME, served, ordinal));
+            self.requests.push((M::NAME, served, self.modules.len()));
         }
         self.modules.push(M::NAME);
     }
@@ -82,7 +81,7 @@ impl Declarations {
 pub struct Assembly<'a> {
     schema: &'a mut SchemaBuilder,
     declared: &'a [&'static str],
-    requests: &'a [(&'static str, Served, u16)],
+    requests: &'a [(&'static str, Served, usize)],
     registrations: &'a mut [Registration],
     columns: &'a mut Columns,
     next: usize,
@@ -118,6 +117,7 @@ impl Assembly<'_> {
             registrations: self.registrations,
             requests: self.requests,
             names: &mut self.columns.names,
+            owners: &self.columns.owners,
             column: &mut column,
             module: M::NAME,
             provides: M::PROVIDES,
@@ -161,8 +161,10 @@ pub(crate) struct Columns {
 pub struct Builder<'a> {
     schema: &'a mut SchemaBuilder,
     registrations: &'a mut [Registration],
-    requests: &'a [(&'static str, Served, u16)],
+    requests: &'a [(&'static str, Served, usize)],
     names: &'a mut Vec<String>,
+    /// The column each built module binds, in visit order.
+    owners: &'a [Option<ColumnIdx>],
     column: &'a mut Option<ColumnIdx>,
     module: &'static str,
     provides: &'static [Provided],
@@ -216,12 +218,13 @@ impl Builder<'_> {
     /// # Panics
     /// When the module does not declare `C` in `PROVIDES`, takes it twice,
     /// or already binds a cell column.
-    pub fn provide_cells<C: CellContract>(&mut self) {
+    pub fn provide_cells<C: CellContract>(&mut self) -> ReadCells {
         let cells: Box<ReadCells> = self
             .take::<C>(C::NAME)
             .downcast()
             .expect("a cell registration holds its column");
         self.bind(cells.column);
+        *cells
     }
 
     /// `None` when no module of the recipe provides `C`.
@@ -232,16 +235,28 @@ impl Builder<'_> {
     }
 
     /// `None` when no module of the recipe serves `C`.
+    ///
+    /// # Panics
+    /// When the server of `C` builds after this module.
     #[must_use]
     pub fn request<C: Request>(&self) -> Option<Ask<C>> {
         let ty = TypeId::of::<C>();
-        self.requests
+        let &(_, served, ordinal) = self
+            .requests
             .iter()
-            .find(|(_, served, _)| served.ty == ty)
-            .map(|&(.., module)| Ask {
-                module,
-                kind: PhantomData,
-            })
+            .find(|(_, served, _)| served.ty == ty)?;
+        let column = self.owners.get(ordinal).unwrap_or_else(|| {
+            panic!(
+                "{} asks {} before its server builds",
+                self.module, served.name
+            )
+        });
+        Some(Ask {
+            check: served.check,
+            apply: served.apply,
+            column: column.expect("a module that serves a request binds a cell column"),
+            kind: PhantomData,
+        })
     }
 
     fn take<C: 'static>(&mut self, name: &str) -> Box<dyn Any> {

@@ -6,7 +6,7 @@ use korr_core::{
     },
 };
 use korr_ecs::{EntityId, FloorId, Handle};
-use korr_scenarios::{TO_GROUND, floor, game, run};
+use korr_scenarios::{GROUND, TO_GROUND, floor, game, nth, run};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Mark(u8);
@@ -134,13 +134,6 @@ impl Module for Fixed {
     fn commit(&self, dir: Dir, ctx: &mut CommitCtx<'_>) {
         ctx.step(dir);
     }
-}
-
-const GROUND: FloorId = FloorId(0);
-
-/// Spawn order is id order.
-fn nth(floor: FloorId, n: u64) -> EntityId {
-    EntityId::new(floor, n)
 }
 
 fn tail_game() -> Game<Tail> {

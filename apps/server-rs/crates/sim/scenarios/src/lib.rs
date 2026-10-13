@@ -4,6 +4,7 @@
 
 extern crate alloc;
 
+mod bleed;
 mod leave;
 mod ring;
 mod scripted;
@@ -12,12 +13,16 @@ mod shy;
 use korr_core::{
     host::{Floor, Game, Mechanics, Pos, Recipe, Ruleset, Runner, Seed, Sequential, World},
     mechanic::{
-        Action, Band, CommitCtx, Cost, Dir, Module, PrepCtx, Prepared, Proposals, Senses, Target,
+        Action, Band, CommitCtx, Cost, Dir, Module, PrepCtx, Prepared, Proposals, ReadCells,
+        Senses, Target,
     },
 };
-use korr_ecs::FloorId;
+use korr_ecs::{EntityId, FloorId, Handle};
+use korr_engine::{Modules, Registry};
 use korr_grid::Shape;
+use korr_hunger::{Diet, Hunger, Satiety};
 
+pub use bleed::{Bleeds, Clot, Wound};
 pub use leave::Leave;
 pub use ring::Ring;
 pub use scripted::{Act, Answer, Fake, Scripted};
@@ -75,6 +80,14 @@ macro_rules! actionless {
     };
 }
 
+pub const GROUND: FloorId = FloorId(0);
+
+/// Spawn order is id order.
+#[must_use]
+pub fn nth(floor: FloorId, n: u64) -> EntityId {
+    EntityId::new(floor, n)
+}
+
 /// # Panics
 /// When a side is outside the bounds of `Shape::new`.
 #[must_use]
@@ -98,6 +111,42 @@ pub fn reload(ruleset: &Ruleset, floor: &Floor) -> Floor {
 #[must_use]
 pub fn game<R: Recipe>(recipe: R, seed: Seed) -> Game<R::Mechanics> {
     Game::new(recipe, seed)
+}
+
+#[must_use]
+pub fn flora_only(seed: Seed) -> Game<Modules> {
+    game(
+        Registry {
+            wander: false,
+            hunger: false,
+            ..Registry::default()
+        },
+        seed,
+    )
+}
+
+/// # Panics
+/// When the registry does not run hunger.
+#[must_use]
+pub fn hunger(modules: &Modules) -> &Hunger {
+    modules.hunger.as_ref().expect("the registry runs hunger")
+}
+
+/// # Panics
+/// When the registry does not run flora.
+#[must_use]
+pub fn plants(modules: &Modules) -> ReadCells {
+    modules
+        .flora
+        .as_ref()
+        .expect("the registry runs flora")
+        .plants()
+}
+
+/// Gives `h` a stomach at `satiety` that takes `diet`.
+pub fn stomach(f: &mut Floor, hunger: &Hunger, h: Handle, satiety: u16, diet: Diet) {
+    f.init(hunger.satiety(), h, Satiety(satiety));
+    f.init(hunger.diet(), h, diet);
 }
 
 /// Every actor off floor 0 departs for its centre.

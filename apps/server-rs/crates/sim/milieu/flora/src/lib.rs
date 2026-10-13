@@ -11,8 +11,8 @@ use core::convert::Infallible;
 
 use korr_contracts::{Graze, Plants};
 use korr_core::mechanic::{
-    Builder, CommitCtx, DrawIndex, Draws, Module, PrepCtx, Prepared, Proposals, Provided, Senses,
-    Served, Stencil, Target, provides_cells, serves,
+    Builder, CommitCtx, DrawIndex, Draws, Module, PrepCtx, Prepared, Proposals, Provided,
+    ReadCells, Senses, Served, Stencil, Target, provides_cells, serves,
 };
 
 use crate::config::{RIPE, SPROUT_CHANCE, SPROUT_ODDS};
@@ -39,14 +39,22 @@ fn grazed(_: u8) -> u8 {
     0
 }
 
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Flora;
+#[derive(Debug, Clone, Copy)]
+pub struct Flora {
+    plants: ReadCells,
+}
 
 impl Flora {
     #[must_use]
     pub fn build(b: &mut Builder<'_>) -> Self {
-        b.provide_cells::<Plants>();
-        Self
+        Self {
+            plants: b.provide_cells::<Plants>(),
+        }
+    }
+
+    #[must_use]
+    pub fn plants(&self) -> ReadCells {
+        self.plants
     }
 }
 

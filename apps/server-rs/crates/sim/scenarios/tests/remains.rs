@@ -1,19 +1,17 @@
-use core::convert::Infallible;
-
 use korr_core::{
     host::{
-        Event, Floor, Game, Mechanics, ROT_PER_ROUND, Round, Seed, Then, Vitality, World, keyed,
+        Event, Floor, Game, Mechanics, ROT_PER_ROUND, Round, SIGHT, Seed, Then, Vitality, World,
+        keyed,
     },
-    mechanic::{
-        Builder, CommitCtx, Component, ImageError, Module, Own, Pos, PrepCtx, Prepared, Proposals,
-        Reader, Rows, Senses, Target, Writer,
-    },
+    mechanic::Pos,
 };
 use korr_ecs::{EntityId, FloorId, Handle};
 use korr_engine::{Modules, Registry};
+use korr_hunger::Diet;
 use korr_hunger::config::{BITE, DECAY, PECKISH, REMAINS_NUTRITION, STARVE_DAMAGE};
-use korr_hunger::{Diet, Satiety};
-use korr_scenarios::{floor, game, reload, run};
+use korr_scenarios::{
+    Bleeds, Clot, Wound, bleed, floor, game, hunger, plants, reload, run, stomach,
+};
 
 const FIELD: FloorId = FloorId(0);
 const SEED: Seed = Seed(1);
@@ -22,11 +20,10 @@ const MASS: u16 = 2 * (BITE + ROT_PER_ROUND) + 1;
 /// Where the first donor dies and leaves its remains.
 const CARCASS: Pos = Pos { x: 4, y: 4 };
 
-fn carnivorous(flora: bool) -> Game<Modules> {
+fn carnivorous() -> Game<Modules> {
     game(
         Registry {
             wander: false,
-            flora,
             ..Registry::default()
         },
         SEED,
@@ -34,14 +31,8 @@ fn carnivorous(flora: bool) -> Game<Modules> {
 }
 
 fn eater(f: &mut Floor, game: &Game<Modules>, at: Pos, satiety: u16, diet: Diet) -> Handle {
-    let hunger = game
-        .mechanics()
-        .hunger
-        .as_ref()
-        .expect("the registry runs hunger");
     let h = f.spawn_actor(game.ruleset(), at);
-    f.init(hunger.satiety(), h, Satiety(satiety));
-    f.init(hunger.diet(), h, diet);
+    stomach(f, hunger(game.mechanics()), h, satiety, diet);
     h
 }
 
@@ -64,7 +55,12 @@ fn fed_field(
 ) -> (World, Vec<Handle>) {
     let mut f = floor(game.ruleset(), FIELD, 9, 9);
     for &(at, growth) in plants {
-        f.set_cell(game.ruleset(), "plants", at, growth);
+        f.set_cell(
+            game.ruleset(),
+            korr_scenarios::plants(game.mechanics()),
+            at,
+            growth,
+        );
     }
     for &(at, mass) in donors {
         let h = eater(&mut f, game, at, 0, Diet::PLANTS);
@@ -120,7 +116,7 @@ fn masses(game: &Game<Modules>, diet: Diet, rounds: usize) -> Vec<Option<u16>> {
 #[test]
 fn a_carnivore_eats_remains_away() {
     assert_eq!(
-        masses(&carnivorous(true), Diet::REMAINS, 3),
+        masses(&carnivorous(), Diet::REMAINS, 3),
         [
             Some(MASS - BITE),
             Some(MASS - 2 * BITE - ROT_PER_ROUND),
@@ -132,7 +128,7 @@ fn a_carnivore_eats_remains_away() {
 #[test]
 fn a_herbivore_never_feeds_on_remains() {
     assert_eq!(
-        masses(&carnivorous(true), Diet::PLANTS, 3),
+        masses(&carnivorous(), Diet::PLANTS, 3),
         [
             Some(MASS),
             Some(MASS - ROT_PER_ROUND),
@@ -143,17 +139,22 @@ fn a_herbivore_never_feeds_on_remains() {
 
 #[test]
 fn without_flora_a_carnivore_still_feeds() {
-    assert_eq!(
-        masses(&carnivorous(false), Diet::REMAINS, 1),
-        [Some(MASS - BITE)]
+    let game = game(
+        Registry {
+            wander: false,
+            flora: false,
+            ..Registry::default()
+        },
+        SEED,
     );
+    assert_eq!(masses(&game, Diet::REMAINS, 1), [Some(MASS - BITE)]);
 }
 
 /// The remains' mass and the plant's growth after round 1, when a starving
 /// creature of `diet` lies between the remains and a plant of
 /// `growth`, which grows one step before it acts.
 fn first_meal(diet: Diet, growth: u8) -> (Option<u16>, u8) {
-    let game = carnivorous(true);
+    let game = carnivorous();
     let plant = Pos { x: 6, y: 4 };
     let mut world = fed_field(
         &game,
@@ -166,22 +167,20 @@ fn first_meal(diet: Diet, growth: u8) -> (Option<u16>, u8) {
     let [remains] = laid(&world)[..] else {
         panic!("one donor, one remains");
     };
-    let growth = world.floor(FIELD).cell(game.ruleset(), "plants", plant);
+    let growth = world
+        .floor(FIELD)
+        .cell(game.ruleset(), plants(game.mechanics()), plant);
     (mass(&game, &world, remains), growth)
-}
-
-fn omnivore() -> Diet {
-    Diet::PLANTS | Diet::REMAINS
 }
 
 #[test]
 fn of_foods_as_near_and_as_nourishing_the_first_in_row_order_is_eaten() {
-    assert_eq!(first_meal(omnivore(), 1), (Some(MASS - BITE), 2));
+    assert_eq!(first_meal(Diet::ALL, 1), (Some(MASS - BITE), 2));
 }
 
 #[test]
 fn a_plant_more_nourishing_than_a_bite_is_eaten_first() {
-    assert_eq!(first_meal(omnivore(), 2), (Some(MASS), 0));
+    assert_eq!(first_meal(Diet::ALL, 2), (Some(MASS), 0));
 }
 
 #[test]
@@ -191,7 +190,7 @@ fn a_carnivore_never_grazes() {
 
 #[test]
 fn one_bite_that_sates_ends_the_meal() {
-    let game = carnivorous(true);
+    let game = carnivorous();
     // One bite lifts it to `PECKISH` after the next decay.
     let satiety = PECKISH + 2 * DECAY - BITE * REMAINS_NUTRITION;
     let eater = (Pos { x: 5, y: 4 }, satiety, Diet::REMAINS);
@@ -211,7 +210,7 @@ fn one_bite_that_sates_ends_the_meal() {
 /// it sates; other remains lie 3 cells from both.
 #[test]
 fn of_two_carnivores_one_eats_the_last_unit() {
-    let game = carnivorous(true);
+    let game = carnivorous();
     let satiety = PECKISH + 2 * DECAY - REMAINS_NUTRITION;
     let sides = [Pos { x: 3, y: 4 }, Pos { x: 5, y: 4 }];
     let (mut world, carnivores) = field(
@@ -234,10 +233,16 @@ fn of_two_carnivores_one_eats_the_last_unit() {
     assert_eq!(hungry, 1, "only the carnivore that did not eat walks on");
 }
 
+#[derive(Clone, Copy)]
+enum Rounds {
+    Unbroken,
+    Reloaded,
+}
+
 /// The hash after 4 rounds of a carnivore 3 cells from remains, and
 /// whether the remains are gone by then.
-fn approached(reloaded: bool) -> (u64, bool) {
-    let game = carnivorous(true);
+fn approached(rounds: Rounds) -> (u64, bool) {
+    let game = carnivorous();
     let eater = (Pos { x: 7, y: 4 }, 0, Diet::REMAINS);
     let (mut world, _) = field(&game, &[(CARCASS, MASS)], &[eater]);
     run(&game, &mut world, 1);
@@ -245,7 +250,7 @@ fn approached(reloaded: bool) -> (u64, bool) {
         panic!("one donor, one remains");
     };
     for _ in 0..4 {
-        if reloaded {
+        if matches!(rounds, Rounds::Reloaded) {
             world = World::new(vec![reload(game.ruleset(), world.floor(FIELD))]);
         }
         run(&game, &mut world, 1);
@@ -255,74 +260,32 @@ fn approached(reloaded: bool) -> (u64, bool) {
 
 #[test]
 fn a_reload_every_round_keeps_the_approach_to_remains() {
-    let unbroken = approached(false);
+    let unbroken = approached(Rounds::Unbroken);
     assert!(unbroken.1, "the carnivore reaches and eats the remains");
-    assert_eq!(approached(true), unbroken);
+    assert_eq!(approached(Rounds::Reloaded), unbroken);
 }
 
-struct Wound;
-
-impl Component for Wound {
-    const VERSION: u16 = 0;
-
-    fn write(&self, _: &mut Writer) {}
-
-    fn read(_: &mut Reader<'_>) -> Result<Self, ImageError> {
-        Ok(Self)
-    }
+#[test]
+fn remains_just_past_sight_are_neither_approached_nor_eaten() {
+    let game = carnivorous();
+    let (carcass, home) = (
+        Pos { x: 1, y: 4 },
+        Pos {
+            x: 2 + SIGHT.cast_signed(),
+            y: 4,
+        },
+    );
+    let (mut world, carnivore) = field(&game, &[(carcass, MASS)], &[(home, 0, Diet::REMAINS)]);
+    run(&game, &mut world, 1);
+    let [remains] = laid(&world)[..] else {
+        panic!("one donor, one remains");
+    };
+    run(&game, &mut world, 2);
+    assert_eq!(world.floor(FIELD).pos(carnivore[0]), Some(home));
+    assert_eq!(mass(&game, &world, remains), Some(MASS - 2 * ROT_PER_ROUND));
 }
 
-struct Clot;
-
-impl Component for Clot {
-    const VERSION: u16 = 0;
-
-    fn write(&self, _: &mut Writer) {}
-
-    fn read(_: &mut Reader<'_>) -> Result<Self, ImageError> {
-        Ok(Self)
-    }
-}
-
-/// Its tick harms every holder of its wound and clot by 1.
-struct Bleed {
-    wound: Own<Wound>,
-    clot: Own<Clot>,
-}
-
-impl Bleed {
-    fn build(b: &mut Builder<'_>) -> Self {
-        Self {
-            wound: b.own("wound"),
-            clot: b.own("clot"),
-        }
-    }
-}
-
-impl Module for Bleed {
-    const NAME: &'static str = "bleed";
-    type Action = Infallible;
-    type Plan = Infallible;
-
-    fn tick_rows(&self, rows: &mut Rows<'_>) {
-        rows.join(&self.wound, &self.clot, |_, _| 1);
-    }
-
-    fn propose(&self, _: &Senses<'_>, _: &mut Proposals<'_, Infallible>) {}
-
-    fn prepare(
-        &self,
-        action: Infallible,
-        _: Target,
-        _: &PrepCtx<'_>,
-    ) -> Prepared<Infallible, Infallible> {
-        match action {}
-    }
-
-    fn commit(&self, plan: Infallible, _: &mut CommitCtx<'_>) {
-        match plan {}
-    }
-}
+bleed!(Bleed, "bleed", 1);
 
 #[test]
 fn the_game_runs_with_remains_and_without_hunger() {
@@ -340,9 +303,9 @@ fn the_game_runs_with_remains_and_without_hunger() {
     let mut f = floor(ruleset, FIELD, 9, 9);
     let h = f.spawn_actor(ruleset, CARCASS);
     f.init(ruleset.vitality(), h, Vitality { hp: 1, max: MASS });
-    let bleed = &game.mechanics().0;
-    f.insert(&bleed.wound, h, Wound);
-    f.insert(&bleed.clot, h, Clot);
+    let (wound, clot) = game.mechanics().0.keys();
+    f.insert(wound, h, Wound);
+    f.insert(clot, h, Clot);
     f.spawn_actor(ruleset, Pos { x: 5, y: 4 });
     let mut world = World::new(vec![f]);
     run(&game, &mut world, 1);
