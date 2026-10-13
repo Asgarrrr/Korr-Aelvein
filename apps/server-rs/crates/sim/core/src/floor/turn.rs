@@ -1,4 +1,4 @@
-use korr_ecs::{EntityId, Handle};
+use korr_ecs::{EntityId, Handle, Lent};
 use korr_grid::Pos;
 use korr_random::Seed;
 
@@ -11,12 +11,30 @@ use crate::ruleset::Ruleset;
 use crate::senses::{Seen, Senses};
 use crate::time::{Cost, Tick};
 
+/// The core's per-actor columns, out of the store while the actors run.
+pub(crate) struct Lents {
+    clock: Lent<Tick>,
+    intent: Lent<Intent>,
+}
+
+impl Lents {
+    /// Every despawn while lent calls it, so a reused slot starts without them.
+    pub(crate) fn clear(&mut self, h: Handle) {
+        self.clock.clear(h);
+        self.intent.clear(h);
+    }
+}
+
 impl Floor {
     /// Every actor due this round acts on the current state, one at a
     /// time, and its harms land before the next acts. A departed or dead
     /// actor leaves the schedule; a departed one's rows travel with it.
     pub(crate) fn run_actors(&mut self, seed: Seed, ruleset: &Ruleset, mechanics: &impl Mechanics) {
         let end = Tick::start_of(self.round.next());
+        let mut lents = Lents {
+            clock: self.store.lend(&ruleset.clock),
+            intent: self.store.lend(&ruleset.intent),
+        };
         while let Some((now, id, actor)) = self.schedule.pop_before(end) {
             // The link compares generations: a due of the dead or of a recycled slot is unplaced.
             let Some(pos) = self.grid.pos(actor) else {
@@ -28,16 +46,18 @@ impl Floor {
                 actor,
                 pos,
             };
-            let cost = self.turn(seed, ruleset, mechanics, placed);
-            self.drain(ruleset);
-            self.clear_emptied();
+            let cost = self.turn(seed, ruleset, mechanics, placed, &mut lents.intent);
+            self.drain(ruleset, Some(&mut lents));
+            self.clear_emptied(&mut lents);
             if !self.store.is_alive(actor) || departed(&self.departures, actor) {
                 continue;
             }
             let next = now.after(cost);
-            self.store.insert(&ruleset.clock, actor, next);
+            lents.clock.insert(&self.store, actor, next);
             self.schedule.push(next, id, actor);
         }
+        self.store.restore(lents.clock);
+        self.store.restore(lents.intent);
     }
 
     /// One pick, and one more without it when its run fails; a second failure idles.
@@ -47,6 +67,7 @@ impl Floor {
         ruleset: &Ruleset,
         mechanics: &impl Mechanics,
         placed: Placed,
+        intents: &mut Lent<Intent>,
     ) -> Cost {
         let Placed {
             now,
@@ -73,7 +94,7 @@ impl Floor {
             out: &mut self.candidates,
             ordinal: 0,
         });
-        let intent = self.store.get(ruleset.intent.read(), actor).copied();
+        let intent = intents.get(&self.store, actor).copied();
         let mut excluded = None;
         while let Some(pick) = self.candidates.pick(intent, excluded) {
             let mut run = RunVisit {
@@ -95,7 +116,7 @@ impl Floor {
                     action: pick.action.key,
                     target: pick.target,
                 };
-                self.store.insert(&ruleset.intent, actor, intent);
+                intents.insert(&self.store, actor, intent);
                 return cost;
             }
             if excluded.is_some() {
@@ -103,7 +124,7 @@ impl Floor {
             }
             excluded = Some(pick.action.key);
         }
-        self.store.remove(&ruleset.intent, actor);
+        intents.remove(&self.store, actor);
         IDLE
     }
 

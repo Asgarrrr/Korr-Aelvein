@@ -1,5 +1,5 @@
 use korr_core::{
-    host::{Cause, Event, Round, Seed, Then, World, keyed},
+    host::{Cause, Event, ROT_PER_ROUND, Remains, Round, Seed, Then, World, keyed},
     mechanic::{
         Action, Band, Builder, CommitCtx, Component, Cost, ImageError, Module, Own, Pos, PrepCtx,
         Prepared, Proposals, Reader, Senses, Target, Writer,
@@ -67,6 +67,74 @@ fn an_actor_killed_by_its_own_action_is_not_rescheduled() {
     ));
     run(&game, &mut world, 3);
     assert_eq!(world.floor(GROUND).round(), Round(4));
+}
+
+/// Re-pin on every intended change to the image format or to behaviour.
+const PINNED_SUICIDE: u64 = 0xdade_c12f_1d87_4e19;
+
+/// The remains reuse the slot of an actor killed by its own action in the
+/// same round, so a clock or intent row left on that slot moves the image.
+#[test]
+fn remains_on_a_slot_freed_mid_round_start_without_clock_or_intent() {
+    let game = game(Suicide, Seed(1));
+    let ruleset = game.ruleset();
+    let mut f = floor(ruleset, GROUND, 5, 5);
+    mortal(&mut f, ruleset, Pos { x: 1, y: 1 }, HP, MAX);
+    f.spawn_actor(ruleset, Pos { x: 3, y: 3 });
+    let mut world = World::new(vec![f]);
+    run(&game, &mut world, 1);
+    game.load(&game.save(&world))
+        .expect("no clock row lies on the remains");
+    assert_eq!(game.hash(&world), PINNED_SUICIDE);
+}
+
+/// Every actor eats the remains it carries, down to nothing.
+struct SelfEater;
+
+impl Module for SelfEater {
+    const NAME: &'static str = "self_eater";
+    type Action = Lethal;
+    type Plan = EntityId;
+
+    fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, Lethal>) {
+        out.push(Lethal::Lethal, Band::Routine, 0, Target::None);
+    }
+
+    fn prepare(&self, _: Lethal, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Lethal, EntityId> {
+        Prepared::Go {
+            cost: Cost::new(100),
+            plan: ctx.actor(),
+        }
+    }
+
+    fn commit(&self, id: EntityId, ctx: &mut CommitCtx<'_>) {
+        ctx.consume(id, u16::MAX);
+    }
+}
+
+/// An actor carrying remains leaves when it eats them mid-round, so its
+/// clock and intent rows must leave with it, or the next entity of that
+/// slot inherits them.
+#[test]
+fn an_actor_that_eats_its_own_remains_leaves_no_clock_or_intent() {
+    let game = game(SelfEater, Seed(1));
+    let ruleset = game.ruleset();
+    let mut f = floor(ruleset, GROUND, 5, 5);
+    let h = f.spawn_actor(ruleset, Pos { x: 1, y: 1 });
+    let of = nth(GROUND, 0);
+    f.init(
+        ruleset.remains(),
+        h,
+        Remains {
+            of,
+            mass: 2 * ROT_PER_ROUND + 1,
+        },
+    );
+    let mut world = World::new(vec![f]);
+    run(&game, &mut world, 1);
+    assert_eq!(world.floor(GROUND).pos(h), None);
+    game.load(&game.save(&world))
+        .expect("no clock or intent row outlives its actor");
 }
 
 #[derive(Debug)]

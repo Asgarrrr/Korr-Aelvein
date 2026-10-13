@@ -6,21 +6,23 @@ use korr_grid::Layer;
 
 use crate::config::ROT_PER_ROUND;
 use crate::floor::Floor;
+use crate::floor::turn::Lents;
 use crate::life::{Event, Remains};
 use crate::ruleset::Ruleset;
 
 impl Floor {
+    /// `lents` while the actors run, `None` outside.
     #[inline]
-    pub(crate) fn drain(&mut self, ruleset: &Ruleset) {
+    pub(crate) fn drain(&mut self, ruleset: &Ruleset, lents: Option<&mut Lents>) {
         if !self.harms.is_empty() {
-            self.settle(ruleset);
+            self.settle(ruleset, lents);
         }
     }
 
     /// Sums the harms per target and kills, in id order, each target they
     /// bring to zero, credited to its lowest cause; then lays the remains.
     #[cold]
-    fn settle(&mut self, ruleset: &Ruleset) {
+    fn settle(&mut self, ruleset: &Ruleset, mut lents: Option<&mut Lents>) {
         let mut harms = mem::take(&mut self.harms);
         harms.sort_unstable();
         let mut spawns = Vec::new();
@@ -46,6 +48,9 @@ impl Floor {
             self.departures.retain(|d| d.actor != h);
             let pos = self.grid.pos(h).expect("a live entity is placed");
             self.grid.unlink(h);
+            if let Some(lents) = lents.as_deref_mut() {
+                lents.clear(h);
+            }
             self.store.despawn(h);
             if mass > 0 {
                 spawns.push((cause, id, pos, mass));
@@ -89,26 +94,29 @@ impl Floor {
                 .filter(|(_, remains)| remains.mass == 0)
                 .map(|(h, _)| (self.store.id(h).expect("a stored row is alive"), h)),
         );
-        self.clear(&mut rotten);
+        self.clear(&mut rotten, None);
         self.emptied = rotten;
     }
 
     /// The remains the last action ate to nothing leave.
     #[inline]
-    pub(crate) fn clear_emptied(&mut self) {
+    pub(crate) fn clear_emptied(&mut self, lents: &mut Lents) {
         if !self.emptied.is_empty() {
             let mut emptied = mem::take(&mut self.emptied);
-            self.clear(&mut emptied);
+            self.clear(&mut emptied, Some(lents));
             self.emptied = emptied;
         }
     }
 
     /// Unlinks and despawns `things` in id order, and empties the list.
     #[cold]
-    fn clear(&mut self, things: &mut Vec<(EntityId, Handle)>) {
+    fn clear(&mut self, things: &mut Vec<(EntityId, Handle)>, mut lents: Option<&mut Lents>) {
         things.sort_unstable_by_key(|&(id, _)| id);
         for (_, h) in things.drain(..) {
             self.grid.unlink(h);
+            if let Some(lents) = lents.as_deref_mut() {
+                lents.clear(h);
+            }
             self.store.despawn(h);
         }
     }

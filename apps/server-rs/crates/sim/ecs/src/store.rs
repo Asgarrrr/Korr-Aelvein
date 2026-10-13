@@ -241,9 +241,20 @@ impl Store {
 
     fn checked(&self, id: ComponentId, prefix: u64) -> usize {
         let index = id.0 as usize;
-        assert!(self.prefixes.get(index) == Some(&prefix), "{FOREIGN_KEY}");
+        let held = self.prefixes.get(index).copied();
+        if held != Some(prefix) {
+            refuse(held, prefix);
+        }
         index
     }
+}
+
+/// `lend` stores the negated prefix, so a lent key fails the same compare.
+#[cold]
+#[inline(never)]
+fn refuse(held: Option<u64>, prefix: u64) -> ! {
+    assert!(held != Some(!prefix), "component column lent");
+    panic!("{FOREIGN_KEY}");
 }
 
 impl Debug for Store {

@@ -44,7 +44,7 @@ impl Floor {
             ordinal: 0,
         });
         self.rot(ruleset);
-        self.drain(ruleset);
+        self.drain(ruleset, None);
     }
 }
 
