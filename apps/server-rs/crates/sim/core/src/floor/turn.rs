@@ -227,6 +227,7 @@ impl RunVisit<'_> {
                 draws,
                 now: self.now,
                 columns: &self.floor.columns,
+                names: &self.ruleset.columns,
             };
             match module.prepare(action, target, &prep) {
                 Prepared::Go { cost, plan } => {

@@ -6,7 +6,7 @@ use korr_ecs::{Component, EntityId, FloorId, Handle, Own, Store};
 use korr_grid::{CellColumn, Dir, Grid, Pos, StepError};
 use korr_random::{DrawIndex, ModuleKey, Phase, Seed, Stream, Subject};
 
-use crate::build::Ask;
+use crate::build::{Ask, ColumnName, FOREIGN_ASK};
 use crate::config::SIGHT;
 use crate::life::{Cause, Harm};
 use crate::ruleset::Ruleset;
@@ -68,6 +68,7 @@ pub struct PrepCtx<'a> {
     pub(crate) draws: Draws,
     pub(crate) now: Tick,
     pub(crate) columns: &'a [CellColumn],
+    pub(crate) names: &'a [ColumnName],
 }
 
 impl fmt::Debug for PrepCtx<'_> {
@@ -126,10 +127,15 @@ impl PrepCtx<'_> {
 
     /// The server's reply to `C` at `at`; `None` when it refuses, or `at` is
     /// off the floor.
+    ///
+    /// # Panics
+    /// When `ask` comes from another ruleset: checked in debug builds only;
+    /// release reads whatever column holds its index.
     #[must_use]
     pub fn check<C>(&self, ask: Ask<C>, at: Pos) -> Option<u8> {
+        debug_assert!(ask.cells.is_in(self.names), "{FOREIGN_ASK}");
         let at = self.grid.shape().idx(at)?;
-        (ask.service.check)(self.columns[ask.column.index()].get(at))
+        (ask.service.check)(self.columns[ask.cells.column.index()].get(at))
     }
 }
 
@@ -165,14 +171,16 @@ impl CommitCtx<'_> {
     /// Applies `C` at `at` through its server.
     ///
     /// # Panics
-    /// When `at` is off the floor: its prepare must have checked it.
+    /// When `ask` comes from another ruleset, or `at` is off the floor: its
+    /// prepare must have checked it.
     pub fn order<C>(&mut self, ask: Ask<C>, at: Pos) {
+        assert!(ask.cells.is_in(&self.ruleset.columns), "{FOREIGN_ASK}");
         let at = self
             .grid
             .shape()
             .idx(at)
             .expect("commit of an order its prepare did not check");
-        let column = &mut self.columns[ask.column.index()];
+        let column = &mut self.columns[ask.cells.column.index()];
         column.set(at, (ask.service.apply)(column.get(at)));
     }
 

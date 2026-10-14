@@ -20,7 +20,7 @@ pub use contract::{
 pub use recipe::{Both, Keyed, Recipe, Then, keyed};
 
 use contract::Kind;
-pub(crate) use contract::{ColumnIdx, ColumnName, FOREIGN_CELLS};
+pub(crate) use contract::{ColumnIdx, ColumnName, FOREIGN_ASK, FOREIGN_CELLS};
 
 /// A registered contract: its write key, or the binding of its cell column,
 /// waits for its provider's build.
@@ -266,9 +266,13 @@ impl Builder<'_> {
             .owners
             .get(server.ordinal)
             .unwrap_or_else(|| panic!("{} asks {name} before its server builds", self.module));
+        let column = column.expect("a module that serves a request binds a cell column");
         Some(Ask {
             service: server.served.service,
-            column: column.expect("a module that serves a request binds a cell column"),
+            cells: ReadCells {
+                column,
+                name: ColumnName::of(&self.names[column.index()]),
+            },
             kind: PhantomData,
         })
     }

@@ -1,7 +1,7 @@
 use core::convert::Infallible;
 
 use korr_contracts::Graze;
-use korr_core::host::{Both, Floor, Game, LoadError, Pos, Sections, Seed, Then, World, keyed};
+use korr_core::host::{Floor, Game, LoadError, Pos, Sections, Seed, Then, World, keyed};
 use korr_core::mechanic::{
     Builder, CellContract, CommitCtx, Module, PrepCtx, Prepared, Proposals, Provided, ReadCells,
     Senses, Served, Target, provides_cells, serves,
@@ -10,6 +10,8 @@ use korr_ecs::{FloorId, ImageError};
 use korr_engine::{Modules, Registry};
 use korr_hunger::{Diet, Hunger};
 use korr_scenarios::{actionless, floor, flora_only, game, hunger, plants, reload, run, stomach};
+
+mod foreign;
 
 const SEED: Seed = Seed(7);
 
@@ -281,83 +283,4 @@ fn a_graze_reaches_the_plants_when_they_are_not_the_first_column() {
     let f = world.floor(FloorId(0));
     assert_eq!(f.cell(ruleset, plants(modules), food), 0);
     assert_eq!(f.cell(ruleset, bog.peat, food), 9);
-}
-
-/// A ruleset whose first cell column is the peat, not the plants.
-fn bogged() -> Game<Both<Bog, Modules>> {
-    game(Then(keyed(Bog::build), Registry::default()), SEED)
-}
-
-#[test]
-#[should_panic(expected = "cell column key from another ruleset")]
-fn a_cell_key_of_another_ruleset_reads_no_cell() {
-    let foreign = bogged();
-    let game = flora_only(SEED);
-    let f = floor(game.ruleset(), FloorId(0), 4, 4);
-    let _ = f.cell(
-        game.ruleset(),
-        foreign.mechanics().0.peat,
-        Pos { x: 1, y: 1 },
-    );
-}
-
-#[test]
-#[should_panic(expected = "cell column key from another ruleset")]
-fn a_cell_key_of_another_ruleset_writes_no_cell() {
-    let foreign = bogged();
-    let game = flora_only(SEED);
-    let mut f = floor(game.ruleset(), FloorId(0), 4, 4);
-    f.set_cell(
-        game.ruleset(),
-        foreign.mechanics().0.peat,
-        Pos { x: 1, y: 1 },
-        1,
-    );
-}
-
-/// Reads every cell in sight through `cells`.
-struct Peeker {
-    cells: ReadCells,
-}
-
-impl Module for Peeker {
-    const NAME: &'static str = "test.peeker";
-    type Action = Infallible;
-    type Plan = Infallible;
-
-    fn propose(&self, senses: &Senses<'_>, _: &mut Proposals<'_, Infallible>) {
-        let _ = senses.cells(self.cells).count();
-    }
-
-    fn prepare(
-        &self,
-        action: Infallible,
-        _: Target,
-        _: &PrepCtx<'_>,
-    ) -> Prepared<Infallible, Infallible> {
-        match action {}
-    }
-
-    fn commit(&self, plan: Infallible, _: &mut CommitCtx<'_>) {
-        match plan {}
-    }
-}
-
-#[test]
-#[cfg(debug_assertions)]
-#[should_panic(expected = "cell column key from another ruleset")]
-fn senses_read_no_cell_through_a_key_of_another_ruleset() {
-    let foreign = flora_only(SEED);
-    let game = game(
-        Then(
-            keyed(Bog::build),
-            Peeker {
-                cells: plants(foreign.mechanics()),
-            },
-        ),
-        SEED,
-    );
-    let mut f = floor(game.ruleset(), FloorId(0), 4, 4);
-    f.spawn_actor(game.ruleset(), Pos { x: 1, y: 1 });
-    game.run_round(&mut World::new(vec![f]));
 }

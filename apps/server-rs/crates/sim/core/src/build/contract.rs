@@ -95,6 +95,7 @@ impl ColumnName {
 }
 
 pub(crate) const FOREIGN_CELLS: &str = "cell column key from another ruleset";
+pub(crate) const FOREIGN_ASK: &str = "request from another ruleset";
 
 /// The read side of a cell column, for `Senses::cells`.
 #[derive(Debug, Clone, Copy)]
@@ -154,7 +155,7 @@ pub const fn serves<C: Request>(check: fn(u8) -> Option<u8>, apply: fn(u8) -> u8
 /// The right to send `C` to the module that serves it.
 pub struct Ask<C> {
     pub(crate) service: Service,
-    pub(crate) column: ColumnIdx,
+    pub(crate) cells: ReadCells,
     pub(crate) kind: PhantomData<fn() -> C>,
 }
 
@@ -168,6 +169,6 @@ impl<C> Copy for Ask<C> {}
 
 impl<C> fmt::Debug for Ask<C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("Ask").field(&self.column).finish()
+        f.debug_tuple("Ask").field(&self.cells).finish()
     }
 }
