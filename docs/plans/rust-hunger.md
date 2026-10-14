@@ -233,6 +233,14 @@ Budget, in the `core` bench (not part of `verify`, reported in the PR):
 - `hunger_tower` starts every actor at `STARVING / 2`, not `PECKISH - 1`:
   at `PECKISH - 1` wander outranks hunger, so no actor grazes or walks to
   food during the measurement.
+- `hunger_tower` costs about 272 ns per decision, over the ~200 ns budget
+  (Q5, 2026-10-14). Per decision: flora's per-cell tick about 119 ns,
+  hunger's plant scan about 63 ns, the eat and approach commits about 21 ns,
+  wander and the rest of the turn about 64 ns. Before Q5 the scan cost
+  about 238 ns: `Senses::cells` now reads its column one
+  row slice at a time (`CellColumn::window`), and hunger scans it in a plain
+  loop, because a `filter().min()` fold kept its closure out of line, one
+  call per cell.
 - One cell column and at most one served request per module. A served
   request carries its `check` and `apply`: `serves::<C>(check, apply)`.
   A module cannot declare `SERVES` and keep a silent refusal.

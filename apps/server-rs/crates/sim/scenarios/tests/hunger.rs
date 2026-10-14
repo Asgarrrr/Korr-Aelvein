@@ -177,6 +177,16 @@ fn a_plant_just_past_sight_is_neither_approached_nor_eaten() {
     assert_ne!(plant(&game, &world, food), 0);
 }
 
+/// The plant lies on the last interior row and column, where sight is clamped.
+#[test]
+fn a_plant_in_the_far_corner_of_the_floor_is_walked_to() {
+    let game = grazing(vec![]);
+    let corner = Pos { x: 7, y: 7 };
+    let (mut world, actors) = meadow(&game, 0, &[Pos { x: 5, y: 5 }], &[(corner, 3)]);
+    run(&game, &mut world, 1);
+    assert_eq!(world.floor(MEADOW).pos(actors[0]), Some(Pos { x: 6, y: 6 }));
+}
+
 /// Serves `Graze` on the plants like flora, but refuses a seedling and
 /// never grows a plant.
 struct Picky {

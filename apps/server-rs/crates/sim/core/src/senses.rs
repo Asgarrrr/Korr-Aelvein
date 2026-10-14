@@ -96,7 +96,11 @@ impl<'a> Senses<'a> {
     pub fn cells(&self, key: ReadCells) -> impl Iterator<Item = (Pos, u8)> + use<'a> {
         debug_assert!(key.is_in(self.names), "{FOREIGN_CELLS}");
         let column = &self.columns[key.column.index()];
-        in_sight(self.grid.shape(), self.pos).map(move |(pos, at)| (pos, column.get(at)))
+        column.window(self.pos, SIGHT).flat_map(|(first, row)| {
+            (first.x..)
+                .zip(row)
+                .map(move |(x, &value)| (Pos { x, y: first.y }, value))
+        })
     }
 
     /// The remains within sight, in no stated order. Few remains are read

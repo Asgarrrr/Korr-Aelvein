@@ -38,6 +38,33 @@ impl CellColumn {
         self.cells[at.cell().index()] = value;
     }
 
+    /// The interior cells within Chebyshev distance `radius` of `centre`, one
+    /// slice per row from the top, each with the position of its first cell.
+    ///
+    /// # Panics
+    /// When no interior column lies within `radius` of `centre`.
+    pub fn window(&self, centre: Pos, radius: u16) -> impl Iterator<Item = (Pos, &[u8])> {
+        let width = usize::from(self.shape.width());
+        let (cx, cy, r) = (i32::from(centre.x), i32::from(centre.y), i32::from(radius));
+        let last = |side: u16| i32::from(side) - 2;
+        let (left, right) = ((cx - r).max(1), (cx + r).min(last(self.shape.width())));
+        let (top, bottom) = ((cy - r).max(1), (cy + r).min(last(self.shape.height())));
+        let index = |v: i32| usize::try_from(v).expect("clamped to the interior");
+        let (from, len) = (index(left), index(right - left));
+        (top..=bottom).map(move |y| {
+            let start = index(y) * width + from;
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "interior coordinates fit i16"
+            )]
+            let first = Pos {
+                x: left as i16,
+                y: y as i16,
+            };
+            (first, &self.cells[start..=start + len])
+        })
+    }
+
     /// The interior cells, one byte each, in row-major order like `Grid::write`.
     pub fn write(&self, w: &mut Writer) {
         let (width, height) = sides(self.shape);
@@ -152,6 +179,8 @@ fn sides(shape: Shape) -> (usize, usize) {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec::Vec;
+
     use super::{CellColumn, Stencil};
     use crate::grid::Grid;
     use crate::shape::{Dir, Pos, Shape};
@@ -240,6 +269,32 @@ mod tests {
                     assert_eq!(neighbours[i], expected, "({x}, {y}) {dir:?}");
                     let ground = around.is_some_and(|n| grid.terrain.material(n.cell()).walkable());
                     assert_eq!(walkable[i], ground, "({x}, {y}) {dir:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_window_holds_the_neighbourhood_row_by_row() {
+        let (grid, column) = setup();
+        let shape = grid.shape();
+        for radius in 0..=3 {
+            for y in 1..=5 {
+                for x in 1..=8 {
+                    let centre = Pos { x, y };
+                    let window: Vec<_> = column
+                        .window(centre, radius)
+                        .flat_map(|(first, row)| {
+                            (first.x..).zip(row).map(move |(x, &v)| (first.y, x, v))
+                        })
+                        .collect();
+                    let mut around: Vec<_> = shape
+                        .neighbourhood(centre, radius)
+                        .map(|at| (shape.pos(at.cell()), column.get(at)))
+                        .map(|(pos, v)| (pos.y, pos.x, v))
+                        .collect();
+                    around.sort_unstable();
+                    assert_eq!(window, around, "({x}, {y}) radius {radius}");
                 }
             }
         }

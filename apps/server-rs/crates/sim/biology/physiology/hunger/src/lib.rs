@@ -165,14 +165,21 @@ impl Hunger {
             return;
         };
         let pos = senses.pos();
-        let plant = match (self.plants, self.graze) {
-            (Some(plants), Some(_)) if diet.contains(Diet::PLANTS) => senses
-                .cells(plants)
-                .filter(|&(_, growth)| growth > 0)
-                .map(|(at, growth)| choice(pos, at, u16::from(growth) * PLANT_NUTRITION, None))
-                .min(),
-            _ => None,
-        };
+        let mut plant = None;
+        if let (Some(plants), Some(_)) = (self.plants, self.graze)
+            && diet.contains(Diet::PLANTS)
+        {
+            // A loop, not `filter().min()`: that fold calls its closure out of
+            // line, once per cell.
+            for (at, growth) in senses.cells(plants) {
+                if growth > 0 {
+                    let meal = choice(pos, at, u16::from(growth) * PLANT_NUTRITION, None);
+                    if plant.is_none_or(|best| meal < best) {
+                        plant = Some(meal);
+                    }
+                }
+            }
+        }
         let remains = diet
             .contains(Diet::REMAINS)
             .then(|| {
