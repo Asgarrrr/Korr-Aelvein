@@ -54,6 +54,10 @@ pub struct Floor {
     emptied: Vec<(EntityId, Handle)>,
     /// What happened since the round started; never saved or hashed.
     events: Vec<Event>,
+    /// Events raised since the round started, stored or not; never saved or hashed.
+    event_count: u32,
+    /// Whether events are stored; never saved or hashed.
+    recording: bool,
 }
 
 impl Floor {
@@ -79,6 +83,8 @@ impl Floor {
             harmed: Vec::new(),
             emptied: Vec::new(),
             events: Vec::new(),
+            event_count: 0,
+            recording: true,
         }
     }
 
@@ -169,6 +175,11 @@ impl Floor {
     #[must_use]
     pub fn events(&self) -> &[Event] {
         &self.events
+    }
+
+    /// Stores the events of the next rounds, or only counts them toward the cap.
+    pub fn set_events(&mut self, on: bool) {
+        self.recording = on;
     }
 
     /// The remains named `id`, while they lie on this floor.

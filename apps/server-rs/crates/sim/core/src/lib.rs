@@ -41,7 +41,7 @@ pub mod mechanic {
 /// What runs a world: the game, its floors, their saves and the registry seam.
 pub mod host {
     pub use crate::build::{Assembly, Both, Declarations, Keyed, Recipe, Then, keyed};
-    pub use crate::config::{ROT_PER_ROUND, SIGHT, TICKS_PER_ROUND};
+    pub use crate::config::{EVENTS_PER_ROUND, ROT_PER_ROUND, SIGHT, TICKS_PER_ROUND};
     pub use crate::error::{LoadError, WorldError};
     pub use crate::floor::{FlightImage, Floor, Sections};
     pub use crate::game::Game;

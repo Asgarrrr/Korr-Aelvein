@@ -157,6 +157,8 @@ impl Floor {
             harmed: Vec::new(),
             emptied: Vec::new(),
             events: Vec::new(),
+            event_count: 0,
+            recording: true,
         })
     }
 }

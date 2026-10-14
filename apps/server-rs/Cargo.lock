@@ -788,6 +788,7 @@ dependencies = [
  "korr-core",
  "korr-ecs",
  "korr-engine",
+ "korr-hunger",
  "korr-scenarios",
  "rayon",
 ]

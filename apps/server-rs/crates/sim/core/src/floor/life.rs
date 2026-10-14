@@ -4,7 +4,7 @@ use core::mem;
 use korr_ecs::{EntityId, Handle};
 use korr_grid::Layer;
 
-use crate::config::ROT_PER_ROUND;
+use crate::config::{EVENTS_PER_ROUND, ROT_PER_ROUND};
 use crate::floor::Floor;
 use crate::floor::turn::Lents;
 use crate::life::{Event, Remains};
@@ -55,7 +55,7 @@ impl Floor {
             if mass > 0 {
                 spawns.push((cause, id, pos, mass));
             }
-            self.events.push(Event::Died { id, cause });
+            self.record(Event::Died { id, cause });
         }
         harms.clear();
         self.harms = harms;
@@ -67,7 +67,20 @@ impl Floor {
             let h = self.join_thing(at);
             self.store.insert(&ruleset.remains, h, Remains { of, mass });
             let id = self.store.id(h).expect("a spawned thing is alive");
-            self.events.push(Event::Spawned { id, cause });
+            self.record(Event::Spawned { id, cause });
+        }
+    }
+
+    /// # Panics
+    /// When the round has raised more than `EVENTS_PER_ROUND` events.
+    fn record(&mut self, event: Event) {
+        self.event_count += 1;
+        assert!(
+            self.event_count <= EVENTS_PER_ROUND,
+            "more than {EVENTS_PER_ROUND} events in one round"
+        );
+        if self.recording {
+            self.events.push(event);
         }
     }
 

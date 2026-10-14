@@ -22,7 +22,9 @@ User criteria:
 2. Misuse fails at compile time where possible: writing another module's
    component, reading a component that does not exist.
 3. A full decision with hunger costs at most ~200 ns per entity at P = 1,
-   measured by the `core` bench (TS measured 366 ns).
+   measured by the `core` bench (`perceiving` in `round_8k_2k` costs 366 ns
+   per decision with 24 neighbours each; the `hunger_tower` case is the TOWER
+   layout).
 
 The project rule stays: the game runs with any mechanic removed.
 
@@ -228,6 +230,9 @@ Budget, in the `core` bench (not part of `verify`, reported in the PR):
 
 ## Deviations
 
+- `hunger_tower` starts every actor at `STARVING / 2`, not `PECKISH - 1`:
+  at `PECKISH - 1` wander outranks hunger, so no actor grazes or walks to
+  food during the measurement.
 - One cell column and at most one served request per module. A served
   request carries its `check` and `apply`: `serves::<C>(check, apply)`.
   A module cannot declare `SERVES` and keep a silent refusal.

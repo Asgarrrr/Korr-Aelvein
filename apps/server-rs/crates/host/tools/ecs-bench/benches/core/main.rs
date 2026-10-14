@@ -2,6 +2,9 @@
 //! things. The budget, about 200 ns per entity, holds for wander, which also
 //! walks flora's bare column; perceiving prices sight with every actor looking,
 //! at half density; feeding prices hunger's search with every actor starving.
+//! The `actor_turn` group runs the 500-actor tower, one decision per actor per
+//! round, budget 200 ns per decision: wander alone, perceiving alone, and
+//! wander with flora and hunger on hungry actors that graze and walk.
 //! The sweep repeats the round at other sizes and densities, so a gain is not
 //! one point's luck. The flora sweep prices the environment
 //! phase alone per interior cell, budget 5 ns, from ripe plants beside bare ground.
@@ -15,6 +18,7 @@
 //! barrier's share.
 
 mod feeding;
+mod tower;
 
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use korr_core::host::{Floor, Game, Job, Pos, Recipe, Ruleset, Runner, Seed, World, keyed};
@@ -351,5 +355,14 @@ fn barrier(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, core, sweep, flora_sweep, floors, skewed, barrier);
+criterion_group!(
+    benches,
+    core,
+    tower::actor_turn,
+    sweep,
+    flora_sweep,
+    floors,
+    skewed,
+    barrier
+);
 criterion_main!(benches);

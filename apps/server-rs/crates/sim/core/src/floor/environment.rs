@@ -29,6 +29,7 @@ impl Floor {
     ) {
         self.check_ruleset(ruleset);
         self.events.clear();
+        self.event_count = 0;
         let floor = self.id();
         mechanics.each(&mut TickVisit {
             seed,
