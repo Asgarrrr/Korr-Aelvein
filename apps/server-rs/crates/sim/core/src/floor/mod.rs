@@ -17,6 +17,7 @@ use crate::build::{FOREIGN_CELLS, ReadCells};
 use crate::ctx::Departure;
 use crate::decision::Candidates;
 use crate::floor::inbox::{Flight, Inbox};
+use crate::floor::life::Death;
 use crate::floor::membership::Joiner;
 use crate::floor::schedule::Schedule;
 use crate::life::{Event, Harm, Remains};
@@ -50,6 +51,8 @@ pub struct Floor {
     harms: Vec<Harm>,
     /// Scratch of one row join, cleared before every join.
     harmed: Vec<(Handle, u16)>,
+    /// Scratch of one drain, empty outside it.
+    deaths: Vec<Death>,
     /// Remains eaten to nothing since the last turn ended; empty between turns.
     emptied: Vec<(EntityId, Handle)>,
     /// What happened since the round started; never saved or hashed.
@@ -81,6 +84,7 @@ impl Floor {
             seen: Vec::new(),
             harms: Vec::new(),
             harmed: Vec::new(),
+            deaths: Vec::new(),
             emptied: Vec::new(),
             events: Vec::new(),
             event_count: 0,

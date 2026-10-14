@@ -2,13 +2,24 @@ use alloc::vec::Vec;
 use core::mem;
 
 use korr_ecs::{EntityId, Handle};
-use korr_grid::Layer;
+use korr_grid::{Layer, Pos};
 
 use crate::config::{EVENTS_PER_ROUND, ROT_PER_ROUND};
 use crate::floor::Floor;
 use crate::floor::turn::Lents;
-use crate::life::{Event, Remains};
+use crate::life::{Cause, Event, Remains, Vitality};
 use crate::ruleset::Ruleset;
+
+/// A target its harms brought to zero, until its remains lie.
+#[derive(Debug)]
+pub(super) struct Death {
+    id: EntityId,
+    cause: Cause,
+    h: Handle,
+    pos: Pos,
+    /// `Vitality::max`, the mass of its remains.
+    mass: u16,
+}
 
 impl Floor {
     /// `lents` while the actors run, `None` outside.
@@ -22,53 +33,78 @@ impl Floor {
     /// Sums the harms per target and kills, in id order, each target they
     /// bring to zero, credited to its lowest cause; then lays the remains.
     #[cold]
-    fn settle(&mut self, ruleset: &Ruleset, mut lents: Option<&mut Lents>) {
+    fn settle(&mut self, ruleset: &Ruleset, lents: Option<&mut Lents>) {
+        debug_assert!(self.deaths.is_empty());
         let mut harms = mem::take(&mut self.harms);
-        harms.sort_unstable();
-        let mut spawns = Vec::new();
+        harms.sort_unstable_by_key(|&(id, _, cause, _)| (id, cause));
+        let mut vitality = self.store.lend(&ruleset.vitality);
         for group in harms.chunk_by(|a, b| a.0 == b.0) {
-            let (id, cause, _) = group[0];
-            let Some(h) = self.store.handle_of(id) else {
-                continue;
-            };
-            let Some(vitality) = self.store.get_mut(&ruleset.vitality, h) else {
+            let (id, h, cause, _) = group[0];
+            let Some(&Vitality { hp, max }) = vitality.get(&self.store, h) else {
                 continue;
             };
             let total = group.iter().fold(0u32, |sum, &(.., amount)| {
                 sum.saturating_add(u32::from(amount))
             });
-            vitality.hp = vitality
-                .hp
-                .saturating_sub(u16::try_from(total).unwrap_or(u16::MAX));
-            if vitality.hp > 0 {
-                continue;
+            let hp = hp.saturating_sub(u16::try_from(total).unwrap_or(u16::MAX));
+            vitality.insert(&self.store, h, Vitality { hp, max });
+            if hp == 0 {
+                let pos = self.grid.pos(h).expect("a live entity is placed");
+                self.deaths.push(Death {
+                    id,
+                    cause,
+                    h,
+                    pos,
+                    mass: max,
+                });
             }
-            let mass = vitality.max;
-            // A departing actor stays harmable until the barrier sends it.
-            self.departures.retain(|d| d.actor != h);
-            let pos = self.grid.pos(h).expect("a live entity is placed");
+        }
+        self.store.restore(vitality);
+        harms.clear();
+        self.harms = harms;
+        if !self.deaths.is_empty() {
+            self.bury(ruleset, lents);
+        }
+    }
+
+    /// Unlinks and despawns the dead in id order, then lays their remains in cause order.
+    #[cold]
+    fn bury(&mut self, ruleset: &Ruleset, mut lents: Option<&mut Lents>) {
+        let mut deaths = mem::take(&mut self.deaths);
+        for &Death { id, cause, h, .. } in &deaths {
             self.grid.unlink(h);
             if let Some(lents) = lents.as_deref_mut() {
                 lents.clear(h);
             }
             self.store.despawn(h);
-            if mass > 0 {
-                spawns.push((cause, id, pos, mass));
-            }
             self.record(Event::Died { id, cause });
         }
-        harms.clear();
-        self.harms = harms;
-        spawns.sort_unstable_by_key(|&(cause, of, ..)| (cause, of));
-        for (cause, of, pos, mass) in spawns {
+        // A departing actor stays harmable until the barrier sends it.
+        self.departures
+            .retain(|d| !deaths.iter().any(|death| death.h == d.actor));
+        deaths.sort_unstable_by_key(|death| (death.cause, death.id));
+        for &Death {
+            id,
+            cause,
+            pos,
+            mass,
+            ..
+        } in &deaths
+        {
+            if mass == 0 {
+                continue;
+            }
             let Some(at) = self.grid.nearest_place(pos, Layer::Thing) else {
                 continue;
             };
             let h = self.join_thing(at);
-            self.store.insert(&ruleset.remains, h, Remains { of, mass });
+            self.store
+                .insert(&ruleset.remains, h, Remains { of: id, mass });
             let id = self.store.id(h).expect("a spawned thing is alive");
             self.record(Event::Spawned { id, cause });
         }
+        deaths.clear();
+        self.deaths = deaths;
     }
 
     /// # Panics

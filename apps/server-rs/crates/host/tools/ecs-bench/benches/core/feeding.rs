@@ -1,10 +1,10 @@
 use criterion::{BatchSize, BenchmarkId, Throughput};
-use korr_core::host::{Floor, Game, ROT_PER_ROUND, Remains, Seed, World};
+use korr_core::host::{Event, Floor, Game, ROT_PER_ROUND, Remains, Seed, Vitality, World};
 use korr_ecs::{EntityId, FloorId};
 use korr_engine::{Modules, Registry};
 use korr_hunger::config::STARVING;
 use korr_hunger::{Diet, Satiety};
-use korr_scenarios::{floor, game, plants};
+use korr_scenarios::{floor, game, hunger, plants, stomach};
 
 use crate::{Group, Layout, REFERENCE, spread};
 
@@ -86,5 +86,49 @@ pub(crate) fn feeding(group: &mut Group<'_>) {
             },
             BatchSize::LargeInput,
         );
+    });
+}
+
+/// `REFERENCE` with every actor on an empty stomach and nothing to eat: each
+/// round harms every actor, and kills it in `hp` rounds.
+fn starving_floor(game: &Game<Modules>, hp: u16) -> Floor {
+    let (ruleset, hunger) = (game.ruleset(), hunger(game.mechanics()));
+    let Layout {
+        side,
+        actors,
+        things,
+    } = REFERENCE;
+    let mut f = floor(ruleset, FloorId(0), side, side);
+    for k in 0..actors {
+        let h = f.spawn_actor(ruleset, spread(side, k, actors));
+        stomach(&mut f, hunger, h, 0, Diet::PLANTS);
+        f.init(ruleset.vitality(), h, Vitality { hp, max: hp });
+    }
+    for k in 0..things {
+        f.spawn_thing(spread(side, k, things));
+    }
+    f
+}
+
+pub(crate) fn starving(group: &mut Group<'_>) {
+    let game = game(Registry::default(), Seed(1));
+    let mut doomed = World::new(vec![starving_floor(&game, 1)]);
+    game.run_round(&mut doomed);
+    let died = doomed
+        .floor(FloorId(0))
+        .events()
+        .iter()
+        .filter(|event| matches!(event, Event::Died { .. }))
+        .count();
+    assert_eq!(
+        u32::try_from(died).expect("a death count fits u32"),
+        REFERENCE.actors,
+        "one round harms every actor"
+    );
+    // No measurement lasts `u16::MAX` rounds: no one dies, so a kept world never drifts.
+    let mut world = World::new(vec![starving_floor(&game, u16::MAX)]);
+    group.throughput(Throughput::Elements(REFERENCE.entities()));
+    group.bench_function(BenchmarkId::from_parameter("starving"), |b| {
+        b.iter(|| game.run_round(&mut world));
     });
 }

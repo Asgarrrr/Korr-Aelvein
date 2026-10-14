@@ -234,8 +234,10 @@ impl CommitCtx<'_> {
 
     /// Harms `target` by `amount`, as the actor's doing, once its turn ends.
     pub fn harm(&mut self, target: EntityId, amount: u16) {
-        if amount > 0 {
-            self.harms.push((target, Cause::Entity(self.id), amount));
+        if amount > 0
+            && let Some(h) = self.store.handle_of(target)
+        {
+            self.harms.push((target, h, Cause::Entity(self.id), amount));
         }
     }
 

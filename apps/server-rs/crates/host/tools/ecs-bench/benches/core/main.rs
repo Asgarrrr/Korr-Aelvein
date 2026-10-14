@@ -1,7 +1,8 @@
 //! One round of the reference world: a 128x128 floor with 8k actors and 2k
 //! things. The budget, about 200 ns per entity, holds for wander, which also
 //! walks flora's bare column; perceiving prices sight with every actor looking,
-//! at half density; feeding prices hunger's search with every actor starving.
+//! at half density; feeding prices hunger's search with every actor starving;
+//! starving prices the harm drain, every actor harmed each round by an empty stomach.
 //! The `actor_turn` group runs the 500-actor tower, one decision per actor per
 //! round, budget 200 ns per decision: wander alone, perceiving alone, and
 //! wander with flora and hunger on hungry actors that graze and walk.
@@ -174,6 +175,7 @@ fn core(c: &mut Criterion) {
         Shy,
     );
     feeding::feeding(&mut group);
+    feeding::starving(&mut group);
     group.finish();
 }
 
