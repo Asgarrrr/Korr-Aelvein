@@ -237,7 +237,12 @@ impl CommitCtx<'_> {
         if amount > 0
             && let Some(h) = self.store.handle_of(target)
         {
-            self.harms.push((target, h, Cause::Entity(self.id), amount));
+            self.harms.push(Harm {
+                target,
+                h,
+                cause: Cause::Entity(self.id),
+                amount,
+            });
         }
     }
 

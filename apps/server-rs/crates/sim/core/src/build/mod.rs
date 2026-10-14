@@ -26,8 +26,27 @@ pub(crate) use contract::{ColumnIdx, ColumnName, FOREIGN_ASK, FOREIGN_CELLS};
 /// waits for its provider's build.
 struct Registration {
     ty: TypeId,
-    own: Option<Box<dyn Any>>,
-    read: Box<dyn Any>,
+    held: Held,
+}
+
+enum Held {
+    Component {
+        own: Option<Box<dyn Any>>,
+        read: Box<dyn Any>,
+    },
+    Cells {
+        own: Option<ReadCells>,
+        read: ReadCells,
+    },
+}
+
+impl Held {
+    fn taken(&self) -> bool {
+        match self {
+            Self::Component { own, .. } => own.is_none(),
+            Self::Cells { own, .. } => own.is_none(),
+        }
+    }
 }
 
 /// Every module of a recipe in build order, the contracts they provide and
@@ -137,7 +156,7 @@ impl Assembly<'_> {
         });
         for provided in M::PROVIDES {
             assert!(
-                registration(self.registrations, provided.ty).is_some_and(|r| r.own.is_none()),
+                registration(self.registrations, provided.ty).is_some_and(|r| r.held.taken()),
                 "{} declares {} but never provides it",
                 M::NAME,
                 provided.name
@@ -202,10 +221,15 @@ impl Builder<'_> {
     }
 
     /// # Panics
-    /// When the module does not declare `C` in `PROVIDES`, or takes it twice.
+    /// When the module does not declare `C` as a component in `PROVIDES`, or
+    /// takes it twice.
     pub fn provide<C: Contract>(&mut self) -> Own<C> {
-        *self
-            .take::<C>(C::NAME)
+        let module = self.module;
+        let Held::Component { own, .. } = self.held::<C>(C::NAME) else {
+            panic!("{module} declares {} as cells, not a component", C::NAME);
+        };
+        *own.take()
+            .unwrap_or_else(|| panic!("{module} takes {} twice", C::NAME))
             .downcast()
             .expect("a registration holds the key of its type")
     }
@@ -213,8 +237,10 @@ impl Builder<'_> {
     /// `None` when no module of the recipe provides `C`.
     #[must_use]
     pub fn contract<C: Contract>(&self) -> Option<Read<C>> {
-        registration(self.registrations, TypeId::of::<C>())
-            .and_then(|r| r.read.downcast_ref().copied())
+        registration(self.registrations, TypeId::of::<C>()).and_then(|r| match &r.held {
+            Held::Component { read, .. } => read.downcast_ref().copied(),
+            Held::Cells { .. } => None,
+        })
     }
 
     /// Binds the module's own cell column, named `<module>.<name>`: no module
@@ -230,22 +256,27 @@ impl Builder<'_> {
     /// Binds the cell column of `C` as the module's own.
     ///
     /// # Panics
-    /// When the module does not declare `C` in `PROVIDES`, takes it twice,
-    /// or already binds a cell column.
+    /// When the module does not declare `C` as cells in `PROVIDES`, takes it
+    /// twice, or already binds a cell column.
     pub fn provide_cells<C: CellContract>(&mut self) -> ReadCells {
-        let cells: Box<ReadCells> = self
-            .take::<C>(C::NAME)
-            .downcast()
-            .expect("a cell registration holds its column");
+        let module = self.module;
+        let Held::Cells { own, .. } = self.held::<C>(C::NAME) else {
+            panic!("{module} declares {} as a component, not cells", C::NAME);
+        };
+        let cells = own
+            .take()
+            .unwrap_or_else(|| panic!("{module} takes {} twice", C::NAME));
         self.bind(cells.column);
-        *cells
+        cells
     }
 
     /// `None` when no module of the recipe provides `C`.
     #[must_use]
     pub fn contract_cells<C: CellContract>(&self) -> Option<ReadCells> {
-        registration(self.registrations, TypeId::of::<C>())
-            .and_then(|r| r.read.downcast_ref().copied())
+        registration(self.registrations, TypeId::of::<C>()).and_then(|r| match &r.held {
+            Held::Cells { read, .. } => Some(*read),
+            Held::Component { .. } => None,
+        })
     }
 
     /// `None` when no module of the recipe serves `C`.
@@ -278,7 +309,7 @@ impl Builder<'_> {
         })
     }
 
-    fn take<C: 'static>(&mut self, name: &str) -> Box<dyn Any> {
+    fn held<C: 'static>(&mut self, name: &str) -> &mut Held {
         let ty = TypeId::of::<C>();
         assert!(
             self.provides.iter().any(|p| p.ty == ty),
@@ -288,8 +319,8 @@ impl Builder<'_> {
         self.registrations
             .iter_mut()
             .find(|r| r.ty == ty)
-            .and_then(|r| r.own.take())
-            .unwrap_or_else(|| panic!("{} provides {name} twice", self.module))
+            .map(|r| &mut r.held)
+            .expect("a declared contract is registered")
     }
 
     fn bind(&mut self, column: ColumnIdx) {
@@ -321,25 +352,30 @@ pub(crate) fn assemble<R: Recipe>(
         .contracts
         .iter()
         .map(|(_, provided)| {
-            let (own, read) = match provided.kind {
-                Kind::Component(register) => register(schema),
+            let held = match provided.kind {
+                Kind::Component(register) => {
+                    let (own, read) = register(schema);
+                    Held::Component {
+                        own: Some(own),
+                        read,
+                    }
+                }
                 Kind::Cells => {
                     let column = ColumnIdx::new(columns.names.len());
                     columns.names.push(provided.name.to_string());
-                    let cells = ReadCells {
+                    let read = ReadCells {
                         column,
                         name: ColumnName::of(provided.name),
                     };
-                    (
-                        Box::new(cells) as Box<dyn Any>,
-                        Box::new(cells) as Box<dyn Any>,
-                    )
+                    Held::Cells {
+                        own: Some(read),
+                        read,
+                    }
                 }
             };
             Registration {
                 ty: provided.ty,
-                own: Some(own),
-                read,
+                held,
             }
         })
         .collect();

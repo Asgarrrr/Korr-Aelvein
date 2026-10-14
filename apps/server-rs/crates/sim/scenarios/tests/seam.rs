@@ -3,8 +3,9 @@ use core::convert::Infallible;
 use korr_core::{
     host::{Assembly, Both, Declarations, Recipe, Seed, Then, World, keyed},
     mechanic::{
-        Band, Builder, CommitCtx, Component, Contract, Cost, Dir, ImageError, Module, Pos, PrepCtx,
-        Prepared, Proposals, Provided, Read, Reader, Senses, Target, Writer, provides,
+        Band, Builder, CellContract, CommitCtx, Component, Contract, Cost, Dir, ImageError, Module,
+        Pos, PrepCtx, Prepared, Proposals, Provided, Read, Reader, Senses, Target, Writer,
+        provides, provides_cells,
     },
 };
 use korr_ecs::FloorId;
@@ -60,6 +61,11 @@ macro_rules! contract {
 contract!(Scent, "test.scent");
 contract!(Musk, "test.musk");
 contract!(Forged, "test.scent");
+contract!(Silt, "test.silt");
+
+impl CellContract for Silt {
+    const NAME: &'static str = "test.silt";
+}
 
 /// Steps east only while it holds the scent 3.
 #[derive(Debug)]
@@ -316,4 +322,72 @@ impl Recipe for Stops {
 #[should_panic(expected = "second declared but never built")]
 fn a_module_declared_but_never_built_panics() {
     let _ = game(Stops, Seed(1));
+}
+
+#[test]
+#[should_panic(expected = "rival takes test.scent twice")]
+fn a_contract_taken_twice_panics() {
+    let _ = game(
+        keyed(|b| {
+            b.provide::<Scent>();
+            b.provide::<Scent>();
+            Rival
+        }),
+        Seed(1),
+    );
+}
+
+#[derive(Debug)]
+struct Silty;
+
+impl Module for Silty {
+    const NAME: &'static str = "silty";
+    const PROVIDES: &'static [Provided] = &[provides_cells::<Silt>()];
+    inert!();
+}
+
+#[test]
+#[should_panic(expected = "silty takes test.silt twice")]
+fn a_cell_contract_taken_twice_panics() {
+    let _ = game(
+        keyed(|b| {
+            b.provide_cells::<Silt>();
+            b.provide_cells::<Silt>();
+            Silty
+        }),
+        Seed(1),
+    );
+}
+
+#[test]
+#[should_panic(expected = "silty declares test.silt as cells, not a component")]
+fn cells_taken_as_a_component_panic() {
+    let _ = game(
+        keyed(|b| {
+            b.provide::<Silt>();
+            Silty
+        }),
+        Seed(1),
+    );
+}
+
+#[derive(Debug)]
+struct Muddy;
+
+impl Module for Muddy {
+    const NAME: &'static str = "muddy";
+    const PROVIDES: &'static [Provided] = &[provides::<Silt>()];
+    inert!();
+}
+
+#[test]
+#[should_panic(expected = "muddy declares test.silt as a component, not cells")]
+fn a_component_taken_as_cells_panics() {
+    let _ = game(
+        keyed(|b| {
+            b.provide_cells::<Silt>();
+            Muddy
+        }),
+        Seed(1),
+    );
 }

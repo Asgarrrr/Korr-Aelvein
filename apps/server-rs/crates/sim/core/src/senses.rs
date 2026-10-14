@@ -165,14 +165,7 @@ impl<T, L: Iterator<Item = T>, W: Iterator<Item = T>> Iterator for Lookup<L, W> 
 /// The interior cells within `SIGHT` of `centre`, row by row: nested ranges
 /// fold into plain loops, where the ring order does not.
 fn in_sight(shape: Shape, centre: Pos) -> impl Iterator<Item = (Pos, Interior)> {
-    let sight = SIGHT.cast_signed();
-    let (last_x, last_y) = (
-        shape.width().cast_signed() - 2,
-        shape.height().cast_signed() - 2,
-    );
-    let (left, right) = ((centre.x - sight).max(1), (centre.x + sight).min(last_x));
-    let (top, bottom) = ((centre.y - sight).max(1), (centre.y + sight).min(last_y));
-    (top..=bottom)
-        .flat_map(move |y| (left..=right).map(move |x| Pos { x, y }))
+    let (xs, ys) = shape.window(centre, SIGHT);
+    ys.flat_map(move |y| xs.clone().map(move |x| Pos { x, y }))
         .map(move |pos| (pos, shape.idx(pos).expect("clamped to the interior")))
 }

@@ -23,7 +23,8 @@ use config::{
     STARVE_DAMAGE, STARVING,
 };
 
-/// What is left in the stomach.
+/// What is left in the stomach. A loaded image may hold more than `FULL`: the
+/// first meal clamps it, and decay lowers it as usual.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Satiety(pub u16);
 
@@ -39,7 +40,8 @@ impl Component for Satiety {
     }
 }
 
-/// What a creature eats: a set of foods.
+/// What a creature eats: a set of foods. A loaded image may hold the empty
+/// set: that creature eats nothing and never proposes a meal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Diet(u8);
 
@@ -132,11 +134,25 @@ fn urgency(satiety: u16) -> u8 {
 }
 
 /// The least is eaten first: nearest, then most nourishing, then by (y, x),
-/// then a plant (no id) before remains, then by id.
-type Choice = (u16, Reverse<u16>, i16, i16, Option<EntityId>);
+/// then a plant (no id) before remains, then by id. The field order is the
+/// comparison order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct Choice {
+    distance: u16,
+    nutrition: Reverse<u16>,
+    y: i16,
+    x: i16,
+    remains: Option<EntityId>,
+}
 
 fn choice(from: Pos, at: Pos, nutrition: u16, remains: Option<EntityId>) -> Choice {
-    (from.chebyshev(at), Reverse(nutrition), at.y, at.x, remains)
+    Choice {
+        distance: from.chebyshev(at),
+        nutrition: Reverse(nutrition),
+        y: at.y,
+        x: at.x,
+        remains,
+    }
 }
 
 /// A greedy step from `pos` toward `at`.
@@ -190,7 +206,7 @@ impl Hunger {
                     .min()
             })
             .flatten();
-        let Some((.., y, x, remains)) = plant.into_iter().chain(remains).min() else {
+        let Some(Choice { y, x, remains, .. }) = plant.into_iter().chain(remains).min() else {
             return;
         };
         let target = remains.map_or(Target::Pos(Pos { x, y }), Target::Entity);

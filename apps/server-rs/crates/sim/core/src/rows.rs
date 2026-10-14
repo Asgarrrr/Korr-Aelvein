@@ -174,7 +174,12 @@ impl Rows<'_> {
         let cause = Cause::Mechanic(self.module);
         for &(h, amount) in &*self.harmed {
             let id = self.store.id(h).expect("a joined row is alive");
-            self.harms.push((id, h, cause, amount));
+            self.harms.push(Harm {
+                target: id,
+                h,
+                cause,
+                amount,
+            });
         }
     }
 }

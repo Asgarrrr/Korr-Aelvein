@@ -1,7 +1,9 @@
 use korr_ecs::{Component, EntityId, Handle, ImageError, Reader, Writer};
 use korr_random::ModuleKey;
 
-/// Core-owned: health changes only through a harm the core applies.
+/// Core-owned: health changes only through a harm the core applies. `hp`
+/// above `max` is accepted unchecked: a harm only lowers `hp`, and remains
+/// weigh `max`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Vitality {
     pub hp: u16,
@@ -54,9 +56,14 @@ pub enum Cause {
     Mechanic(ModuleKey),
 }
 
-/// A harm waiting for the next drain: its target, the target's handle, its
-/// cause and its amount.
-pub(crate) type Harm = (EntityId, Handle, Cause, u16);
+/// A harm waiting for the next drain.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Harm {
+    pub(crate) target: EntityId,
+    pub(crate) h: Handle,
+    pub(crate) cause: Cause,
+    pub(crate) amount: u16,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Event {

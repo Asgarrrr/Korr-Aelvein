@@ -42,26 +42,16 @@ impl CellColumn {
     /// slice per row from the top, each with the position of its first cell.
     ///
     /// # Panics
-    /// When no interior column lies within `radius` of `centre`.
+    /// When `centre.x` lies more than `radius + 1` columns outside the interior.
     pub fn window(&self, centre: Pos, radius: u16) -> impl Iterator<Item = (Pos, &[u8])> {
         let width = usize::from(self.shape.width());
-        let (cx, cy, r) = (i32::from(centre.x), i32::from(centre.y), i32::from(radius));
-        let last = |side: u16| i32::from(side) - 2;
-        let (left, right) = ((cx - r).max(1), (cx + r).min(last(self.shape.width())));
-        let (top, bottom) = ((cy - r).max(1), (cy + r).min(last(self.shape.height())));
-        let index = |v: i32| usize::try_from(v).expect("clamped to the interior");
-        let (from, len) = (index(left), index(right - left));
-        (top..=bottom).map(move |y| {
-            let start = index(y) * width + from;
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "interior coordinates fit i16"
-            )]
-            let first = Pos {
-                x: left as i16,
-                y: y as i16,
-            };
-            (first, &self.cells[start..=start + len])
+        let (xs, ys) = self.shape.window(centre, radius);
+        let index = |v: i16| usize::try_from(v).expect("clamped to the interior");
+        let (from, to) = (index(*xs.start()), index(*xs.end()));
+        ys.map(move |y| {
+            let row = index(y) * width;
+            let first = Pos { x: *xs.start(), y };
+            (first, &self.cells[row + from..=row + to])
         })
     }
 

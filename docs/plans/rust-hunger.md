@@ -271,6 +271,11 @@ Budget, in the `core` bench (not part of `verify`, reported in the PR):
 - §3's reach rule covers requests and remains too: `check` refuses a cell
   beyond `SIGHT`, and `consume` eats nothing of remains beyond it. One
   Chebyshev compare per check or committed action.
+- `barrier/ring/18` stays about 1.8% over c6961e3 (Q6, 2026-10-14). The
+  cost is the entity id index: an insert and a remove per flight, about
+  19 ns, measured by disabling the index. Fusing the admit probe and
+  shrinking the buckets gained nothing measurable (about 2 ns), so the
+  index is unchanged.
 - Module state behind a `Mutex` or other interior mutability is forbidden
   by convention only: `Module` takes `&self`, and the trait cannot enforce
   it. Clippy's `disallowed-types` catches the std types, not a crate's.

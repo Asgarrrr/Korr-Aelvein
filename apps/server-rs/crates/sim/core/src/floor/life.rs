@@ -7,7 +7,7 @@ use korr_grid::{Layer, Pos};
 use crate::config::{EVENTS_PER_ROUND, ROT_PER_ROUND};
 use crate::floor::Floor;
 use crate::floor::turn::Lents;
-use crate::life::{Cause, Event, Remains, Vitality};
+use crate::life::{Cause, Event, Harm, Remains, Vitality};
 use crate::ruleset::Ruleset;
 
 /// A target its harms brought to zero, until its remains lie.
@@ -36,16 +36,21 @@ impl Floor {
     fn settle(&mut self, ruleset: &Ruleset, lents: Option<&mut Lents>) {
         debug_assert!(self.deaths.is_empty());
         let mut harms = mem::take(&mut self.harms);
-        harms.sort_unstable_by_key(|&(id, _, cause, _)| (id, cause));
+        harms.sort_unstable_by_key(|harm| (harm.target, harm.cause));
         let mut vitality = self.store.lend(&ruleset.vitality);
-        for group in harms.chunk_by(|a, b| a.0 == b.0) {
-            let (id, h, cause, _) = group[0];
+        for group in harms.chunk_by(|a, b| a.target == b.target) {
+            let Harm {
+                target: id,
+                h,
+                cause,
+                ..
+            } = group[0];
             let Some(&Vitality { hp, max }) = vitality.get(&self.store, h) else {
                 continue;
             };
-            let total = group.iter().fold(0u32, |sum, &(.., amount)| {
-                sum.saturating_add(u32::from(amount))
-            });
+            let total = group
+                .iter()
+                .fold(0u32, |sum, harm| sum.saturating_add(u32::from(harm.amount)));
             let hp = hp.saturating_sub(u16::try_from(total).unwrap_or(u16::MAX));
             vitality.insert(&self.store, h, Vitality { hp, max });
             if hp == 0 {
