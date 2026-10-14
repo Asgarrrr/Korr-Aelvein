@@ -68,6 +68,16 @@ the spec is updated to include it.
 - A parallel barrier: `send` and `land` work per floor and can go through
   the same `Runner`. Only if the `barrier` bench, with travellers, shows the
   serial barrier takes a real share of the round.
+- Lend module columns for the actor loop, as the core lends clock and
+  intent: it removes the per-entity `type_id` downcast in a module's
+  `get`. Hunger idles at about 35 us per round on `round_8k_2k/wander`
+  (4.8%); a build with no downcast at all gains only about 2% on wander and
+  feeding, so the rest is satiety memory access. It costs about 280 lines,
+  a module API change, and a despawn route that must clear every lent
+  column. Only when a module's idle cost is measured above that bound.
+- A bench threshold guard: a script that runs the alternated A/B of
+  `round_8k_2k` and `floors` against a base and fails past a set margin,
+  so a module's cost is checked without a manual bench session.
 
 ## Visuals
 
