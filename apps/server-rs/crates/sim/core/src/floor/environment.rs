@@ -14,8 +14,8 @@ use crate::ruleset::Ruleset;
 use crate::time::{Round, Tick};
 
 impl Floor {
-    /// Phase 1 of a round: every module that binds a cell column ticks each of
-    /// its cells, then every module ticks its entity rows, then remains rot.
+    /// Phase 1 of a round: each module in turn ticks each cell of its cell
+    /// column, when it binds one, then its entity rows; then remains rot.
     /// The harms land once, after all of it, so registry order never picks
     /// the cause of a death.
     ///
@@ -49,8 +49,8 @@ impl Floor {
     }
 }
 
-/// Hands each module that binds a cell column that column, then each module
-/// the floor's rows.
+/// Hands each module in turn its cell column, when it binds one, then the
+/// floor's rows.
 struct TickVisit<'a> {
     seed: Seed,
     ruleset: &'a Ruleset,

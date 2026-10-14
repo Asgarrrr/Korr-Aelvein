@@ -3,7 +3,7 @@ use core::fmt;
 use core::num::NonZeroU32;
 
 use korr_ecs::{Component, EntityId, FloorId, Handle, Own, Store};
-use korr_grid::{CellColumn, Dir, Grid, Pos, StepError};
+use korr_grid::{CellColumn, Dir, Grid, Interior, Pos, StepError};
 use korr_random::{DrawIndex, ModuleKey, Phase, Seed, Stream, Subject};
 
 use crate::build::{Ask, ColumnName, FOREIGN_ASK};
@@ -57,6 +57,11 @@ pub(crate) struct Departure {
 /// Departures are pushed in turn order, so only the last can be this actor's.
 pub(crate) fn departed(departures: &[Departure], actor: Handle) -> bool {
     departures.last().is_some_and(|d| d.actor == actor)
+}
+
+/// Whether `at` lies within `SIGHT` of `actor`: as far as a ctx reaches.
+fn within_sight(grid: &Grid, actor: Handle, at: Pos) -> bool {
+    at.chebyshev(grid.pos(actor).expect("a due actor is placed")) <= SIGHT
 }
 
 pub struct PrepCtx<'a> {
@@ -117,7 +122,7 @@ impl PrepCtx<'_> {
     #[must_use]
     pub fn locate(&self, id: EntityId) -> Option<Pos> {
         let at = self.grid.pos(self.store.handle_of(id)?)?;
-        (at.chebyshev(self.pos()) <= SIGHT).then_some(at)
+        within_sight(self.grid, self.actor, at).then_some(at)
     }
 
     #[must_use]
@@ -125,17 +130,37 @@ impl PrepCtx<'_> {
         self.draws.below(draw, bound)
     }
 
-    /// The server's reply to `C` at `at`; `None` when it refuses, or `at` is
-    /// off the floor.
+    /// The server's reply to `C` at `at`, with the token that orders it;
+    /// `None` when it refuses, or `at` is off the floor or beyond `SIGHT`.
     ///
     /// # Panics
     /// When `ask` comes from another ruleset: checked in debug builds only;
-    /// release reads whatever column holds its index.
+    /// release reads whatever column holds its index, or panics out of bounds.
     #[must_use]
-    pub fn check<C>(&self, ask: Ask<C>, at: Pos) -> Option<u8> {
+    pub fn check<C>(&self, ask: Ask<C>, at: Pos) -> Option<(Checked<C>, u8)> {
         debug_assert!(ask.cells.is_in(self.names), "{FOREIGN_ASK}");
+        if !within_sight(self.grid, self.actor, at) {
+            return None;
+        }
         let at = self.grid.shape().idx(at)?;
-        (ask.service.check)(self.columns[ask.cells.column.index()].get(at))
+        let reply = (ask.service.check)(self.columns[ask.cells.column.index()].get(at))?;
+        Some((Checked { ask, at }, reply))
+    }
+}
+
+/// A request `PrepCtx::check` accepted at one cell, and the only way to
+/// order it: it lives from a prepare to the commit of the same run.
+pub struct Checked<C> {
+    ask: Ask<C>,
+    at: Interior,
+}
+
+impl<C> fmt::Debug for Checked<C> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Checked")
+            .field("ask", &self.ask)
+            .field("at", &self.at)
+            .finish()
     }
 }
 
@@ -168,18 +193,17 @@ impl CommitCtx<'_> {
         self.store.get_mut(key, self.actor)
     }
 
-    /// Applies `C` at `at` through its server.
+    /// Applies the request its prepare checked, at its cell, through its server.
     ///
     /// # Panics
-    /// When `ask` comes from another ruleset, or `at` is off the floor: its
-    /// prepare must have checked it.
-    pub fn order<C>(&mut self, ask: Ask<C>, at: Pos) {
+    /// When `checked` comes from another ruleset, or a floor of another shape.
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "an order spends its token, so one check orders once"
+    )]
+    pub fn order<C>(&mut self, checked: Checked<C>) {
+        let Checked { ask, at } = checked;
         assert!(ask.cells.is_in(&self.ruleset.columns), "{FOREIGN_ASK}");
-        let at = self
-            .grid
-            .shape()
-            .idx(at)
-            .expect("commit of an order its prepare did not check");
         let column = &mut self.columns[ask.cells.column.index()];
         column.set(at, (ask.service.apply)(column.get(at)));
     }
@@ -216,12 +240,19 @@ impl CommitCtx<'_> {
     }
 
     /// Eats up to `amount` of the mass of the remains named `id`, and returns
-    /// what it ate: 0 when `id` names no remains here. Remains eaten to
-    /// nothing leave once the turn ends, so later actors never see them.
+    /// what it ate: 0 when `id` names no remains within `SIGHT`. Remains eaten
+    /// to nothing leave once the turn ends, so later actors never see them.
     pub fn consume(&mut self, id: EntityId, amount: u16) -> u16 {
         let Some(h) = self.store.handle_of(id) else {
             return 0;
         };
+        if !self
+            .grid
+            .pos(h)
+            .is_some_and(|at| within_sight(self.grid, self.actor, at))
+        {
+            return 0;
+        }
         let Some(remains) = self.store.get_mut(&self.ruleset.remains, h) else {
             return 0;
         };

@@ -51,14 +51,16 @@ impl<M: Mechanics> Game<M> {
 
 impl<M: Mechanics + Sync> Game<M> {
     /// # Panics
-    /// When an actor departs to a floor outside `world`.
+    /// When an actor departs to a floor outside `world`, or a floor raises
+    /// more than `EVENTS_PER_ROUND` events in the round.
     pub fn run_round(&self, world: &mut World) {
         self.run_round_on(world, &Sequential);
     }
 
     /// # Panics
-    /// When an actor departs to a floor outside `world`, or when a floor
-    /// panics during phase 1.
+    /// When an actor departs to a floor outside `world`, a floor raises more
+    /// than `EVENTS_PER_ROUND` events in the round, or a floor panics during
+    /// phase 1.
     pub fn run_round_on(&self, world: &mut World, runner: &impl Runner) {
         world.run_round(self.seed, &self.ruleset, &self.mechanics, runner);
     }

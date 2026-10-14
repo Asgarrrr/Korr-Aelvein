@@ -27,7 +27,7 @@ pub mod mechanic {
         Ask, Builder, CellContract, Contract, Provided, ReadCells, Request, Served, provides,
         provides_cells, serves,
     };
-    pub use crate::ctx::{CommitCtx, Draws, PrepCtx};
+    pub use crate::ctx::{Checked, CommitCtx, Draws, PrepCtx};
     pub use crate::decision::Band;
     pub use crate::module::{Action, Module, Prepared, Proposals, Target};
     pub use crate::rows::Rows;

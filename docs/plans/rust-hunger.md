@@ -256,6 +256,24 @@ Budget, in the `core` bench (not part of `verify`, reported in the PR):
   `Builder::contract`, the getter view) stays with no production
   provider. Its second implementation is the test fake in `tests/seam.rs`.
   Fear or combat will be its first real reader.
+- The seam is narrower than §2: no `PrepCtx::get`, no `CommitCtx`
+  `insert`, `remove` or `set`, and `Rows` has only a two-column `join`.
+  No mechanic uses them yet, and an abstraction waits for a real user:
+  each arrives with the first mechanic that needs it, likely fear or combat.
+- §4's schedule check is a grid-placement check, not a clock equality: a
+  popped `Due` runs only if its handle is still placed. The grid link
+  compares generations, so the dead and recycled slots are skipped.
+- `PrepCtx::check` returns a `Checked<C>` token with its reply, and
+  `CommitCtx::order` takes only that token. An order without a check in
+  the same run does not compile, and one check orders once. The token
+  carries the ask's column, so `order` still refuses one from another
+  ruleset.
+- §3's reach rule covers requests and remains too: `check` refuses a cell
+  beyond `SIGHT`, and `consume` eats nothing of remains beyond it. One
+  Chebyshev compare per check or committed action.
+- Module state behind a `Mutex` or other interior mutability is forbidden
+  by convention only: `Module` takes `&self`, and the trait cannot enforce
+  it. Clippy's `disallowed-types` catches the std types, not a crate's.
 
 ## Open, deferred to combat
 

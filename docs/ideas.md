@@ -78,9 +78,6 @@ the spec is updated to include it.
 - A bench threshold guard: a script that runs the alternated A/B of
   `round_8k_2k` and `floors` against a base and fails past a set margin,
   so a module's cost is checked without a manual bench session.
-- Module-declared events: a module registers its own event types at build,
-  beside the core's `Died` and `Spawned`. Wait for the first reader: today
-  only the host reads events, and only those two.
 
 ## Visuals
 

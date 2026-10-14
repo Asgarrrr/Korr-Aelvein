@@ -8,7 +8,7 @@ use korr_core::{
 use korr_ecs::{EntityId, FloorId, Handle};
 use korr_hunger::config::STARVE_DAMAGE;
 use korr_hunger::{Diet, Hunger};
-use korr_scenarios::{GROUND, Pace, floor, game, nth, run, stomach};
+use korr_scenarios::{GROUND, Pace, Shy, floor, game, nth, run, stomach};
 
 const UPPER: FloorId = FloorId(1);
 const HUNGER: Cause = Cause::Mechanic(ModuleKey::of("hunger"));
@@ -109,6 +109,25 @@ fn starvation_in_the_bulk_phase_before_the_due_pops_does_not_panic() {
         world.floor(GROUND).events(),
         [],
         "a round reports only its own events"
+    );
+}
+
+#[test]
+fn a_creature_starved_in_the_bulk_phase_is_gone_before_any_actor_acts() {
+    let game = game(Then(Shy, keyed(Hunger::build)), Seed(1));
+    let ruleset = game.ruleset();
+    let mut f = floor(ruleset, GROUND, 7, 7);
+    let home = Pos { x: 3, y: 3 };
+    let watcher = f.spawn_actor(ruleset, home);
+    let h = mortal(&mut f, ruleset, Pos { x: 5, y: 3 }, STARVE_DAMAGE, MAX);
+    stomach(&mut f, &game.mechanics().1, h, 0, Diet::PLANTS);
+    let mut world = World::new(vec![f]);
+    run(&game, &mut world, 1);
+    assert_eq!(world.floor(GROUND).pos(h), None);
+    assert_eq!(
+        world.floor(GROUND).pos(watcher),
+        Some(home),
+        "the watcher acted while the starving creature still stood in sight"
     );
 }
 

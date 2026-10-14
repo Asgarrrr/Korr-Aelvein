@@ -159,6 +159,14 @@ pub struct Ask<C> {
     pub(crate) kind: PhantomData<fn() -> C>,
 }
 
+impl<C> Ask<C> {
+    /// The server's cell column, for `Senses::cells`.
+    #[must_use]
+    pub fn cells(self) -> ReadCells {
+        self.cells
+    }
+}
+
 impl<C> Clone for Ask<C> {
     fn clone(&self) -> Self {
         *self

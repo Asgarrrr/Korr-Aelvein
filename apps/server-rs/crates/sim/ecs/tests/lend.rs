@@ -56,3 +56,14 @@ fn the_store_sees_what_the_lent_column_kept() {
     assert_eq!(store.get(satiety.read(), dead), None);
     assert_eq!(store.get(satiety.read(), reborn), Some(&Satiety(5)));
 }
+
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic(expected = "restore to another store")]
+fn a_column_is_restored_only_to_the_store_that_lent_it() {
+    let (schema, satiety) = hunger_only();
+    let mut lender = Store::new(&schema, FloorId(0));
+    let mut other = Store::new(&schema, FloorId(1));
+    let _kept = other.lend(&satiety);
+    other.restore(lender.lend(&satiety));
+}

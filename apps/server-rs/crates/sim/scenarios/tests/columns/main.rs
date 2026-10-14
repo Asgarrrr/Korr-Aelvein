@@ -1,10 +1,10 @@
 use core::convert::Infallible;
 
 use korr_contracts::Graze;
-use korr_core::host::{Floor, Game, LoadError, Pos, Sections, Seed, Then, World, keyed};
+use korr_core::host::{Floor, Game, LoadError, Pos, SIGHT, Sections, Seed, Then, World, keyed};
 use korr_core::mechanic::{
-    Builder, CellContract, CommitCtx, Module, PrepCtx, Prepared, Proposals, Provided, ReadCells,
-    Senses, Served, Target, provides_cells, serves,
+    Action, Ask, Band, Builder, CellContract, Checked, CommitCtx, Cost, Module, PrepCtx, Prepared,
+    Proposals, Provided, ReadCells, Senses, Served, Target, provides_cells, serves,
 };
 use korr_ecs::{FloorId, ImageError};
 use korr_engine::{Modules, Registry};
@@ -283,4 +283,83 @@ fn a_graze_reaches_the_plants_when_they_are_not_the_first_column() {
     let f = world.floor(FloorId(0));
     assert_eq!(f.cell(ruleset, plants(modules), food), 0);
     assert_eq!(f.cell(ruleset, bog.peat, food), 9);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Reach;
+
+impl Action for Reach {
+    const ALL: &'static [Self] = &[Self];
+
+    fn name(self) -> &'static str {
+        "reach"
+    }
+}
+
+/// Grazes the plant at `at` every turn, wherever it stands.
+struct Reacher {
+    graze: Ask<Graze>,
+    at: Pos,
+}
+
+impl Module for Reacher {
+    const NAME: &'static str = "test.reacher";
+    type Action = Reach;
+    type Plan = Checked<Graze>;
+
+    fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, Reach>) {
+        out.push(Reach, Band::Routine, 0, Target::None);
+    }
+
+    fn prepare(&self, _: Reach, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Reach, Checked<Graze>> {
+        match ctx.check(self.graze, self.at) {
+            Some((checked, _)) => Prepared::Go {
+                cost: Cost::new(100),
+                plan: checked,
+            },
+            None => Prepared::Fail,
+        }
+    }
+
+    fn commit(&self, checked: Checked<Graze>, ctx: &mut CommitCtx<'_>) {
+        ctx.order(checked);
+    }
+}
+
+/// The growth of a plant after round 1, when a grazer stands `dx` cells
+/// west of it.
+fn reached(dx: u16) -> u8 {
+    let plant = Pos { x: 8, y: 4 };
+    let game = game(
+        Then(
+            flora_registry(),
+            keyed(|b| Reacher {
+                graze: b.request().expect("flora serves graze"),
+                at: plant,
+            }),
+        ),
+        SEED,
+    );
+    let (ruleset, cells) = (game.ruleset(), plants(&game.mechanics().0));
+    let mut f = floor(ruleset, FloorId(0), 10, 9);
+    f.set_cell(ruleset, cells, plant, 3);
+    let x = plant.x - dx.cast_signed();
+    f.spawn_actor(ruleset, Pos { x, ..plant });
+    let mut world = World::new(vec![f]);
+    run(&game, &mut world, 1);
+    world.floor(FloorId(0)).cell(ruleset, cells, plant)
+}
+
+#[test]
+fn a_plant_beyond_sight_is_not_grazed() {
+    assert_eq!(reached(SIGHT), 0);
+    assert_ne!(reached(SIGHT + 1), 0);
+}
+
+fn flora_registry() -> Registry {
+    Registry {
+        wander: false,
+        hunger: false,
+        ..Registry::default()
+    }
 }

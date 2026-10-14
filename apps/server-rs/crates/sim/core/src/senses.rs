@@ -92,7 +92,7 @@ impl<'a> Senses<'a> {
     ///
     /// # Panics
     /// When `key` comes from another ruleset: checked in debug builds only;
-    /// release reads whatever column holds its index.
+    /// release reads whatever column holds its index, or panics out of bounds.
     pub fn cells(&self, key: ReadCells) -> impl Iterator<Item = (Pos, u8)> + use<'a> {
         debug_assert!(key.is_in(self.names), "{FOREIGN_CELLS}");
         let column = &self.columns[key.column.index()];

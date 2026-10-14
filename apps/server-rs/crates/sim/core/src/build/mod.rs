@@ -195,7 +195,8 @@ impl Builder<'_> {
     /// A component named `<module>.<name>`, private to the module.
     ///
     /// # Panics
-    /// When the module already registered `name`.
+    /// When `<module>.<name>` is longer than `u16::MAX` bytes or already
+    /// registered, or the schema already holds 2^32 components.
     pub fn own<T: Component>(&mut self, name: &str) -> Own<T> {
         self.schema.register(&format!("{}.{name}", self.module))
     }

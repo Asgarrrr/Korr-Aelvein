@@ -12,10 +12,10 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::Reverse;
 
-use korr_contracts::{Graze, Plants};
+use korr_contracts::Graze;
 use korr_core::mechanic::{
-    Action, AnyRead, Ask, Band, Builder, CommitCtx, Component, Dir, EntityId, ImageError, Module,
-    Own, Pos, PrepCtx, Prepared, Proposals, Read, ReadCells, Reader, Rows, Senses, Target, Writer,
+    Action, AnyRead, Ask, Band, Builder, Checked, CommitCtx, Component, Dir, EntityId, ImageError,
+    Module, Own, Pos, PrepCtx, Prepared, Proposals, Read, Reader, Rows, Senses, Target, Writer,
 };
 
 use config::{
@@ -89,7 +89,7 @@ impl Action for Eating {
 
 #[derive(Debug)]
 pub enum Meal {
-    Graze { at: Pos, gain: u16 },
+    Graze { checked: Checked<Graze>, gain: u16 },
     Feed { id: EntityId },
     Step(Dir),
 }
@@ -98,16 +98,17 @@ pub enum Meal {
 pub struct Hunger {
     satiety: Own<Satiety>,
     diet: Own<Diet>,
-    plants: Option<ReadCells>,
     graze: Option<Ask<Graze>>,
 }
 
 impl Hunger {
+    /// # Panics
+    /// When the server of `Graze`, flora, builds after it.
+    #[must_use]
     pub fn build(b: &mut Builder<'_>) -> Self {
         Self {
             satiety: b.own("satiety"),
             diet: b.own("diet"),
-            plants: b.contract_cells::<Plants>(),
             graze: b.request(),
         }
     }
@@ -166,12 +167,12 @@ impl Hunger {
         };
         let pos = senses.pos();
         let mut plant = None;
-        if let (Some(plants), Some(_)) = (self.plants, self.graze)
+        if let Some(graze) = self.graze
             && diet.contains(Diet::PLANTS)
         {
             // A loop, not `filter().min()`: that fold calls its closure out of
             // line, once per cell.
-            for (at, growth) in senses.cells(plants) {
+            for (at, growth) in senses.cells(graze.cells()) {
                 if growth > 0 {
                     let meal = choice(pos, at, u16::from(growth) * PLANT_NUTRITION, None);
                     if plant.is_none_or(|best| meal < best) {
@@ -240,8 +241,8 @@ impl Module for Hunger {
 
     fn commit(&self, meal: Meal, ctx: &mut CommitCtx<'_>) {
         match meal {
-            Meal::Graze { at, gain } => {
-                ctx.order(self.graze.expect("a graze was checked"), at);
+            Meal::Graze { checked, gain } => {
+                ctx.order(checked);
                 self.sate(gain, ctx);
             }
             Meal::Feed { id } => {
@@ -257,7 +258,7 @@ impl Module for Hunger {
 
 impl Hunger {
     fn graze_at(&self, action: Eating, at: Pos, ctx: &PrepCtx<'_>) -> Prepared<Eating, Meal> {
-        let Some(growth) = self.graze.and_then(|graze| ctx.check(graze, at)) else {
+        let Some((checked, growth)) = self.graze.and_then(|graze| ctx.check(graze, at)) else {
             return Prepared::Fail;
         };
         let pos = ctx.pos();
@@ -269,7 +270,7 @@ impl Hunger {
             Eating::Eat => Prepared::Go {
                 cost: EAT_COST,
                 plan: Meal::Graze {
-                    at,
+                    checked,
                     gain: u16::from(growth) * PLANT_NUTRITION,
                 },
             },

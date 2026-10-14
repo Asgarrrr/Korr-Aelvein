@@ -327,7 +327,7 @@ struct Probe {
 }
 
 /// Bare ground, a seedling, and the wall ring.
-const PROBED: [Pos; 3] = [Pos { x: 2, y: 2 }, SEEDLING, Pos { x: 0, y: 0 }];
+const PROBED: [Pos; 3] = [Pos { x: 2, y: 2 }, SEEDLING, Pos { x: 5, y: 7 }];
 
 impl Probe {
     #[expect(
@@ -356,7 +356,7 @@ impl Module for Probe {
         self.replies
             .lock()
             .expect("no prepare panicked while holding the lock")
-            .extend(PROBED.map(|at| ctx.check(graze, at)));
+            .extend(PROBED.map(|at| ctx.check(graze, at).map(|(_, reply)| reply)));
         Prepared::Fail
     }
 

@@ -1,14 +1,14 @@
 use core::convert::Infallible;
 
 use korr_core::{
-    host::{Seed, Then, World, keyed},
+    host::{Assembly, Both, Declarations, Recipe, Seed, Then, World, keyed},
     mechanic::{
         Band, Builder, CommitCtx, Component, Contract, Cost, Dir, ImageError, Module, Pos, PrepCtx,
         Prepared, Proposals, Provided, Read, Reader, Senses, Target, Writer, provides,
     },
 };
 use korr_ecs::FloorId;
-use korr_scenarios::{Step, floor, game, run};
+use korr_scenarios::{Step, actionless, floor, game, run};
 
 /// The three callbacks of a module that never proposes.
 macro_rules! inert {
@@ -268,4 +268,52 @@ fn a_reader_alone_reads_nothing_and_runs() {
     let mut world = World::new(vec![f]);
     run(&game, &mut world, 3);
     assert_eq!(world.floor(FloorId(0)).pos(still), Some(Pos { x: 2, y: 2 }));
+}
+
+actionless!(First, "first");
+actionless!(Second, "second");
+
+/// Declares `First` then `Second`, and builds `Second` first.
+struct Backwards;
+
+impl Recipe for Backwards {
+    type Mechanics = Both<First, Second>;
+
+    fn declare(&self, declarations: &mut Declarations) {
+        declarations.module::<First>();
+        declarations.module::<Second>();
+    }
+
+    fn build(self, assembly: &mut Assembly<'_>) -> Self::Mechanics {
+        let second = assembly.module(|_| Second);
+        Both(assembly.module(|_| First), second)
+    }
+}
+
+#[test]
+#[should_panic(expected = "second built out of declared order")]
+fn a_module_built_out_of_declared_order_panics() {
+    let _ = game(Backwards, Seed(1));
+}
+
+/// Declares `First` then `Second`, and builds `First` only.
+struct Stops;
+
+impl Recipe for Stops {
+    type Mechanics = First;
+
+    fn declare(&self, declarations: &mut Declarations) {
+        declarations.module::<First>();
+        declarations.module::<Second>();
+    }
+
+    fn build(self, assembly: &mut Assembly<'_>) -> First {
+        assembly.module(|_| First)
+    }
+}
+
+#[test]
+#[should_panic(expected = "second declared but never built")]
+fn a_module_declared_but_never_built_panics() {
+    let _ = game(Stops, Seed(1));
 }
