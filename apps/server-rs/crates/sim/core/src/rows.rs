@@ -1,4 +1,5 @@
 use alloc::vec::Vec;
+use core::num::NonZeroU16;
 
 use korr_ecs::{Component, Handle, Own, Store};
 use korr_random::ModuleKey;
@@ -42,7 +43,7 @@ use crate::life::{Cause, Harm};
 ///         rows.join(&self.fat, &self.lean, |fat: &mut Fat, lean: &mut Lean| {
 ///             fat.0 = fat.0.saturating_sub(1);
 ///             lean.0 = lean.0.saturating_add(1);
-///             0
+///             None
 ///         });
 ///     }
 /// #   fn propose(&self, _: &Senses<'_>, _: &mut Proposals<'_, Infallible>) {}
@@ -101,7 +102,7 @@ use crate::life::{Cause, Harm};
 ///         rows.join(&self.fat.read(), &self.lean, |fat: &mut Fat, lean: &mut Lean| {
 ///             fat.0 = fat.0.saturating_sub(1);
 ///             lean.0 = lean.0.saturating_add(1);
-///             0
+///             None
 ///         });
 ///     }
 /// #   fn propose(&self, _: &Senses<'_>, _: &mut Proposals<'_, Infallible>) {}
@@ -151,7 +152,7 @@ impl<'a> Rows<'a> {
 
 impl Rows<'_> {
     /// Calls `f` on every row that holds both `a` and `b`, in the dense order
-    /// of `a`. A non-zero return harms the row's entity by that amount, as
+    /// of `a`. A `Some` return harms the row's entity by that amount, as
     /// the module's doing.
     ///
     /// # Panics
@@ -161,16 +162,11 @@ impl Rows<'_> {
         &mut self,
         a: &Own<A>,
         b: &Own<B>,
-        mut f: impl FnMut(&mut A, &mut B) -> u16,
+        mut f: impl FnMut(&mut A, &mut B) -> Option<NonZeroU16>,
     ) {
-        let harmed = &mut *self.harmed;
-        harmed.clear();
-        self.store.join_mut(a, b, |h, a, b| {
-            let amount = f(a, b);
-            if amount > 0 {
-                harmed.push((h, amount));
-            }
-        });
+        self.harmed.clear();
+        self.store
+            .join_mut(a, b, self.harmed, |a, b| f(a, b).map(NonZeroU16::get));
         let cause = Cause::Mechanic(self.module);
         for &(h, amount) in &*self.harmed {
             let id = self.store.id(h).expect("a joined row is alive");

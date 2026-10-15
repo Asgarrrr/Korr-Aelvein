@@ -53,7 +53,7 @@ impl<T> fmt::Debug for Read<T> {
 }
 
 /// A component key without its type: enough to test presence, never to read.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AnyRead {
     pub(crate) id: ComponentId,
     pub(crate) prefix: u64,

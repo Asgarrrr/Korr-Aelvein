@@ -1,4 +1,4 @@
-use korr_ecs::{EntityId, Handle, Lent};
+use korr_ecs::{AnyRead, EntityId, Handle, Lent, Store};
 use korr_grid::Pos;
 use korr_random::Seed;
 
@@ -210,14 +210,11 @@ impl RunVisit<'_> {
         let floor = self.floor.id();
         let draws = Draws::new(self.seed, module_key::<M>(), self.now, self.id);
         let mut hops = 0;
+        if !holds(&self.floor.store, self.actor, &requires[index]) {
+            return None;
+        }
         loop {
             let store = &self.floor.store;
-            if !requires[index]
-                .iter()
-                .all(|&key| store.has(key, self.actor))
-            {
-                return None;
-            }
             let prep = PrepCtx {
                 grid: &self.floor.grid,
                 store,
@@ -254,7 +251,14 @@ impl RunVisit<'_> {
                     if hops > MAX_INSTEAD {
                         return None;
                     }
-                    index = index_of(next);
+                    let next_index = index_of(next);
+                    // A run cannot change the store before its commit: equal keys still hold.
+                    if requires[next_index] != requires[index]
+                        && !holds(store, self.actor, &requires[next_index])
+                    {
+                        return None;
+                    }
+                    index = next_index;
                     action = next;
                     target = next_target;
                 }
@@ -262,4 +266,8 @@ impl RunVisit<'_> {
             }
         }
     }
+}
+
+fn holds(store: &Store, actor: Handle, keys: &[AnyRead]) -> bool {
+    keys.iter().all(|&key| store.has(key, actor))
 }

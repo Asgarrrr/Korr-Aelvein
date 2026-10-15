@@ -271,6 +271,13 @@ Budget, in the `core` bench (not part of `verify`, reported in the PR):
 - §3's reach rule covers requests and remains too: `check` refuses a cell
   beyond `SIGHT`, and `consume` eats nothing of remains beyond it. One
   Chebyshev compare per check or committed action.
+- The core checks `requires` once per run, before the first `prepare`. An
+  `Instead` hop checks again only when its action requires other keys: no
+  `prepare` can change the store, so equal keys still hold.
+- Hunger's proposer reads satiety with one `type_id` downcast per actor.
+  Safe Rust cannot reach a typed column behind the erased one without it,
+  and a build with an unchecked cast gained 0-1.5% (Q7, 2026-10-15).
+  Lending module columns removes it; it waits in `docs/ideas.md`.
 - `barrier/ring/18` stays about 1.8% over c6961e3 (Q6, 2026-10-14). The
   cost is the entity id index: an insert and a remove per flight, about
   19 ns, measured by disabling the index. Fusing the admit probe and

@@ -67,7 +67,9 @@ macro_rules! bleed {
             type Plan = ::core::convert::Infallible;
 
             fn tick_rows(&self, rows: &mut $crate::__core::mechanic::Rows<'_>) {
-                rows.join(&self.wound, &self.clot, |_, _| $amount);
+                rows.join(&self.wound, &self.clot, |_, _| {
+                    ::core::num::NonZeroU16::new($amount)
+                });
             }
 
             fn propose(

@@ -11,6 +11,7 @@ pub mod config;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::Reverse;
+use core::num::NonZeroU16;
 
 use korr_contracts::Graze;
 use korr_core::mechanic::{
@@ -228,7 +229,7 @@ impl Module for Hunger {
         // A creature without a diet does not hunger.
         rows.join(&self.satiety, &self.diet, |satiety, _| {
             satiety.0 = satiety.0.saturating_sub(DECAY);
-            if satiety.0 == 0 { STARVE_DAMAGE } else { 0 }
+            NonZeroU16::new(STARVE_DAMAGE).filter(|_| satiety.0 == 0)
         });
     }
 

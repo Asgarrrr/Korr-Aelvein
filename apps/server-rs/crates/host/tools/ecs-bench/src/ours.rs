@@ -97,9 +97,10 @@ impl Backend for Ours {
 
     fn query(&mut self) {
         for store in &mut self.stores {
-            store.join_mut(&self.vel, &self.pos, |_, vel, pos| {
+            store.join_mut(&self.vel, &self.pos, &mut Vec::new(), |vel, pos| {
                 pos.x = pos.x.wrapping_add(vel.dx);
                 pos.y = pos.y.wrapping_add(vel.dy);
+                None::<()>
             });
         }
     }

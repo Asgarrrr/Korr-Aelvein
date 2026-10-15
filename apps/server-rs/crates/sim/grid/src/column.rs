@@ -1,5 +1,6 @@
 use alloc::vec;
 use alloc::vec::Vec;
+use core::ops::RangeInclusive;
 
 use korr_ecs::{ImageError, Reader, Writer};
 
@@ -40,17 +41,23 @@ impl CellColumn {
 
     /// The interior cells within Chebyshev distance `radius` of `centre`, one
     /// slice per row from the top, each with the position of its first cell.
-    ///
-    /// # Panics
-    /// When `centre.x` lies more than `radius + 1` columns outside the interior.
+    /// `centre` may lie off the floor.
     pub fn window(&self, centre: Pos, radius: u16) -> impl Iterator<Item = (Pos, &[u8])> {
         let width = usize::from(self.shape.width());
         let (xs, ys) = self.shape.window(centre, radius);
-        let index = |v: i16| usize::try_from(v).expect("clamped to the interior");
-        let (from, to) = (index(*xs.start()), index(*xs.end()));
+        let (start, end) = xs.into_inner();
+        // Off the interior the span is empty and may end below 0: no row then.
+        let ys = if start <= end {
+            ys
+        } else {
+            RangeInclusive::new(1, 0)
+        };
+        // Read only on a non-empty span, which lies within the interior.
+        let index = |v: i16| usize::from(v.unsigned_abs());
+        let (from, to) = (index(start), index(end));
         ys.map(move |y| {
             let row = index(y) * width;
-            let first = Pos { x: *xs.start(), y };
+            let first = Pos { x: start, y };
             (first, &self.cells[row + from..=row + to])
         })
     }

@@ -130,11 +130,16 @@ impl Backend for Ours {
 
     fn query(&mut self) -> u64 {
         let mut sum = 0_u64;
-        self.store
-            .join_mut(&self.keys[ALWAYS], &self.keys[ALWAYS + 1], |_, a, b| {
+        self.store.join_mut(
+            &self.keys[ALWAYS],
+            &self.keys[ALWAYS + 1],
+            &mut Vec::new(),
+            |a, b| {
                 b.0 = b.0.wrapping_add(a.0);
                 sum = sum.wrapping_add(u64::from(b.0));
-            });
+                None::<()>
+            },
+        );
         sum
     }
 

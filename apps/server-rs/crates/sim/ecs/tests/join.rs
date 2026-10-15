@@ -91,12 +91,12 @@ fn id_of(store: &Store, h: Handle) -> EntityId {
 fn join_mut_touches_only_rows_with_both() {
     let mut f = fixture();
     let mut touched = Vec::new();
-    f.store.join_mut(&f.a, &f.b, |h, a, b| {
+    f.store.join_mut(&f.a, &f.b, &mut touched, |a, b| {
         a.0 += b.0;
-        touched.push(h);
+        Some(())
     });
 
-    let touched_ids: Vec<EntityId> = touched.iter().map(|&h| id_of(&f.store, h)).collect();
+    let touched_ids: Vec<EntityId> = touched.iter().map(|&(h, ())| id_of(&f.store, h)).collect();
     let expected_ids: Vec<EntityId> = f
         .store
         .iter(f.a.read())
@@ -134,7 +134,7 @@ fn lone_store() -> (Store, Own<A>, Own<B>) {
 #[should_panic(expected = "join of a component with itself")]
 fn join_mut_of_a_key_with_itself_panics() {
     let (mut store, a, _) = lone_store();
-    store.join_mut(&a, &a, |_, _: &mut A, _: &mut A| {});
+    store.join_mut(&a, &a, &mut Vec::new(), |_: &mut A, _: &mut A| None::<()>);
 }
 
 /// Keys 1 and 2 of a three-component schema: the first has the wrong type
@@ -152,7 +152,12 @@ fn foreign_keys() -> (Own<A>, Own<A>) {
 fn join_mut_with_an_out_of_range_key_panics() {
     let (mut store, a, _) = lone_store();
     let (_, out_of_range) = foreign_keys();
-    store.join_mut(&a, &out_of_range, |_, _: &mut A, _: &mut A| {});
+    store.join_mut(
+        &a,
+        &out_of_range,
+        &mut Vec::new(),
+        |_: &mut A, _: &mut A| None::<()>,
+    );
 }
 
 #[test]
@@ -160,7 +165,9 @@ fn join_mut_with_an_out_of_range_key_panics() {
 fn join_mut_with_a_mismatched_key_panics() {
     let (mut store, a, _) = lone_store();
     let (mismatched, _) = foreign_keys();
-    store.join_mut(&a, &mismatched, |_, _: &mut A, _: &mut A| {});
+    store.join_mut(&a, &mismatched, &mut Vec::new(), |_: &mut A, _: &mut A| {
+        None::<()>
+    });
 }
 
 #[test]
@@ -173,7 +180,10 @@ fn join_mut_pairs_rows_by_owner_when_dense_orders_differ() {
     for (i, &h) in (0_u32..4).zip(&handles).rev() {
         store.insert(&b, h, B(10 * i));
     }
-    store.join_mut(&a, &b, |_, a, b| a.0 += b.0);
+    store.join_mut(&a, &b, &mut Vec::new(), |a, b| {
+        a.0 += b.0;
+        None::<()>
+    });
     let sums: Vec<u32> = handles
         .iter()
         .map(|&h| store.get(a.read(), h).expect("every handle holds a").0)
