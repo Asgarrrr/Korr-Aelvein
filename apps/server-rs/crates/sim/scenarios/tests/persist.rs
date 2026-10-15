@@ -1,13 +1,13 @@
 use korr_core::host::{
-    Floor, Game, LoadError, Pos, Round, Ruleset, Sections, Seed, TICKS_PER_ROUND, World,
+    Floor, LoadError, Pos, Round, Ruleset, Sections, Seed, TICKS_PER_ROUND, Then, World, keyed,
 };
-use korr_ecs::{Component, FloorId, Handle, ImageError, Reader, SchemaBuilder, Writer, checksum};
+use korr_ecs::{Component, FloorId, Handle, ImageError, Reader, Writer, checksum};
 use korr_engine::Registry;
 use korr_scenarios::{Pace, actionless, floor, game, run};
 
 const SEED: Seed = Seed(7);
 /// Re-pin on every intended change to the image format or to behaviour.
-const PINNED: u64 = 0x93cd_b873_5eb0_37d1;
+const PINNED: u64 = 0x3d66_b458_c272_c931;
 
 /// 40 actors, two per row. The fast even id starts at x = 3: blocked by the
 /// wall from tick 570, its clock stays off the round boundary. The slow odd
@@ -51,7 +51,7 @@ fn save_load_replay_matches_the_pinned_run() {
 
 /// The whole image under wander: its saved intent and ruleset fingerprint,
 /// which positions alone miss. Any behaviour or floor image change moves it.
-const PINNED_WANDER: u64 = 0x53ce_641d_44ab_2a92;
+const PINNED_WANDER: u64 = 0xf3e4_5675_08b2_d230;
 
 #[test]
 fn wander_world_hash_pins_the_image() {
@@ -86,11 +86,15 @@ fn a_changed_ruleset_refuses_the_save() {
     let bytes = populated(saving.ruleset()).0.save(saving.ruleset());
     let changed = [
         Registry {
-            wander: None,
+            wander: false,
             ..Registry::default()
         },
         Registry {
-            flora: None,
+            flora: false,
+            ..Registry::default()
+        },
+        Registry {
+            hunger: false,
             ..Registry::default()
         },
     ];
@@ -146,14 +150,30 @@ impl Component for MarkV1 {
     }
 }
 
+actionless!(Holder, "holder");
+
 #[test]
 fn a_changed_component_encoding_refuses_the_save() {
-    let mut schema0 = SchemaBuilder::default();
-    schema0.register::<MarkV0>("test.mark");
-    let game0 = Game::new(schema0, Pace, SEED);
-    let mut schema1 = SchemaBuilder::default();
-    schema1.register::<MarkV1>("test.mark");
-    let game1 = Game::new(schema1, Pace, SEED);
+    let game0 = game(
+        Then(
+            Pace,
+            keyed(|b| {
+                b.own::<MarkV0>("mark");
+                Holder
+            }),
+        ),
+        SEED,
+    );
+    let game1 = game(
+        Then(
+            Pace,
+            keyed(|b| {
+                b.own::<MarkV1>("mark");
+                Holder
+            }),
+        ),
+        SEED,
+    );
     let bytes = populated(game0.ruleset()).0.save(game0.ruleset());
     assert!(matches!(
         Floor::load(game1.ruleset(), &bytes),
@@ -185,10 +205,11 @@ fn forge_store(bytes: &[u8], edit: impl FnOnce(&mut Vec<u8>)) -> Vec<u8> {
 }
 
 /// The offset of the clock column's row count in a store image that holds one
-/// clock. Core registers the clock last, so its one row of owner slot (4 bytes)
-/// and tick (8 bytes) ends the image, before the checksum.
+/// clock and no vitality or remains. Core registers the clock, then those two:
+/// its one row of owner slot (4 bytes) and tick (8 bytes) precedes two empty
+/// columns of prefix (8 bytes) and count (4 bytes), then the checksum.
 fn clock_count_at(store: &[u8]) -> usize {
-    let at = store.len() - 8 - 12 - 4;
+    let at = store.len() - 8 - 2 * 12 - 12 - 4;
     assert_eq!(
         store[at..at + 4],
         1u32.to_le_bytes(),

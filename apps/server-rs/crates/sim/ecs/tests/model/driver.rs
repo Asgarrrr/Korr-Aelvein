@@ -74,6 +74,7 @@ pub(crate) struct World {
     model: BTreeMap<EntityId, (FloorId, Row)>,
     alive: Vec<(usize, Handle, EntityId)>,
     stale: Vec<(usize, Handle)>,
+    retired: Vec<(usize, EntityId)>,
 }
 
 impl World {
@@ -90,6 +91,7 @@ impl World {
             model: BTreeMap::new(),
             alive: Vec::new(),
             stale: Vec::new(),
+            retired: Vec::new(),
         }
     }
 
@@ -113,9 +115,9 @@ impl World {
     /// Takes `alive[index]` off its floor. The model keeps its row while it
     /// is in flight, so `check` holds only once it arrives.
     pub(crate) fn depart(&mut self, index: usize) -> Traveller {
-        let (floor, h, _) = self.alive.swap_remove(index);
+        let (floor, h, id) = self.alive.swap_remove(index);
         let traveller = self.stores[floor].detach(h);
-        self.retire(floor, h);
+        self.retire(floor, h, id);
         traveller
     }
 
@@ -170,14 +172,16 @@ impl World {
         let (floor, h, id) = self.alive.swap_remove(index);
         self.stores[floor].despawn(h);
         self.model.remove(&id);
-        self.retire(floor, h);
+        self.retire(floor, h, id);
     }
 
-    fn retire(&mut self, floor: usize, h: Handle) {
+    fn retire(&mut self, floor: usize, h: Handle, id: EntityId) {
         if self.stale.len() == STALE_KEPT {
             self.stale.remove(0);
+            self.retired.remove(0);
         }
         self.stale.push((floor, h));
+        self.retired.push((floor, id));
     }
 
     fn mutate(&mut self, stream: Stream, op: u32, (floor, h, id): (usize, Handle, EntityId)) {
@@ -246,6 +250,11 @@ impl World {
             );
             assert_eq!(store.id(h), Some(id), "step {step}: id");
             assert_eq!(
+                store.handle_of(id),
+                Some(h),
+                "step {step}: handle of {id:?}"
+            );
+            assert_eq!(
                 store.get(self.keys.pos.read(), h),
                 pos.as_ref(),
                 "step {step}: pos of {id:?}"
@@ -261,6 +270,18 @@ impl World {
             assert!(!store.is_alive(h), "step {step}: stale handle alive");
             assert_eq!(store.get(self.keys.pos.read(), h), None, "step {step}");
             assert_eq!(store.get(self.keys.hunger.read(), h), None, "step {step}");
+        }
+        for &(floor, id) in &self.retired {
+            let store = &self.stores[floor];
+            // A traveller may come back to the floor it left.
+            if self
+                .model
+                .get(&id)
+                .is_some_and(|(at, _)| *at == store.floor())
+            {
+                continue;
+            }
+            assert_eq!(store.handle_of(id), None, "step {step}: retired {id:?}");
         }
     }
 

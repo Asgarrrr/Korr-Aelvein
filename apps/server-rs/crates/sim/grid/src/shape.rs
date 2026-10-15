@@ -1,3 +1,5 @@
+use core::ops::RangeInclusive;
+
 /// One interior cell inside the wall ring.
 const MIN_SIDE: u16 = 3;
 /// Every position of the shape fits `i16`.
@@ -7,6 +9,15 @@ const MAX_SIDE: u16 = i16::MAX.unsigned_abs();
 pub struct Pos {
     pub x: i16,
     pub y: i16,
+}
+
+impl Pos {
+    /// The distance in king moves.
+    #[inline]
+    #[must_use]
+    pub fn chebyshev(self, other: Self) -> u16 {
+        self.x.abs_diff(other.x).max(self.y.abs_diff(other.y))
+    }
 }
 
 /// Any cell of the padded frame, ring included, in row-major order.
@@ -152,6 +163,25 @@ impl Shape {
             x: p.x.clamp(1, last(self.width)),
             y: p.y.clamp(1, last(self.height)),
         }
+    }
+
+    /// The columns and rows of the interior within Chebyshev distance `radius`
+    /// of `centre`, which may lie off the floor. A range is empty when no
+    /// interior line lies within `radius`.
+    #[must_use]
+    #[inline]
+    #[expect(
+        clippy::missing_panics_doc,
+        reason = "both bounds fit i16: the lower lies in 1..=max(centre, 1), the upper between min(centre, last line) and the last line"
+    )]
+    pub fn window(self, centre: Pos, radius: u16) -> (RangeInclusive<i16>, RangeInclusive<i16>) {
+        let last = |side: u16| i32::from(side) - 2;
+        let span = |at: i16, side: u16| {
+            let (at, r) = (i32::from(at), i32::from(radius));
+            let narrow = |v: i32| i16::try_from(v).expect("clamped within i16");
+            narrow((at - r).max(1))..=narrow((at + r).min(last(side)))
+        };
+        (span(centre.x, self.width), span(centre.y, self.height))
     }
 
     /// The interior cells within Chebyshev distance `radius` of `centre`, ring by

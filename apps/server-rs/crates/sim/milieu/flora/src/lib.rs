@@ -1,6 +1,7 @@
 //! Flora: the plants on the cells of a floor. A cell's value is its plant, 0
 //! for bare ground. Each round a plant grows one step until ripe, and bare
 //! ground beside ripe plants may sprout. A plant off walkable ground withers.
+//! A grazed plant leaves bare ground.
 #![no_std]
 #![deny(clippy::float_arithmetic)]
 
@@ -8,8 +9,10 @@ mod config;
 
 use core::convert::Infallible;
 
+use korr_contracts::Graze;
 use korr_core::mechanic::{
-    CommitCtx, DrawIndex, Draws, Module, PrepCtx, Prepared, Proposals, Senses, Stencil, Target,
+    Builder, CommitCtx, DrawIndex, Draws, Module, PrepCtx, Prepared, Proposals, ReadCells, Senses,
+    Served, Stencil, Target, serves,
 };
 
 use crate::config::{RIPE, SPROUT_CHANCE, SPROUT_ODDS};
@@ -27,14 +30,39 @@ impl From<Draw> for DrawIndex {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Flora;
+/// Any plant may be grazed, and the reply is its growth.
+fn graze(plant: u8) -> Option<u8> {
+    (plant > 0).then_some(plant)
+}
+
+fn grazed(_: u8) -> u8 {
+    0
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Flora {
+    plants: ReadCells,
+}
+
+impl Flora {
+    #[must_use]
+    pub fn build(b: &mut Builder<'_>) -> Self {
+        Self {
+            plants: b.cells("plants"),
+        }
+    }
+
+    #[must_use]
+    pub fn plants(&self) -> ReadCells {
+        self.plants
+    }
+}
 
 impl Module for Flora {
     const NAME: &'static str = "flora";
     type Action = Infallible;
     type Plan = Infallible;
-    const CELL_COLUMN: bool = true;
+    const SERVES: Option<Served> = Some(serves::<Graze>(graze, grazed));
 
     #[inline]
     fn tick(&self, cell: Stencil<'_>, draws: Draws) -> u8 {

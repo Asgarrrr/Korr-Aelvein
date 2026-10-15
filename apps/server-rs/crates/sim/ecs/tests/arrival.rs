@@ -88,3 +88,19 @@ fn a_traveller_id_with_bit_63_set_is_corrupt() {
         Some(ImageError::Corrupt("entity id"))
     );
 }
+
+#[test]
+fn attaching_an_id_already_alive_here_is_refused() {
+    let schema = SchemaBuilder::default().build();
+    let mut source = Store::new(&schema, FloorId(0));
+    let mut destination = Store::new(&schema, FloorId(1));
+    let h = source.spawn();
+    let t = source.detach(h);
+    let copy = reread(&t, |_| {});
+    destination.attach(t).expect("first attach");
+    let alive = destination.len();
+    let refusal = Err(ImageError::Corrupt("duplicate entity id"));
+    assert_eq!(destination.check_arrival(&copy), refusal);
+    assert_eq!(destination.attach(copy).map(|_| ()), refusal);
+    assert_eq!(destination.len(), alive);
+}

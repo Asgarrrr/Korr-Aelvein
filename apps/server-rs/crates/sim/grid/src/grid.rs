@@ -137,6 +137,7 @@ impl Grid {
     ///
     /// # Panics
     /// When `h` is not a linked actor.
+    #[inline]
     pub fn check_step(&self, h: Handle, dir: Dir) -> Result<Pos, StepError> {
         self.target(h, dir).map(|to| self.shape.pos(to.cell()))
     }
@@ -156,6 +157,7 @@ impl Grid {
         Ok(self.shape.pos(to.cell()))
     }
 
+    #[inline]
     fn target(&self, h: Handle, dir: Dir) -> Result<Interior, StepError> {
         let from = self
             .occupancy

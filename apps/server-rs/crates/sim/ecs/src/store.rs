@@ -69,6 +69,13 @@ impl Store {
         self.entities.id(h)
     }
 
+    /// The live entity named `id` on this floor.
+    #[must_use]
+    #[inline]
+    pub fn handle_of(&self, id: EntityId) -> Option<Handle> {
+        self.entities.handle_of(id)
+    }
+
     /// Every live entity, in ascending slot.
     pub fn handles(&self) -> impl Iterator<Item = Handle> + '_ {
         self.entities.handles()
@@ -92,6 +99,54 @@ impl Store {
     /// When `h` is dead, or `key` comes from another schema.
     pub fn insert<T: Component>(&mut self, key: &Own<T>, h: Handle, value: T) -> Option<T> {
         assert!(self.is_alive(h), "insert on a dead handle");
+        self.column_mut(key.read()).insert(h.slot, value)
+    }
+
+    /// Inserts through a read key: for setup by a host that holds no write
+    /// key. Returns the value `h` held before.
+    ///
+    /// ```
+    /// # use korr_ecs::{Component, FloorId, ImageError, Reader, SchemaBuilder, Store, Writer};
+    /// # #[derive(Debug, PartialEq)]
+    /// # struct Satiety(u8);
+    /// # impl Component for Satiety {
+    /// #     const VERSION: u16 = 0;
+    /// #     fn write(&self, w: &mut Writer) { w.write_u8(self.0); }
+    /// #     fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> { r.read_u8().map(Self) }
+    /// # }
+    /// let mut builder = SchemaBuilder::default();
+    /// let satiety = builder.register::<Satiety>("satiety").read();
+    /// let mut store = Store::new(&builder.build(), FloorId(0));
+    /// let h = store.spawn();
+    /// store.init(satiety, h, Satiety(1));
+    /// assert_eq!(store.get(satiety, h), Some(&Satiety(1)));
+    /// ```
+    ///
+    /// ```compile_fail,E0308
+    /// # use korr_ecs::{Component, FloorId, ImageError, Reader, SchemaBuilder, Store, Writer};
+    /// # struct Satiety(u8);
+    /// # impl Component for Satiety {
+    /// #     const VERSION: u16 = 0;
+    /// #     fn write(&self, w: &mut Writer) { w.write_u8(self.0); }
+    /// #     fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> { r.read_u8().map(Self) }
+    /// # }
+    /// # struct Dread(u8);
+    /// # impl Component for Dread {
+    /// #     const VERSION: u16 = 0;
+    /// #     fn write(&self, w: &mut Writer) { w.write_u8(self.0); }
+    /// #     fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> { r.read_u8().map(Self) }
+    /// # }
+    /// let mut builder = SchemaBuilder::default();
+    /// let satiety = builder.register::<Satiety>("satiety").read();
+    /// let mut store = Store::new(&builder.build(), FloorId(0));
+    /// let h = store.spawn();
+    /// store.init(satiety, h, Dread(1));
+    /// ```
+    ///
+    /// # Panics
+    /// When `h` is dead, or `key` comes from another schema.
+    pub fn init<T: Component>(&mut self, key: Read<T>, h: Handle, value: T) -> Option<T> {
+        assert!(self.is_alive(h), "init on a dead handle");
         self.column_mut(key).insert(h.slot, value)
     }
 
@@ -120,7 +175,7 @@ impl Store {
     /// When `key` comes from another schema.
     pub fn get_mut<T: Component>(&mut self, key: &Own<T>, h: Handle) -> Option<&mut T> {
         let alive = self.is_alive(h);
-        let column = self.column_mut(key);
+        let column = self.column_mut(key.read());
         if !alive {
             return None;
         }
@@ -133,7 +188,7 @@ impl Store {
     /// When `h` is dead, or `key` comes from another schema.
     pub fn remove<T: Component>(&mut self, key: &Own<T>, h: Handle) -> Option<T> {
         assert!(self.is_alive(h), "remove on a dead handle");
-        self.column_mut(key).remove(h.slot)
+        self.column_mut(key.read()).remove(h.slot)
     }
 
     /// Every value of `key`, in dense order.
@@ -151,7 +206,7 @@ impl Store {
     /// # Panics
     /// When `key` comes from another schema.
     pub fn values_mut<T: Component>(&mut self, key: &Own<T>) -> &mut [T] {
-        self.column_mut(key).values_mut()
+        self.column_mut(key.read()).values_mut()
     }
 
     /// Every holder of `key` and its value, in dense order.
@@ -171,8 +226,10 @@ impl Store {
         typed(&*self.columns[self.index(key)])
     }
 
-    fn column_mut<T: Component>(&mut self, key: &Own<T>) -> &mut Column<T> {
-        let index = self.index(key.read());
+    /// Takes a read key so `init` shares it: only the public signatures
+    /// that take `&Own<T>` guard the write.
+    fn column_mut<T: Component>(&mut self, key: Read<T>) -> &mut Column<T> {
+        let index = self.index(key);
         typed_mut(&mut *self.columns[index])
     }
 
@@ -184,9 +241,20 @@ impl Store {
 
     fn checked(&self, id: ComponentId, prefix: u64) -> usize {
         let index = id.0 as usize;
-        assert!(self.prefixes.get(index) == Some(&prefix), "{FOREIGN_KEY}");
+        let held = self.prefixes.get(index).copied();
+        if held != Some(prefix) {
+            refuse(held, prefix);
+        }
         index
     }
+}
+
+/// `lend` stores the negated prefix, so a lent key fails the same compare.
+#[cold]
+#[inline(never)]
+fn refuse(held: Option<u64>, prefix: u64) -> ! {
+    assert!(held != Some(!prefix), "component column lent");
+    panic!("{FOREIGN_KEY}");
 }
 
 impl Debug for Store {

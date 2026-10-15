@@ -43,6 +43,9 @@ a second name anywhere.
   sparse set.
 - **Cell column**: one typed array holding one field for every cell of
   every floor.
+- **ColumnIdx**: a cell column's place in its ruleset: contract columns in
+  provider visit order, then private columns in build order. In Rust
+  (korr-core): a `u16` newtype, never a Slot.
 - **Species**: which components an entity starts with, and their values.
   Content data, compiled once per world. Each entity saves its species as
   an index into the world's sorted species names; 0 means unnamed (spawned
@@ -126,11 +129,12 @@ a second name anywhere.
 - **Fingerprint**: a hash of the core schema, each module's name, schema,
   cells and config in registry order, and the species. A save only loads
   into a world with the same fingerprint. The Rust form hashes the component
-  names and format versions, then each module's name, action keys and
-  whether it owns a cell column, in visit order.
+  names and format versions, then each module's name and action keys and,
+  for a module that binds a cell column, the ColumnIdx and name of that
+  column, in visit order.
 - **Ruleset**: what every floor of a Rust world shares: the schema, the
   core's component keys, the module table (each module's key and action
-  keys, in visit order), the modules that own a cell column, and the
+  keys and bound ColumnIdx, in visit order), the cell column names, and the
   fingerprint. A floor image loads only under a ruleset with the same
   fingerprint.
 - **Traffic**: a per-floor running hash of the departures that leave or
@@ -150,7 +154,14 @@ a second name anywhere.
 - **Domain**: a folder grouping Mechanics by subject in the Rust engine:
   `biology`, `milieu`, `combat`. Filing only: it holds no shared code.
 - **Contract**: a component or cell field read by a second module, typed
-  in `contracts/` and read through a getter view.
+  in `contracts/` and read through a getter view. A cell column reached only
+  through a Request is not one: the Ask carries its key.
+- **Request**: what one module asks another to do to a cell of the cell
+  column the other serves, such as `Graze`. The serving module checks it in the
+  asker's `prepare` and applies it in the asker's `commit`. Not a Command,
+  which a client sends. In Rust (korr-core): the `Request` trait.
+- **Registration**: in Rust (korr-core), what the build keeps for one
+  contract until its provider's build takes the write key. Not a Slot.
 - **Trait**: one independent personality axis of an individual, such as
   boldness. Each entity draws its value from its species Range at birth.
 - **Temperament**: the module and component that hold an individual's

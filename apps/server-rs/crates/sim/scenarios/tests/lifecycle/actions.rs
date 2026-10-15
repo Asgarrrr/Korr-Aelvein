@@ -1,0 +1,316 @@
+use korr_core::{
+    host::{
+        Cause, Event, ROT_PER_ROUND, Remains, Round, SIGHT, Seed, Then, Vitality, World, keyed,
+    },
+    mechanic::{
+        Action, Band, Builder, CommitCtx, Component, Cost, ImageError, Module, Own, Pos, PrepCtx,
+        Prepared, Proposals, Reader, Senses, Target, Writer,
+    },
+};
+use korr_ecs::EntityId;
+use korr_scenarios::{GROUND, TO_GROUND, floor, game, nth, run};
+
+use super::{MAX, UPPER, mortal};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Lethal {
+    Lethal,
+}
+
+impl Action for Lethal {
+    const ALL: &'static [Self] = &[Self::Lethal];
+
+    fn name(self) -> &'static str {
+        "lethal"
+    }
+}
+
+const HP: u16 = 40;
+
+/// Every actor harms itself for `HP`.
+struct Suicide;
+
+impl Module for Suicide {
+    const NAME: &'static str = "suicide";
+    type Action = Lethal;
+    type Plan = EntityId;
+
+    fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, Lethal>) {
+        out.push(Lethal::Lethal, Band::Routine, 0, Target::None);
+    }
+
+    fn prepare(&self, _: Lethal, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Lethal, EntityId> {
+        Prepared::Go {
+            cost: Cost::new(100),
+            plan: ctx.actor(),
+        }
+    }
+
+    fn commit(&self, id: EntityId, ctx: &mut CommitCtx<'_>) {
+        ctx.harm(id, HP);
+    }
+}
+
+#[test]
+fn an_actor_killed_by_its_own_action_is_not_rescheduled() {
+    let game = game(Suicide, Seed(1));
+    let ruleset = game.ruleset();
+    let mut f = floor(ruleset, GROUND, 5, 5);
+    let h = mortal(&mut f, ruleset, Pos { x: 1, y: 1 }, HP, MAX);
+    f.spawn_actor(ruleset, Pos { x: 3, y: 3 });
+    let mut world = World::new(vec![f]);
+    run(&game, &mut world, 1);
+    assert_eq!(world.floor(GROUND).pos(h), None);
+    let dead = nth(GROUND, 0);
+    assert!(matches!(
+        *world.floor(GROUND).events(),
+        [Event::Died { id, cause: Cause::Entity(by) }, Event::Spawned { .. }]
+            if id == dead && by == dead
+    ));
+    run(&game, &mut world, 3);
+    assert_eq!(world.floor(GROUND).round(), Round(4));
+}
+
+/// Re-pin on every intended change to the image format or to behaviour.
+const PINNED_SUICIDE: u64 = 0xdade_c12f_1d87_4e19;
+
+/// The remains reuse the slot of an actor killed by its own action in the
+/// same round, so a clock or intent row left on that slot moves the image.
+#[test]
+fn remains_on_a_slot_freed_mid_round_start_without_clock_or_intent() {
+    let game = game(Suicide, Seed(1));
+    let ruleset = game.ruleset();
+    let mut f = floor(ruleset, GROUND, 5, 5);
+    mortal(&mut f, ruleset, Pos { x: 1, y: 1 }, HP, MAX);
+    f.spawn_actor(ruleset, Pos { x: 3, y: 3 });
+    let mut world = World::new(vec![f]);
+    run(&game, &mut world, 1);
+    game.load(&game.save(&world))
+        .expect("no clock row lies on the remains");
+    assert_eq!(game.hash(&world), PINNED_SUICIDE);
+}
+
+/// Every actor eats the remains it carries, down to nothing.
+struct SelfEater;
+
+impl Module for SelfEater {
+    const NAME: &'static str = "self_eater";
+    type Action = Lethal;
+    type Plan = EntityId;
+
+    fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, Lethal>) {
+        out.push(Lethal::Lethal, Band::Routine, 0, Target::None);
+    }
+
+    fn prepare(&self, _: Lethal, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Lethal, EntityId> {
+        Prepared::Go {
+            cost: Cost::new(100),
+            plan: ctx.actor(),
+        }
+    }
+
+    fn commit(&self, id: EntityId, ctx: &mut CommitCtx<'_>) {
+        ctx.consume(id, u16::MAX);
+    }
+}
+
+/// An actor carrying remains leaves when it eats them mid-round, so its
+/// clock and intent rows must leave with it, or the next entity of that
+/// slot inherits them.
+#[test]
+fn an_actor_that_eats_its_own_remains_leaves_no_clock_or_intent() {
+    let game = game(SelfEater, Seed(1));
+    let ruleset = game.ruleset();
+    let mut f = floor(ruleset, GROUND, 5, 5);
+    let h = f.spawn_actor(ruleset, Pos { x: 1, y: 1 });
+    let of = nth(GROUND, 0);
+    f.init(
+        ruleset.remains(),
+        h,
+        Remains {
+            of,
+            mass: 2 * ROT_PER_ROUND + 1,
+        },
+    );
+    let mut world = World::new(vec![f]);
+    run(&game, &mut world, 1);
+    assert_eq!(world.floor(GROUND).pos(h), None);
+    game.load(&game.save(&world))
+        .expect("no clock or intent row outlives its actor");
+}
+
+#[derive(Debug)]
+struct Fang;
+
+impl Component for Fang {
+    const VERSION: u16 = 0;
+
+    fn write(&self, _: &mut Writer) {}
+
+    fn read(_: &mut Reader<'_>) -> Result<Self, ImageError> {
+        Ok(Self)
+    }
+}
+
+/// An actor with a fang harms the first actor it sees for 255.
+struct Striker {
+    fang: Own<Fang>,
+}
+
+impl Striker {
+    fn build(b: &mut Builder<'_>) -> Self {
+        Self {
+            fang: b.own("fang"),
+        }
+    }
+}
+
+impl Module for Striker {
+    const NAME: &'static str = "striker";
+    type Action = Lethal;
+    type Plan = EntityId;
+
+    fn perceives(&self) -> bool {
+        true
+    }
+
+    fn propose(&self, senses: &Senses<'_>, out: &mut Proposals<'_, Lethal>) {
+        if senses.get(self.fang.read()).is_none() {
+            return;
+        }
+        if let Some(seen) = senses.seen().first() {
+            out.push(Lethal::Lethal, Band::Routine, 2, Target::Entity(seen.id));
+        }
+    }
+
+    fn prepare(&self, _: Lethal, target: Target, ctx: &PrepCtx<'_>) -> Prepared<Lethal, EntityId> {
+        match target {
+            Target::Entity(id) if ctx.locate(id).is_some() => Prepared::Go {
+                cost: Cost::new(100),
+                plan: id,
+            },
+            _ => Prepared::Fail,
+        }
+    }
+
+    fn commit(&self, id: EntityId, ctx: &mut CommitCtx<'_>) {
+        ctx.harm(id, 255);
+    }
+}
+
+/// The ground's one interior cell is held, so an arrival there would wait.
+#[test]
+fn an_actor_killed_after_it_departs_stays_dead() {
+    let game = game(Then(keyed(Striker::build), TO_GROUND), Seed(1));
+    let ruleset = game.ruleset();
+    let mut ground = floor(ruleset, GROUND, 3, 3);
+    ground.spawn_actor(ruleset, Pos { x: 1, y: 1 });
+    let mut upper = floor(ruleset, UPPER, 5, 5);
+    let victim = mortal(&mut upper, ruleset, Pos { x: 1, y: 1 }, MAX, MAX);
+    let striker = upper.spawn_actor(ruleset, Pos { x: 2, y: 1 });
+    upper.insert(&game.mechanics().0.fang, striker, Fang);
+    let mut world = World::new(vec![ground, upper]);
+    run(&game, &mut world, 1);
+    let (ground, upper) = (world.floor(GROUND), world.floor(UPPER));
+    assert_eq!(upper.pos(victim), None);
+    assert_eq!(ground.inbox_len(), 0);
+    assert!(matches!(
+        *upper.events(),
+        [Event::Died { id, cause: Cause::Entity(by) }, Event::Spawned { .. }]
+            if id == nth(UPPER, 0) && by == nth(UPPER, 1)
+    ));
+}
+
+/// Every actor harms `target` for `HP`, wherever it stands.
+struct Sniper {
+    target: EntityId,
+}
+
+impl Module for Sniper {
+    const NAME: &'static str = "sniper";
+    type Action = Lethal;
+    type Plan = EntityId;
+
+    fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, Lethal>) {
+        out.push(Lethal::Lethal, Band::Routine, 0, Target::None);
+    }
+
+    fn prepare(&self, _: Lethal, _: Target, _: &PrepCtx<'_>) -> Prepared<Lethal, EntityId> {
+        Prepared::Go {
+            cost: Cost::new(100),
+            plan: self.target,
+        }
+    }
+
+    fn commit(&self, id: EntityId, ctx: &mut CommitCtx<'_>) {
+        ctx.harm(id, HP);
+    }
+}
+
+/// Whether a thing `dx` cells east of a sniper survives its first shot.
+fn survives(dx: u16) -> bool {
+    let game = game(
+        Sniper {
+            target: nth(GROUND, 1),
+        },
+        Seed(1),
+    );
+    let ruleset = game.ruleset();
+    let mut f = floor(ruleset, GROUND, 8, 3);
+    let from = Pos { x: 1, y: 1 };
+    f.spawn_actor(ruleset, from);
+    let thing = f.spawn_thing(Pos {
+        x: from.x + dx.cast_signed(),
+        ..from
+    });
+    f.init(ruleset.vitality(), thing, Vitality { hp: HP, max: MAX });
+    let mut world = World::new(vec![f]);
+    run(&game, &mut world, 1);
+    world.floor(GROUND).pos(thing).is_some()
+}
+
+#[test]
+fn a_harm_beyond_sight_does_nothing() {
+    assert!(!survives(SIGHT));
+    assert!(survives(SIGHT + 1));
+}
+
+/// Every actor off the ground departs for it, in a third of a round.
+struct Dash;
+
+impl Module for Dash {
+    const NAME: &'static str = "dash";
+    type Action = Lethal;
+    type Plan = ();
+
+    fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, Lethal>) {
+        out.push(Lethal::Lethal, Band::Routine, 0, Target::None);
+    }
+
+    fn prepare(&self, _: Lethal, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Lethal, ()> {
+        if ctx.floor() == GROUND {
+            Prepared::Fail
+        } else {
+            Prepared::Go {
+                cost: Cost::new(30),
+                plan: (),
+            }
+        }
+    }
+
+    fn commit(&self, (): (), ctx: &mut CommitCtx<'_>) {
+        ctx.depart(GROUND, Pos { x: 2, y: 2 });
+    }
+}
+
+/// Rescheduled before the barrier, it would depart twice in one round.
+#[test]
+fn an_actor_that_departs_acts_no_more_before_the_barrier() {
+    let game = game(Dash, Seed(1));
+    let ruleset = game.ruleset();
+    let mut upper = floor(ruleset, UPPER, 5, 5);
+    let h = upper.spawn_actor(ruleset, Pos { x: 1, y: 1 });
+    let mut world = World::new(vec![floor(ruleset, GROUND, 5, 5), upper]);
+    run(&game, &mut world, 1);
+    assert_eq!(world.floor(UPPER).pos(h), None);
+}

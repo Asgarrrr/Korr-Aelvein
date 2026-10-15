@@ -37,6 +37,14 @@ fn pos_inverts_idx() {
 }
 
 #[test]
+fn chebyshev_is_the_longer_axis_from_either_end() {
+    let (a, b) = (Pos { x: 1, y: 6 }, Pos { x: 4, y: 5 });
+    assert_eq!((a.chebyshev(b), b.chebyshev(a)), (3, 3));
+    let (low, high) = (Pos { x: i16::MIN, y: 0 }, Pos { x: i16::MAX, y: 0 });
+    assert_eq!(low.chebyshev(high), u16::MAX);
+}
+
+#[test]
 fn shape_bounds() {
     assert_eq!(Shape::new(2, 5), None);
     assert!(Shape::new(3, 3).is_some());
@@ -51,4 +59,45 @@ fn dir_all_is_row_major() {
         (dy, dx)
     });
     assert!(keys.windows(2).all(|pair| pair[0] < pair[1]), "{keys:?}");
+}
+
+#[test]
+fn a_window_is_the_neighbourhood_clamped_to_the_interior() {
+    let shape = shape(7, 5);
+    for radius in [0, 1, 2, 5, u16::MAX] {
+        for cy in -2..=7 {
+            for cx in -2..=9 {
+                let centre = Pos { x: cx, y: cy };
+                let (xs, ys) = shape.window(centre, radius);
+                let window: Vec<_> = ys.flat_map(|y| xs.clone().map(move |x| (y, x))).collect();
+                let mut around: Vec<_> = shape
+                    .neighbourhood(centre, radius)
+                    .map(|at| shape.pos(at.cell()))
+                    .map(|p| (p.y, p.x))
+                    .collect();
+                around.sort_unstable();
+                assert_eq!(window, around, "{centre:?} radius {radius}");
+            }
+        }
+    }
+}
+
+#[test]
+fn a_window_far_off_the_floor_does_not_overflow() {
+    let shape = shape(7, 5);
+    for centre in [
+        Pos {
+            x: i16::MIN,
+            y: i16::MAX,
+        },
+        Pos {
+            x: i16::MAX,
+            y: i16::MIN,
+        },
+    ] {
+        let (xs, ys) = shape.window(centre, u16::MAX);
+        assert_eq!(xs.count() * ys.count(), 5 * 3);
+        let (xs, ys) = shape.window(centre, 0);
+        assert_eq!(xs.count() * ys.count(), 0);
+    }
 }

@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use core::cmp::Reverse;
 
-use korr_ecs::{Component, ImageError, Reader, Writer};
+use korr_ecs::{Component, EntityId, ImageError, Reader, Writer};
 use korr_grid::Pos;
 
 use crate::config::INERTIA;
@@ -39,6 +39,7 @@ pub(crate) struct Intent {
 
 const TARGET_NONE: u8 = 0;
 const TARGET_POS: u8 = 1;
+const TARGET_ENTITY: u8 = 2;
 
 impl Component for Intent {
     const VERSION: u16 = 0;
@@ -52,6 +53,10 @@ impl Component for Intent {
                 w.write_i16(p.x);
                 w.write_i16(p.y);
             }
+            Target::Entity(id) => {
+                w.write_u8(TARGET_ENTITY);
+                w.write_u64(id.to_bits());
+            }
         }
     }
 
@@ -63,6 +68,9 @@ impl Component for Intent {
                 x: r.read_i16()?,
                 y: r.read_i16()?,
             }),
+            TARGET_ENTITY => Target::Entity(
+                EntityId::from_bits(r.read_u64()?).ok_or(ImageError::Corrupt("target"))?,
+            ),
             _ => return Err(ImageError::Corrupt("target")),
         };
         Ok(Self { action, target })
@@ -109,9 +117,9 @@ impl Candidates {
 
 #[cfg(test)]
 mod tests {
-    use korr_ecs::{Component, ImageError, Reader, Writer};
+    use korr_ecs::{Component, EntityId, FloorId, ImageError, Reader, Writer};
 
-    use super::{ActionRef, Band, Candidate, Candidates, INERTIA, Intent, TARGET_POS};
+    use super::{ActionRef, Band, Candidate, Candidates, INERTIA, Intent, TARGET_ENTITY};
     use crate::module::{ActionKey, Target};
 
     fn candidate(key: u64, weight: u16) -> Candidate {
@@ -148,10 +156,24 @@ mod tests {
     }
 
     #[test]
+    fn an_entity_target_round_trips() {
+        let intent = Intent {
+            action: ActionKey(9),
+            target: Target::Entity(EntityId::new(FloorId(3), 41)),
+        };
+        let mut w = Writer::new();
+        intent.write(&mut w);
+        let bytes = w.into_bytes();
+        let mut r = Reader::new(&bytes);
+        assert_eq!(Intent::read(&mut r), Ok(intent));
+        assert_eq!(r.finish(), Ok(()));
+    }
+
+    #[test]
     fn an_unknown_target_tag_is_corrupt() {
         let mut w = Writer::new();
         w.write_u64(0);
-        w.write_u8(TARGET_POS + 1);
+        w.write_u8(TARGET_ENTITY + 1);
         let bytes = w.into_bytes();
         assert_eq!(
             Intent::read(&mut Reader::new(&bytes)).err(),

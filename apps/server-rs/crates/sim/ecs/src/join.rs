@@ -1,6 +1,8 @@
 //! A join walks the first key's dense order, so the order is predictable from
 //! one column: put the rarer component first.
 
+use alloc::vec::Vec;
+
 use crate::codec::Component;
 use crate::column::{FOREIGN_KEY, typed_mut};
 use crate::id::Handle;
@@ -9,15 +11,17 @@ use crate::store::Store;
 
 impl Store {
     /// Calls `f` on every holder of both `a` and `b`, in the dense order of
-    /// `a`. `f` cannot reach the store, so a join never changes structure.
+    /// `a`, and pushes each `Some` it returns to `out` with its holder. `f`
+    /// cannot reach the store, so a join never changes structure.
     ///
     /// # Panics
     /// When `a` and `b` are the same key, or a key comes from another schema.
-    pub fn join_mut<A: Component, B: Component>(
+    pub fn join_mut<A: Component, B: Component, R>(
         &mut self,
         a: &Own<A>,
         b: &Own<B>,
-        mut f: impl FnMut(Handle, &mut A, &mut B),
+        out: &mut Vec<(Handle, R)>,
+        mut f: impl FnMut(&mut A, &mut B) -> Option<R>,
     ) {
         assert!(
             a.read().id != b.read().id,
@@ -28,8 +32,10 @@ impl Store {
         let a = typed_mut::<A>(&mut **a);
         let b = typed_mut::<B>(&mut **b);
         for (slot, a) in a.rows_mut() {
-            if let Some(b) = b.get_mut(slot) {
-                f(self.entities.handle_at(slot), a, b);
+            if let Some(b) = b.get_mut(slot)
+                && let Some(r) = f(a, b)
+            {
+                out.push((self.entities.handle_at(slot), r));
             }
         }
     }

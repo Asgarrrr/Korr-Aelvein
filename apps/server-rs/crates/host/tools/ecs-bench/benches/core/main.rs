@@ -1,8 +1,13 @@
 //! One round of the reference world: a 128x128 floor with 8k actors and 2k
 //! things. The budget, about 200 ns per entity, holds for wander, which also
 //! walks flora's bare column; perceiving prices sight with every actor looking,
-//! at half density. The sweep repeats the round at other sizes and densities,
-//! so a gain is not one point's luck. The flora sweep prices the environment
+//! at half density; feeding prices hunger's search with every actor starving;
+//! starving prices the harm drain, every actor harmed each round by an empty stomach.
+//! The `actor_turn` group runs the 500-actor tower, one decision per actor per
+//! round, budget 200 ns per decision: wander alone, perceiving alone, and
+//! wander with flora and hunger on hungry actors that graze and walk.
+//! The sweep repeats the round at other sizes and densities, so a gain is not
+//! one point's luck. The flora sweep prices the environment
 //! phase alone per interior cell, budget 5 ns, from ripe plants beside bare ground.
 //! The floors group runs 64 tower floors per round on 1..N threads, for wander, for
 //! perceiving and for a trivial per-cell tick. Efficiency is thrpt(N) / (N x thrpt(1)), which
@@ -13,12 +18,14 @@
 //! serial barrier at its busiest. Divided by floors/wander/N, it bounds the
 //! barrier's share.
 
+mod feeding;
+mod tower;
+
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use korr_core::host::{Floor, Game, Job, Mechanics, Pos, Ruleset, Runner, Seed, World};
+use korr_core::host::{Floor, Game, Job, Pos, Recipe, Ruleset, Runner, Seed, World, keyed};
 use korr_ecs::FloorId;
-use korr_engine::Registry;
-use korr_flora::Flora;
-use korr_scenarios::{Ring, Shy, actionless, floor, game};
+use korr_engine::{Modules, Registry};
+use korr_scenarios::{Ring, Shy, actionless, floor, game, plants};
 use korr_server::Threads;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::{ThreadPool, ThreadPoolBuilder};
@@ -100,8 +107,8 @@ impl<R: Runner> Runner for Timed<'_, R> {
     }
 }
 
-fn build<M: Mechanics>(mechanics: M, layouts: &[Layout]) -> (World, Game<M>) {
-    let game = game(mechanics, Seed(1));
+fn build<R: Recipe>(recipe: R, layouts: &[Layout]) -> (World, Game<R::Mechanics>) {
+    let game = game(recipe, Seed(1));
     let floors = layouts
         .iter()
         .enumerate()
@@ -113,7 +120,7 @@ fn build<M: Mechanics>(mechanics: M, layouts: &[Layout]) -> (World, Game<M>) {
     (World::new(floors), game)
 }
 
-actionless!(Still, "still", CELL_COLUMN = true);
+actionless!(Still, "still", cells);
 
 /// The `k`-th of `n` cells spread evenly over the interior, row-major.
 fn spread(side: u16, k: u32, n: u32) -> Pos {
@@ -128,8 +135,13 @@ fn spread(side: u16, k: u32, n: u32) -> Pos {
 
 type Group<'a> = criterion::BenchmarkGroup<'a, criterion::measurement::WallTime>;
 
-fn round(group: &mut Group<'_>, id: BenchmarkId, layout: Layout, mechanics: impl Mechanics + Sync) {
-    let (mut world, game) = build(mechanics, &[layout]);
+fn round(
+    group: &mut Group<'_>,
+    id: BenchmarkId,
+    layout: Layout,
+    recipe: impl Recipe<Mechanics: Sync>,
+) {
+    let (mut world, game) = build(recipe, &[layout]);
     group.throughput(Throughput::Elements(layout.entities()));
     group.bench_function(id, |b| b.iter(|| game.run_round(&mut world)));
 }
@@ -137,11 +149,11 @@ fn round(group: &mut Group<'_>, id: BenchmarkId, layout: Layout, mechanics: impl
 fn parallel_round(
     group: &mut Group<'_>,
     id: BenchmarkId,
-    mechanics: impl Mechanics + Sync,
+    recipe: impl Recipe<Mechanics: Sync>,
     layouts: &[Layout],
     runner: &impl Runner,
 ) {
-    let (mut world, game) = build(mechanics, layouts);
+    let (mut world, game) = build(recipe, layouts);
     group.throughput(Throughput::Elements(
         u64::try_from(layouts.len()).expect("the floor count fits u64"),
     ));
@@ -162,6 +174,8 @@ fn core(c: &mut Criterion) {
         REFERENCE,
         Shy,
     );
+    feeding::feeding(&mut group);
+    feeding::starving(&mut group);
     group.finish();
 }
 
@@ -192,12 +206,12 @@ fn sweep(c: &mut Criterion) {
     group.finish();
 }
 
-fn planted(game: &Game<Registry>, world: &World, side: u16) -> u32 {
+fn planted(game: &Game<Modules>, world: &World, side: u16) -> u32 {
     let last = side.cast_signed() - 2;
-    let f = world.floor(FloorId(0));
+    let (f, cells) = (world.floor(FloorId(0)), plants(game.mechanics()));
     (1..=last)
         .flat_map(|y| (1..=last).map(move |x| Pos { x, y }))
-        .map(|at| u32::from(f.cell_value::<Flora>(game.ruleset(), at) != 0))
+        .map(|at| u32::from(f.cell(game.ruleset(), cells, at) != 0))
         .sum()
 }
 
@@ -210,16 +224,16 @@ fn flora_sweep(c: &mut Criterion) {
     for (side, percent) in cases {
         let game = game(
             Registry {
-                wander: None,
+                wander: false,
                 ..Registry::default()
             },
             Seed(1),
         );
         let inside = u32::from(side - 2);
-        let plants = inside * inside * percent / 100;
+        let (cells, plants) = (plants(game.mechanics()), inside * inside * percent / 100);
         let mut f = floor(game.ruleset(), FloorId(0), side, side);
         for k in 0..plants {
-            f.set_cell_value::<Flora>(game.ruleset(), spread(side, k, plants), u8::MAX);
+            f.set_cell(game.ruleset(), cells, spread(side, k, plants), u8::MAX);
         }
         let bytes = game.save(&World::new(vec![f]));
         let mut sown = game.load(&bytes).expect("own save loads");
@@ -271,7 +285,7 @@ fn floors(c: &mut Criterion) {
         parallel_round(
             &mut group,
             BenchmarkId::new("trivial", n),
-            Still,
+            keyed(Still::build),
             &layouts,
             &threads,
         );
@@ -343,5 +357,14 @@ fn barrier(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, core, sweep, flora_sweep, floors, skewed, barrier);
+criterion_group!(
+    benches,
+    core,
+    tower::actor_turn,
+    sweep,
+    flora_sweep,
+    floors,
+    skewed,
+    barrier
+);
 criterion_main!(benches);

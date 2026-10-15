@@ -72,7 +72,7 @@ fn walled_in_wanderer_still_ends_the_round() {
 fn wander_disabled_creatures_idle() {
     let game = game(
         Registry {
-            wander: None,
+            wander: false,
             ..Registry::default()
         },
         Seed(1),

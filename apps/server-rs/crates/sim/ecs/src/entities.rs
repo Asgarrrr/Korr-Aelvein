@@ -1,7 +1,6 @@
 //! Generational slots on a LIFO free list follow thunderdome 0.6.1 and hecs
 //! 0.11.2 (MIT OR Apache-2.0). Both wrap the generation; here a slot retires.
 
-use alloc::collections::BTreeSet;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::mem;
@@ -9,6 +8,7 @@ use core::mem;
 use crate::codec::{Reader, Writer};
 use crate::error::ImageError;
 use crate::id::{COUNTER_MASK, EntityId, FloorId, Handle, SlotIdx};
+use crate::index::IdIndex;
 
 const DEAD: u8 = 0;
 const ALIVE: u8 = 1;
@@ -25,6 +25,7 @@ pub(crate) struct Entities {
     metas: Vec<Meta>,
     free: Vec<SlotIdx>,
     alive: usize,
+    index: IdIndex,
 }
 
 /// Only `admit` builds one, so `arrive` never skips the counter check.
@@ -48,6 +49,7 @@ impl Entities {
             metas: Vec::new(),
             free: Vec::new(),
             alive: 0,
+            index: IdIndex::new(),
         }
     }
 
@@ -67,6 +69,9 @@ impl Entities {
     }
 
     pub(crate) fn admit(&self, id: EntityId) -> Result<Arrival, ImageError> {
+        if self.index.get(id).is_some() {
+            return Err(ImageError::Corrupt("duplicate entity id"));
+        }
         self.check_id(id)?;
         Ok(Arrival {
             id,
@@ -103,6 +108,7 @@ impl Entities {
     fn alloc(&mut self, id: EntityId) -> Handle {
         self.alive += 1;
         let slot = self.next_slot();
+        self.index.insert(id, slot.get());
         if self.free.pop().is_some() {
             let meta = &mut self.metas[slot.index()];
             assert!(meta.id.is_none(), "free list held a live slot");
@@ -127,6 +133,7 @@ impl Entities {
         let meta = &mut self.metas[h.slot.index()];
         meta.id = None;
         self.alive -= 1;
+        self.index.remove(id);
         // A wrapped generation would revive every stale handle to this slot.
         if meta.generation != u32::MAX {
             meta.generation += 1;
@@ -152,6 +159,14 @@ impl Entities {
         self.metas
             .get(slot.index())
             .is_some_and(|meta| meta.id.is_some())
+    }
+
+    /// A hit is always alive: `free` drops the id.
+    #[inline]
+    pub(crate) fn handle_of(&self, id: EntityId) -> Option<Handle> {
+        self.index
+            .get(id)
+            .map(|slot| self.handle_at(SlotIdx::new(slot)))
     }
 
     #[inline]
@@ -203,22 +218,23 @@ impl Entities {
     }
 
     /// Keeps the slot table and the free stack as written, so a reloaded
-    /// floor hands out the same slots as the saved one would have.
+    /// floor hands out the same slots as the saved one would have. The id
+    /// index is never written: it is rebuilt from the slots.
     pub(crate) fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> {
         let mut entities = Self::new(FloorId(r.read_u16()?));
         entities.next_counter = r.read_u64()?;
-        let mut ids = BTreeSet::new();
-        for _ in 0..r.read_u32()? {
+        for slot in 0..r.read_u32()? {
             let generation = r.read_u32()?;
             let id = match r.read_u8()? {
                 DEAD => None,
                 ALIVE => {
                     let id = EntityId::from_bits(r.read_u64()?)
                         .ok_or(ImageError::Corrupt("entity id"))?;
-                    if !ids.insert(id) {
+                    if entities.index.get(id).is_some() {
                         return Err(ImageError::Corrupt("duplicate entity id"));
                     }
                     entities.check_id(id)?;
+                    entities.index.insert(id, slot);
                     entities.alive += 1;
                     Some(id)
                 }

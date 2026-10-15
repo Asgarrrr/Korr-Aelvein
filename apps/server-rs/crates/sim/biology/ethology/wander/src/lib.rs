@@ -7,7 +7,8 @@ mod config;
 use core::num::NonZeroU32;
 
 use korr_core::mechanic::{
-    Action, Band, CommitCtx, Dir, DrawIndex, Module, PrepCtx, Prepared, Proposals, Senses, Target,
+    Action, Band, Builder, CommitCtx, Dir, DrawIndex, Module, PrepCtx, Prepared, Proposals, Senses,
+    Target,
 };
 
 use config::{ROAM_COST, ROAM_WEIGHT};
@@ -45,6 +46,13 @@ impl Action for WanderAction {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Wander;
 
+impl Wander {
+    #[must_use]
+    pub fn build(_: &mut Builder<'_>) -> Self {
+        Self
+    }
+}
+
 impl Module for Wander {
     const NAME: &'static str = "wander";
     type Action = WanderAction;
@@ -54,6 +62,9 @@ impl Module for Wander {
         out.push(WanderAction::Roam, Band::Routine, ROAM_WEIGHT, Target::None);
     }
 
+    // Inlined: LTO outlines it as the registry grows, costing 15-20% of a
+    // round on the wander benches.
+    #[inline]
     fn prepare(
         &self,
         _: WanderAction,

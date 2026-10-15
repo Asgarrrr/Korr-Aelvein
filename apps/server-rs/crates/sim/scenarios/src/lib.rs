@@ -4,63 +4,90 @@
 
 extern crate alloc;
 
+mod bleed;
 mod leave;
 mod ring;
 mod scripted;
 mod shy;
 
 use korr_core::{
-    host::{Floor, Game, Mechanics, Pos, Ruleset, Runner, Seed, Sequential, World},
+    host::{Floor, Game, Mechanics, Pos, Recipe, Ruleset, Runner, Seed, Sequential, World},
     mechanic::{
-        Action, Band, CommitCtx, Cost, Dir, Module, PrepCtx, Prepared, Proposals, Senses, Target,
+        Action, Band, CommitCtx, Cost, Dir, Module, PrepCtx, Prepared, Proposals, ReadCells,
+        Senses, Target,
     },
 };
-use korr_ecs::{FloorId, SchemaBuilder};
+use korr_ecs::{EntityId, FloorId, Handle};
+use korr_engine::{Modules, Registry};
 use korr_grid::Shape;
+use korr_hunger::{Diet, Hunger, Satiety};
 
+pub use bleed::{Bleeds, Clot, Wound};
+#[doc(hidden)]
+pub use korr_core as __core;
 pub use leave::Leave;
 pub use ring::Ring;
 pub use scripted::{Act, Answer, Fake, Scripted};
 pub use shy::{Shy, random_step};
 
-/// Declares `$module`, a module named `$name` with no action.
+/// Declares `$module`, a module named `$name` with no action. With `cells`,
+/// its `build` binds a cell column named `$name.cells`, for `keyed`.
 #[macro_export]
 macro_rules! actionless {
-    ($module:ident, $name:literal $(, CELL_COLUMN = $column:literal)?) => {
+    ($module:ident, $name:literal, cells) => {
+        $crate::actionless!($module, $name);
+
+        impl $module {
+            fn build(b: &mut $crate::__core::mechanic::Builder<'_>) -> Self {
+                b.cells("cells");
+                Self
+            }
+        }
+    };
+    ($module:ident, $name:literal) => {
         struct $module;
 
-        impl ::korr_core::mechanic::Module for $module {
+        impl $crate::__core::mechanic::Module for $module {
             const NAME: &'static str = $name;
-            $(const CELL_COLUMN: bool = $column;)?
             type Action = ::core::convert::Infallible;
             type Plan = ::core::convert::Infallible;
 
             fn propose(
                 &self,
-                _: &::korr_core::mechanic::Senses<'_>,
-                _: &mut ::korr_core::mechanic::Proposals<'_, ::core::convert::Infallible>,
+                _: &$crate::__core::mechanic::Senses<'_>,
+                _: &mut $crate::__core::mechanic::Proposals<'_, ::core::convert::Infallible>,
             ) {
             }
 
             fn prepare(
                 &self,
                 action: ::core::convert::Infallible,
-                _: ::korr_core::mechanic::Target,
-                _: &::korr_core::mechanic::PrepCtx<'_>,
-            ) -> ::korr_core::mechanic::Prepared<::core::convert::Infallible, ::core::convert::Infallible>
-            {
+                _: $crate::__core::mechanic::Target,
+                _: &$crate::__core::mechanic::PrepCtx<'_>,
+            ) -> $crate::__core::mechanic::Prepared<
+                ::core::convert::Infallible,
+                ::core::convert::Infallible,
+            > {
                 match action {}
             }
 
             fn commit(
                 &self,
                 plan: ::core::convert::Infallible,
-                _: &mut ::korr_core::mechanic::CommitCtx<'_>,
+                _: &mut $crate::__core::mechanic::CommitCtx<'_>,
             ) {
                 match plan {}
             }
         }
     };
+}
+
+pub const GROUND: FloorId = FloorId(0);
+
+/// Spawn order is id order.
+#[must_use]
+pub fn nth(floor: FloorId, n: u64) -> EntityId {
+    EntityId::new(floor, n)
 }
 
 /// # Panics
@@ -82,10 +109,46 @@ pub fn reload(ruleset: &Ruleset, floor: &Floor) -> Floor {
 
 /// # Panics
 /// When two modules share a name, two actions share an `ActionKey`, or
-/// an action requires a component the schema does not register.
+/// the recipe breaks a contract rule.
 #[must_use]
-pub fn game<M: Mechanics>(mechanics: M, seed: Seed) -> Game<M> {
-    Game::new(SchemaBuilder::default(), mechanics, seed)
+pub fn game<R: Recipe>(recipe: R, seed: Seed) -> Game<R::Mechanics> {
+    Game::new(recipe, seed)
+}
+
+#[must_use]
+pub fn flora_only(seed: Seed) -> Game<Modules> {
+    game(
+        Registry {
+            wander: false,
+            hunger: false,
+            ..Registry::default()
+        },
+        seed,
+    )
+}
+
+/// # Panics
+/// When the registry does not run hunger.
+#[must_use]
+pub fn hunger(modules: &Modules) -> &Hunger {
+    modules.hunger.as_ref().expect("the registry runs hunger")
+}
+
+/// # Panics
+/// When the registry does not run flora.
+#[must_use]
+pub fn plants(modules: &Modules) -> ReadCells {
+    modules
+        .flora
+        .as_ref()
+        .expect("the registry runs flora")
+        .plants()
+}
+
+/// Gives `h` a stomach at `satiety` that takes `diet`.
+pub fn stomach(f: &mut Floor, hunger: &Hunger, h: Handle, satiety: u16, diet: Diet) {
+    f.init(hunger.satiety(), h, Satiety(satiety));
+    f.init(hunger.diet(), h, diet);
 }
 
 /// Every actor off floor 0 departs for its centre.

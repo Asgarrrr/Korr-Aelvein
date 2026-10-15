@@ -1,9 +1,11 @@
 use alloc::vec::Vec;
 
-use korr_ecs::{AnyRead, Own, Schema, SchemaBuilder, checksum};
+use korr_ecs::{AnyRead, Own, Read, Schema, SchemaBuilder, checksum};
 use korr_random::ModuleKey;
 
+use crate::build::{ColumnIdx, ColumnName, Recipe, assemble};
 use crate::decision::Intent;
+use crate::life::{Remains, Vitality};
 use crate::module::{Action, ActionKey, Mechanics, Module, Visit, module_key};
 use crate::time::Tick;
 
@@ -14,7 +16,8 @@ pub(crate) struct ModuleEntry {
     pub(crate) name: &'static str,
     pub(crate) actions: Vec<ActionKey>,
     pub(crate) requires: Vec<Vec<AnyRead>>,
-    pub(crate) column: bool,
+    /// The cell column the module binds.
+    pub(crate) column: Option<ColumnIdx>,
 }
 
 /// What every floor of a world shares: the schema, the module table and the core's keys.
@@ -24,25 +27,27 @@ pub struct Ruleset {
     pub(crate) intent: Own<Intent>,
     /// When the actor acts next: the schedule is rebuilt from it on load.
     pub(crate) clock: Own<Tick>,
+    pub(crate) vitality: Own<Vitality>,
+    pub(crate) remains: Own<Remains>,
     /// In visit order: a candidate's module ordinal indexes it.
     pub(crate) modules: Vec<ModuleEntry>,
     /// Whether any module reads `Senses::seen`.
     pub(crate) perceives: bool,
-    /// The names of the modules that own a cell column, in visit order.
-    pub(crate) columns: Vec<&'static str>,
+    /// The hashed name of each cell column, in `ColumnIdx` order.
+    pub(crate) columns: Vec<ColumnName>,
     fingerprint: u64,
 }
 
-struct Table<'a> {
-    schema: &'a Schema,
+struct Table {
     modules: Vec<ModuleEntry>,
     perceives: bool,
-    columns: Vec<&'static str>,
+    /// The column each module binds, in visit order.
+    owners: Vec<Option<ColumnIdx>>,
     /// Every action key with its module ordinal and name, to report a collision.
     keys: Vec<(ActionKey, usize, &'static str)>,
 }
 
-impl Visit for Table<'_> {
+impl Visit for Table {
     fn module<M: Module>(&mut self, module: &M) {
         let key = module_key::<M>();
         assert!(
@@ -63,50 +68,39 @@ impl Visit for Table<'_> {
             .collect();
         let requires = M::Action::ALL
             .iter()
-            .map(|&action| {
-                M::requires(action)
-                    .iter()
-                    .map(|&name| {
-                        self.schema.find(name).unwrap_or_else(|| {
-                            panic!(
-                                "{}.{} requires {name}, which the schema does not register",
-                                M::NAME,
-                                action.name()
-                            )
-                        })
-                    })
-                    .collect()
-            })
+            .map(|&action| module.requires(action))
             .collect();
         self.perceives |= module.perceives();
-        if M::CELL_COLUMN {
-            self.columns.push(M::NAME);
-        }
         self.modules.push(ModuleEntry {
             key,
             name: M::NAME,
             actions,
             requires,
-            column: M::CELL_COLUMN,
+            column: self.owners[ordinal],
         });
     }
 }
 
 impl Ruleset {
+    /// The ruleset of a recipe and the mechanics it builds.
+    ///
     /// # Panics
-    /// When two modules share a name, two actions share an `ActionKey`, or
-    /// an action requires a component the schema does not register, or a
-    /// module ordinal or action index exceeds `u16`.
+    /// When two modules share a name, two actions share an `ActionKey`, the
+    /// recipe breaks a contract rule, or a module ordinal or action index
+    /// exceeds `u16`.
     #[must_use]
-    pub(crate) fn new(mut schema: SchemaBuilder, mechanics: &impl Mechanics) -> Self {
+    pub(crate) fn new<R: Recipe>(recipe: R) -> (Self, R::Mechanics) {
+        let mut schema = SchemaBuilder::default();
         let intent = schema.register::<Intent>("core.intent");
         let clock = schema.register::<Tick>("core.clock");
+        let vitality = schema.register::<Vitality>("core.vitality");
+        let remains = schema.register::<Remains>("core.remains");
+        let (mechanics, columns) = assemble(recipe, &mut schema);
         let schema = schema.build();
         let mut table = Table {
-            schema: &schema,
             modules: Vec::new(),
             perceives: false,
-            columns: Vec::new(),
+            owners: columns.owners,
             keys: Vec::new(),
         };
         mechanics.each(&mut table);
@@ -120,7 +114,17 @@ impl Ruleset {
             for action in &module.actions {
                 bytes.extend_from_slice(&action.to_bits().to_le_bytes());
             }
-            bytes.push(u8::from(module.column));
+            match module.column {
+                None => bytes.push(0),
+                Some(column) => {
+                    let name = &columns.names[column.index()];
+                    let name_len = u32::try_from(name.len()).expect("a column name fits u32 bytes");
+                    bytes.push(1);
+                    bytes.extend_from_slice(&column.to_le_bytes());
+                    bytes.extend_from_slice(&name_len.to_le_bytes());
+                    bytes.extend_from_slice(name.as_bytes());
+                }
+            }
         }
         let fingerprint = checksum(&bytes);
         table.keys.sort_unstable_by_key(|&(key, ..)| key);
@@ -135,27 +139,43 @@ impl Ruleset {
             }
         }
         let Table {
-            modules,
-            perceives,
-            columns,
-            ..
+            modules, perceives, ..
         } = table;
-        Self {
+        let ruleset = Self {
             schema,
             intent,
             clock,
+            vitality,
+            remains,
             modules,
             perceives,
-            columns,
+            columns: columns
+                .names
+                .iter()
+                .map(|name| ColumnName::of(name))
+                .collect(),
             fingerprint,
-        }
+        };
+        (ruleset, mechanics)
     }
 
-    /// The schema, then the name, action keys and whether it owns a cell column
-    /// of each module in visit order: a save loads only under a ruleset with
+    /// The schema, then the name, action keys and bound cell column of each
+    /// module in visit order: a save loads only under a ruleset with
     /// the same fingerprint.
     #[must_use]
     pub fn fingerprint(&self) -> u64 {
         self.fingerprint
+    }
+
+    /// For setup through `Floor::init`: in a round, only `harm` writes vitality.
+    #[must_use]
+    pub fn vitality(&self) -> Read<Vitality> {
+        self.vitality.read()
+    }
+
+    /// For setup through `Floor::init`: in a round, only a death lays remains.
+    #[must_use]
+    pub fn remains(&self) -> Read<Remains> {
+        self.remains.read()
     }
 }

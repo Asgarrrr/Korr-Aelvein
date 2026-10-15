@@ -66,14 +66,13 @@ impl Store {
         }
     }
 
-    /// All or nothing: on `Err` the store is unchanged. Does not check that
-    /// the id is alive on no floor; detach always precedes attach. A caller
-    /// that attaches one id twice, for example by reading the same bytes
-    /// twice, makes `save` write an image that `load` rejects.
+    /// All or nothing: on `Err` the store is unchanged. Checks that the id is
+    /// not alive on this store; does not check the other floors, as detach
+    /// always precedes attach.
     ///
     /// # Errors
-    /// When the id is beyond this floor's counter or the row does not
-    /// match the schema.
+    /// When the id is alive on this store, the id is beyond this floor's
+    /// counter, or the row does not match the schema.
     #[expect(
         clippy::needless_pass_by_value,
         reason = "taking the traveller keeps one value from attaching twice"

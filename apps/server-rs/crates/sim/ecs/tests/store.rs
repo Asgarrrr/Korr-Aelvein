@@ -107,7 +107,7 @@ fn reused_slot_starts_without_components() {
 #[test]
 fn has_is_false_for_a_stale_handle_on_a_reused_slot() {
     let (schema, satiety) = hunger_only();
-    let key = schema.find("satiety").expect("registered");
+    let key = satiety.read().into();
     let mut store = Store::new(&schema, FloorId(0));
     let old = store.spawn();
     store.despawn(old);
@@ -147,6 +147,16 @@ fn insert_on_a_dead_handle_panics() {
     let h = store.spawn();
     store.despawn(h);
     store.insert(&satiety, h, Satiety(1));
+}
+
+#[test]
+#[should_panic(expected = "init on a dead handle")]
+fn init_on_a_dead_handle_panics() {
+    let (schema, satiety) = hunger_only();
+    let mut store = Store::new(&schema, FloorId(0));
+    let h = store.spawn();
+    store.despawn(h);
+    store.init(satiety.read(), h, Satiety(1));
 }
 
 #[test]

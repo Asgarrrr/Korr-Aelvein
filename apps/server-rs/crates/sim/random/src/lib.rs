@@ -26,7 +26,7 @@ pub enum Subject {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Seed(pub u64);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ModuleKey(u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

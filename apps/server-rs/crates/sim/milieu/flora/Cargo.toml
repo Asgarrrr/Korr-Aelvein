@@ -10,6 +10,7 @@ test = false
 doctest = false
 
 [dependencies]
+korr-contracts.workspace = true
 korr-core.workspace = true
 
 [lints]

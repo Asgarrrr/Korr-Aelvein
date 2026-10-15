@@ -1,12 +1,12 @@
 use korr_core::{
-    host::{Game, Seed, World},
+    host::{Seed, World, keyed},
     mechanic::{
-        Action, Band, CommitCtx, Cost, Dir, Module, Pos, PrepCtx, Prepared, Proposals, Senses,
-        Target,
+        Action, AnyRead, Band, Builder, CommitCtx, Component, Cost, Dir, ImageError, Module, Own,
+        Pos, PrepCtx, Prepared, Proposals, Reader, Senses, Target, Writer,
     },
 };
-use korr_ecs::{Component, FloorId, ImageError, Reader, SchemaBuilder, Writer};
-use korr_scenarios::{floor, run};
+use korr_ecs::FloorId;
+use korr_scenarios::{floor, game, run};
 
 struct Mark;
 
@@ -22,7 +22,17 @@ impl Component for Mark {
 
 /// Prefers east, which only a marked actor may take; west needs nothing.
 #[derive(Debug)]
-struct Marked;
+struct Marked {
+    mark: Own<Mark>,
+}
+
+impl Marked {
+    fn build(b: &mut Builder<'_>) -> Self {
+        Self {
+            mark: b.own("mark"),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Step {
@@ -55,10 +65,10 @@ impl Module for Marked {
     type Action = Step;
     type Plan = Dir;
 
-    fn requires(action: Step) -> &'static [&'static str] {
+    fn requires(&self, action: Step) -> Vec<AnyRead> {
         match action {
-            Step::East => &["test.mark"],
-            Step::West => &[],
+            Step::East => vec![self.mark.read().into()],
+            Step::West => Vec::new(),
         }
     }
 
@@ -84,12 +94,10 @@ impl Module for Marked {
 
 #[test]
 fn a_missing_requirement_fails_the_action() {
-    let mut schema = SchemaBuilder::default();
-    let mark = schema.register::<Mark>("test.mark");
-    let game = Game::new(schema, Marked, Seed(1));
+    let game = game(keyed(Marked::build), Seed(1));
     let mut f = floor(game.ruleset(), FloorId(0), 9, 9);
     let m = f.spawn_actor(game.ruleset(), Pos { x: 4, y: 4 });
-    f.insert(&mark, m, Mark);
+    f.insert(&game.mechanics().mark, m, Mark);
     let u = f.spawn_actor(game.ruleset(), Pos { x: 4, y: 6 });
     let mut world = World::new(vec![f]);
     run(&game, &mut world, 1);
@@ -98,15 +106,19 @@ fn a_missing_requirement_fails_the_action() {
     assert_eq!(floor.pos(u), Some(Pos { x: 3, y: 6 }));
 }
 
-#[test]
-#[should_panic(expected = "requires test.mark")]
-fn an_unregistered_requirement_panics() {
-    let _ = Game::new(SchemaBuilder::default(), Marked, Seed(1));
-}
-
 /// Proposes only `Start`, which hands over to `Gated`: east, for a marked actor only.
 #[derive(Debug)]
-struct Hop;
+struct Hop {
+    mark: Own<Mark>,
+}
+
+impl Hop {
+    fn build(b: &mut Builder<'_>) -> Self {
+        Self {
+            mark: b.own("mark"),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Hopping {
@@ -130,10 +142,10 @@ impl Module for Hop {
     type Action = Hopping;
     type Plan = ();
 
-    fn requires(action: Hopping) -> &'static [&'static str] {
+    fn requires(&self, action: Hopping) -> Vec<AnyRead> {
         match action {
-            Hopping::Start => &[],
-            Hopping::Gated => &["test.mark"],
+            Hopping::Start => Vec::new(),
+            Hopping::Gated => vec![self.mark.read().into()],
         }
     }
 
@@ -164,12 +176,10 @@ impl Module for Hop {
 
 #[test]
 fn a_redirect_to_an_action_the_actor_lacks_the_component_for_fails() {
-    let mut schema = SchemaBuilder::default();
-    let mark = schema.register::<Mark>("test.mark");
-    let game = Game::new(schema, Hop, Seed(1));
+    let game = game(keyed(Hop::build), Seed(1));
     let mut f = floor(game.ruleset(), FloorId(0), 9, 9);
     let m = f.spawn_actor(game.ruleset(), Pos { x: 4, y: 4 });
-    f.insert(&mark, m, Mark);
+    f.insert(&game.mechanics().mark, m, Mark);
     let u = f.spawn_actor(game.ruleset(), Pos { x: 4, y: 6 });
     let mut world = World::new(vec![f]);
     run(&game, &mut world, 1);
