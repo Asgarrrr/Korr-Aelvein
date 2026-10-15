@@ -260,9 +260,9 @@ Budget, in the `core` bench (not part of `verify`, reported in the PR):
 - The cell-contract seam (`provides_cells::<C>()`, `Builder::provide_cells`,
   `Builder::contract_cells`) stays with no production provider too. Hunger
   reads flora's plants through the key its `Ask<Graze>` carries, so flora
-  binds a private column, `flora.plants`, and `korr-contracts` holds no `Plants`. Its
-  implementations are the test fakes `Peat` in `tests/columns/main.rs` and
-  `Silt` in `tests/seam.rs`.
+  binds a private column, `flora.plants`, and `korr-contracts` holds no
+  `Plants`. Its implementations are the test fakes `Peat` in
+  `tests/columns/main.rs` and `Silt` in `tests/seam.rs`.
 - The seam is narrower than §2: no `PrepCtx::get`, no `CommitCtx`
   `insert`, `remove` or `set`, and `Rows` has only a two-column `join`.
   No mechanic uses them yet, and an abstraction waits for a real user:
