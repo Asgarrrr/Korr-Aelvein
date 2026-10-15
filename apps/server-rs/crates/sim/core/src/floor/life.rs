@@ -5,8 +5,8 @@ use korr_ecs::{EntityId, Handle};
 use korr_grid::{Layer, Pos};
 
 use crate::config::{EVENTS_PER_ROUND, ROT_PER_ROUND};
-use crate::floor::Floor;
 use crate::floor::turn::Lents;
+use crate::floor::{Floor, Recording};
 use crate::life::{Cause, Event, Harm, Remains, Vitality};
 use crate::ruleset::Ruleset;
 
@@ -120,7 +120,7 @@ impl Floor {
             self.event_count <= EVENTS_PER_ROUND,
             "more than {EVENTS_PER_ROUND} events in one round"
         );
-        if self.recording {
+        if self.recording == Recording::Kept {
             self.events.push(event);
         }
     }

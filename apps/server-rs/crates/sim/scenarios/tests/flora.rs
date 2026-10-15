@@ -356,7 +356,7 @@ impl Module for Probe {
         self.replies
             .lock()
             .expect("no prepare panicked while holding the lock")
-            .extend(PROBED.map(|at| ctx.check(graze, at).map(|(_, reply)| reply)));
+            .extend(PROBED.map(|at| ctx.check(graze, at).map(|checked| checked.reply())));
         Prepared::Fail
     }
 

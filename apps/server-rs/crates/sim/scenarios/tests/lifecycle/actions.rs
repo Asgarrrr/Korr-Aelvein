@@ -1,5 +1,7 @@
 use korr_core::{
-    host::{Cause, Event, ROT_PER_ROUND, Remains, Round, Seed, Then, World, keyed},
+    host::{
+        Cause, Event, ROT_PER_ROUND, Remains, Round, SIGHT, Seed, Then, Vitality, World, keyed,
+    },
     mechanic::{
         Action, Band, Builder, CommitCtx, Component, Cost, ImageError, Module, Own, Pos, PrepCtx,
         Prepared, Proposals, Reader, Senses, Target, Writer,
@@ -217,4 +219,98 @@ fn an_actor_killed_after_it_departs_stays_dead() {
         [Event::Died { id, cause: Cause::Entity(by) }, Event::Spawned { .. }]
             if id == nth(UPPER, 0) && by == nth(UPPER, 1)
     ));
+}
+
+/// Every actor harms `target` for `HP`, wherever it stands.
+struct Sniper {
+    target: EntityId,
+}
+
+impl Module for Sniper {
+    const NAME: &'static str = "sniper";
+    type Action = Lethal;
+    type Plan = EntityId;
+
+    fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, Lethal>) {
+        out.push(Lethal::Lethal, Band::Routine, 0, Target::None);
+    }
+
+    fn prepare(&self, _: Lethal, _: Target, _: &PrepCtx<'_>) -> Prepared<Lethal, EntityId> {
+        Prepared::Go {
+            cost: Cost::new(100),
+            plan: self.target,
+        }
+    }
+
+    fn commit(&self, id: EntityId, ctx: &mut CommitCtx<'_>) {
+        ctx.harm(id, HP);
+    }
+}
+
+/// Whether a thing `dx` cells east of a sniper survives its first shot.
+fn survives(dx: u16) -> bool {
+    let game = game(
+        Sniper {
+            target: nth(GROUND, 1),
+        },
+        Seed(1),
+    );
+    let ruleset = game.ruleset();
+    let mut f = floor(ruleset, GROUND, 8, 3);
+    let from = Pos { x: 1, y: 1 };
+    f.spawn_actor(ruleset, from);
+    let thing = f.spawn_thing(Pos {
+        x: from.x + dx.cast_signed(),
+        ..from
+    });
+    f.init(ruleset.vitality(), thing, Vitality { hp: HP, max: MAX });
+    let mut world = World::new(vec![f]);
+    run(&game, &mut world, 1);
+    world.floor(GROUND).pos(thing).is_some()
+}
+
+#[test]
+fn a_harm_beyond_sight_does_nothing() {
+    assert!(!survives(SIGHT));
+    assert!(survives(SIGHT + 1));
+}
+
+/// Every actor off the ground departs for it, in a third of a round.
+struct Dash;
+
+impl Module for Dash {
+    const NAME: &'static str = "dash";
+    type Action = Lethal;
+    type Plan = ();
+
+    fn propose(&self, _: &Senses<'_>, out: &mut Proposals<'_, Lethal>) {
+        out.push(Lethal::Lethal, Band::Routine, 0, Target::None);
+    }
+
+    fn prepare(&self, _: Lethal, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Lethal, ()> {
+        if ctx.floor() == GROUND {
+            Prepared::Fail
+        } else {
+            Prepared::Go {
+                cost: Cost::new(30),
+                plan: (),
+            }
+        }
+    }
+
+    fn commit(&self, (): (), ctx: &mut CommitCtx<'_>) {
+        ctx.depart(GROUND, Pos { x: 2, y: 2 });
+    }
+}
+
+/// Rescheduled before the barrier, it would depart twice in one round.
+#[test]
+fn an_actor_that_departs_acts_no_more_before_the_barrier() {
+    let game = game(Dash, Seed(1));
+    let ruleset = game.ruleset();
+    let mut upper = floor(ruleset, UPPER, 5, 5);
+    let h = upper.spawn_actor(ruleset, Pos { x: 1, y: 1 });
+    let mut world = World::new(vec![floor(ruleset, GROUND, 5, 5), upper]);
+    run(&game, &mut world, 1);
+    assert_eq!(world.floor(UPPER).pos(h), None);
 }

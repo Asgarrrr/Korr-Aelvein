@@ -130,21 +130,21 @@ impl PrepCtx<'_> {
         self.draws.below(draw, bound)
     }
 
-    /// The server's reply to `C` at `at`, with the token that orders it;
-    /// `None` when it refuses, or `at` is off the floor or beyond `SIGHT`.
+    /// The token that orders `C` at `at`, with the server's reply; `None`
+    /// when it refuses, or `at` is off the floor or beyond `SIGHT`.
     ///
     /// # Panics
     /// When `ask` comes from another ruleset: checked in debug builds only;
     /// release reads whatever column holds its index, or panics out of bounds.
     #[must_use]
-    pub fn check<C>(&self, ask: Ask<C>, at: Pos) -> Option<(Checked<C>, u8)> {
+    pub fn check<C>(&self, ask: Ask<C>, at: Pos) -> Option<Checked<C>> {
         debug_assert!(ask.cells.is_in(self.names), "{FOREIGN_ASK}");
         if !within_sight(self.grid, self.actor, at) {
             return None;
         }
         let at = self.grid.shape().idx(at)?;
         let reply = (ask.service.check)(self.columns[ask.cells.column.index()].get(at))?;
-        Some((Checked { ask, at }, reply))
+        Some(Checked { ask, at, reply })
     }
 }
 
@@ -153,6 +153,15 @@ impl PrepCtx<'_> {
 pub struct Checked<C> {
     ask: Ask<C>,
     at: Interior,
+    reply: u8,
+}
+
+impl<C> Checked<C> {
+    /// What the server replied when it accepted the request.
+    #[must_use]
+    pub fn reply(&self) -> u8 {
+        self.reply
+    }
 }
 
 impl<C> fmt::Debug for Checked<C> {
@@ -160,6 +169,7 @@ impl<C> fmt::Debug for Checked<C> {
         f.debug_struct("Checked")
             .field("ask", &self.ask)
             .field("at", &self.at)
+            .field("reply", &self.reply)
             .finish()
     }
 }
@@ -202,7 +212,7 @@ impl CommitCtx<'_> {
         reason = "an order spends its token, so one check orders once"
     )]
     pub fn order<C>(&mut self, checked: Checked<C>) {
-        let Checked { ask, at } = checked;
+        let Checked { ask, at, .. } = checked;
         assert!(ask.cells.is_in(&self.ruleset.columns), "{FOREIGN_ASK}");
         let column = &mut self.columns[ask.cells.column.index()];
         column.set(at, (ask.service.apply)(column.get(at)));
@@ -232,10 +242,15 @@ impl CommitCtx<'_> {
         });
     }
 
-    /// Harms `target` by `amount`, as the actor's doing, once its turn ends.
+    /// Harms `target` by `amount`, as the actor's doing, once its turn ends:
+    /// nothing when `target` stands on no cell within `SIGHT`, like `consume`.
     pub fn harm(&mut self, target: EntityId, amount: u16) {
         if amount > 0
             && let Some(h) = self.store.handle_of(target)
+            && self
+                .grid
+                .pos(h)
+                .is_some_and(|at| within_sight(self.grid, self.actor, at))
         {
             self.harms.push(Harm {
                 target,

@@ -27,6 +27,16 @@ use crate::time::{Round, Tick};
 
 pub use sections::{FlightImage, Sections};
 
+/// What a floor keeps of the events of a round: every event counts toward
+/// the cap either way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Recording {
+    /// Stored for `Floor::events`.
+    Kept,
+    /// Only counted.
+    Counted,
+}
+
 #[derive(Debug)]
 pub struct Floor {
     store: Store,
@@ -59,8 +69,8 @@ pub struct Floor {
     events: Vec<Event>,
     /// Events raised since the round started, stored or not; never saved or hashed.
     event_count: u32,
-    /// Whether events are stored; never saved or hashed.
-    recording: bool,
+    /// Never saved or hashed.
+    recording: Recording,
 }
 
 impl Floor {
@@ -88,7 +98,7 @@ impl Floor {
             emptied: Vec::new(),
             events: Vec::new(),
             event_count: 0,
-            recording: true,
+            recording: Recording::Kept,
         }
     }
 
@@ -181,9 +191,9 @@ impl Floor {
         &self.events
     }
 
-    /// Stores the events of the next rounds, or only counts them toward the cap.
-    pub fn set_events(&mut self, on: bool) {
-        self.recording = on;
+    /// What the floor keeps of the events of the next rounds.
+    pub fn set_recording(&mut self, recording: Recording) {
+        self.recording = recording;
     }
 
     /// The remains named `id`, while they lie on this floor.

@@ -35,8 +35,8 @@ enum Held {
         read: Box<dyn Any>,
     },
     Cells {
-        own: Option<ReadCells>,
         read: ReadCells,
+        taken: bool,
     },
 }
 
@@ -44,7 +44,7 @@ impl Held {
     fn taken(&self) -> bool {
         match self {
             Self::Component { own, .. } => own.is_none(),
-            Self::Cells { own, .. } => own.is_none(),
+            Self::Cells { taken, .. } => *taken,
         }
     }
 }
@@ -244,13 +244,19 @@ impl Builder<'_> {
     }
 
     /// Binds the module's own cell column, named `<module>.<name>`: no module
-    /// holds a write key to it, its tick is its only writer.
+    /// holds a write key to it, its tick and the request it serves are its
+    /// only writers.
     ///
     /// # Panics
     /// When the module already binds a cell column.
-    pub fn cells(&mut self, name: &str) {
-        self.bind(ColumnIdx::new(self.names.len()));
+    pub fn cells(&mut self, name: &str) -> ReadCells {
+        let column = ColumnIdx::new(self.names.len());
+        self.bind(column);
         self.names.push(format!("{}.{name}", self.module));
+        ReadCells {
+            column,
+            name: ColumnName::of(&self.names[column.index()]),
+        }
     }
 
     /// Binds the cell column of `C` as the module's own.
@@ -260,12 +266,12 @@ impl Builder<'_> {
     /// twice, or already binds a cell column.
     pub fn provide_cells<C: CellContract>(&mut self) -> ReadCells {
         let module = self.module;
-        let Held::Cells { own, .. } = self.held::<C>(C::NAME) else {
+        let Held::Cells { read, taken } = self.held::<C>(C::NAME) else {
             panic!("{module} declares {} as a component, not cells", C::NAME);
         };
-        let cells = own
-            .take()
-            .unwrap_or_else(|| panic!("{module} takes {} twice", C::NAME));
+        assert!(!*taken, "{module} takes {} twice", C::NAME);
+        *taken = true;
+        let cells = *read;
         self.bind(cells.column);
         cells
     }
@@ -332,6 +338,7 @@ impl Builder<'_> {
         *self.column = Some(column);
     }
 }
+
 /// The schema and cell columns of a recipe, and the mechanics it builds.
 ///
 /// # Panics
@@ -367,10 +374,7 @@ pub(crate) fn assemble<R: Recipe>(
                         column,
                         name: ColumnName::of(provided.name),
                     };
-                    Held::Cells {
-                        own: Some(read),
-                        read,
-                    }
+                    Held::Cells { read, taken: false }
                 }
             };
             Registration {

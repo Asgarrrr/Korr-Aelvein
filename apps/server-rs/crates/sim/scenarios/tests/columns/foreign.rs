@@ -163,7 +163,7 @@ impl Module for Prober {
                 let _ = ctx.check(self.ask, AT);
                 return Prepared::Blocked;
             }
-            Probe::Keep => ctx.check(self.ask, AT).map(|(checked, _)| checked),
+            Probe::Keep => ctx.check(self.ask, AT),
             Probe::Order => self.kept.lock().expect("no probe panics").take(),
         };
         checked.map_or(Prepared::Fail, |plan| Prepared::Go {

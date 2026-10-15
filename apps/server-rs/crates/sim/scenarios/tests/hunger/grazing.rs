@@ -1,10 +1,10 @@
 use core::convert::Infallible;
 
-use korr_contracts::{Graze, Plants};
+use korr_contracts::Graze;
 use korr_core::host::{Round, SIGHT, Seed, Then, World, keyed};
 use korr_core::mechanic::{
-    Builder, CommitCtx, Module, Pos, PrepCtx, Prepared, Proposals, Provided, ReadCells, Senses,
-    Served, Target, provides_cells, serves,
+    Builder, CommitCtx, Module, Pos, PrepCtx, Prepared, Proposals, ReadCells, Senses, Served,
+    Target, serves,
 };
 use korr_engine::Registry;
 use korr_grid::Material;
@@ -89,14 +89,13 @@ struct Picky {
 impl Picky {
     fn build(b: &mut Builder<'_>) -> Self {
         Self {
-            plants: b.provide_cells::<Plants>(),
+            plants: b.cells("plants"),
         }
     }
 }
 
 impl Module for Picky {
     const NAME: &'static str = "test.picky";
-    const PROVIDES: &'static [Provided] = &[provides_cells::<Plants>()];
     const SERVES: Option<Served> =
         Some(serves::<Graze>(|plant| (plant > 1).then_some(plant), |_| 0));
     type Action = Infallible;
@@ -180,6 +179,17 @@ fn of_two_plants_as_near_the_riper_is_eaten_first() {
     run(&game, &mut world, 2);
     assert_eq!(plant(&game, &world, riper), 0);
     assert_ne!(plant(&game, &world, young), 0);
+}
+
+/// The upper plant lies east of the lower one, so an (x, y) order eats the lower.
+#[test]
+fn of_two_plants_alike_the_upper_is_eaten_first() {
+    let game = grazing(vec![]);
+    let (upper, lower) = (Pos { x: 5, y: 3 }, Pos { x: 3, y: 5 });
+    let (mut world, _) = meadow(&game, 0, &[Pos { x: 4, y: 4 }], &[(upper, 3), (lower, 3)]);
+    run(&game, &mut world, 1);
+    assert_eq!(plant(&game, &world, upper), 0);
+    assert_ne!(plant(&game, &world, lower), 0);
 }
 
 #[test]

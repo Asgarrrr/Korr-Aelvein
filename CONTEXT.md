@@ -154,7 +154,8 @@ a second name anywhere.
 - **Domain**: a folder grouping Mechanics by subject in the Rust engine:
   `biology`, `milieu`, `combat`. Filing only: it holds no shared code.
 - **Contract**: a component or cell field read by a second module, typed
-  in `contracts/` and read through a getter view.
+  in `contracts/` and read through a getter view. A cell column reached only
+  through a Request is not one: the Ask carries its key.
 - **Request**: what one module asks another to do to a cell of the cell
   column the other serves, such as `Graze`. The serving module checks it in the
   asker's `prepare` and applies it in the asker's `commit`. Not a Command,

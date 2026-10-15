@@ -7,10 +7,10 @@ use korr_grid::{CellColumn, Grid};
 use crate::config::TICKS_PER_ROUND;
 use crate::decision::Candidates;
 use crate::error::LoadError;
-use crate::floor::Floor;
 use crate::floor::inbox::{Flight, Inbox};
 use crate::floor::schedule::Schedule;
 use crate::floor::sections::{FlightImage, Sections};
+use crate::floor::{Floor, Recording};
 use crate::ruleset::Ruleset;
 
 impl Floor {
@@ -159,7 +159,7 @@ impl Floor {
             emptied: Vec::new(),
             events: Vec::new(),
             event_count: 0,
-            recording: true,
+            recording: Recording::Kept,
         })
     }
 }

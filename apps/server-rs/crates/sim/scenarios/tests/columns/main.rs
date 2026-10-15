@@ -30,6 +30,25 @@ fn a_module_that_gains_a_column_refuses_the_save() {
     ));
 }
 
+impl Soiled {
+    /// As long as `cells`, so only the bytes of the names differ.
+    fn clods(b: &mut Builder<'_>) -> Self {
+        b.cells("clods");
+        Self
+    }
+}
+
+#[test]
+fn a_renamed_cell_column_refuses_the_save() {
+    let saving = game(keyed(Soiled::build), SEED);
+    let bytes = floor(saving.ruleset(), FloorId(0), 4, 4).save(saving.ruleset());
+    let running = game(keyed(Soiled::clods), SEED);
+    assert!(matches!(
+        Floor::load(running.ruleset(), &bytes),
+        Err(LoadError::Ruleset { .. })
+    ));
+}
+
 #[test]
 #[should_panic(expected = "ruleset is not the one that built this floor")]
 fn a_cell_column_is_not_readable_under_a_foreign_ruleset() {
@@ -313,7 +332,7 @@ impl Module for Reacher {
 
     fn prepare(&self, _: Reach, _: Target, ctx: &PrepCtx<'_>) -> Prepared<Reach, Checked<Graze>> {
         match ctx.check(self.graze, self.at) {
-            Some((checked, _)) => Prepared::Go {
+            Some(checked) => Prepared::Go {
                 cost: Cost::new(100),
                 plan: checked,
             },

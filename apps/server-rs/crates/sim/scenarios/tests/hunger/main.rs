@@ -20,7 +20,7 @@ fn grazing(script: Vec<Act>) -> Grazing {
     game(Then(Scripted(script), registry), Seed(1))
 }
 
-/// Plants at `satiety` and a herbivore's diet on `h`.
+/// Gives `h` a stomach at `satiety` and a herbivore's diet.
 fn herbivore(game: &Grazing, f: &mut Floor, h: Handle, satiety: u16) {
     stomach(f, hunger(&game.mechanics().1), h, satiety, Diet::PLANTS);
 }

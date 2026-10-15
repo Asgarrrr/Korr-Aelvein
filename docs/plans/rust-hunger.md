@@ -164,7 +164,8 @@ Crate `korr-hunger` in `biology/physiology/hunger`.
   before fear. It waits in `docs/ideas.md`.
 - Private: `Satiety`, and `Diet`, a mask of `PLANTS = 1` and
   `REMAINS = 2`. Reading unknown bits from a save is corrupt.
-- Contracts read: flora's cell column (optional) and core `Remains`.
+- Contracts read: core `Remains`. Flora's plants (optional) are reached
+  through `Graze`, whose `Ask` carries their column.
 - Tick: for a creature with both `Satiety` and `Diet`, `satiety -= decay`,
   and at zero push `harm(self, starve, Cause::Mechanic(hunger))`.
 - Food: any plant, eaten through `Graze` (flora's check accepts a cell with
@@ -256,6 +257,12 @@ Budget, in the `core` bench (not part of `verify`, reported in the PR):
   `Builder::contract`, the getter view) stays with no production
   provider. Its second implementation is the test fake in `tests/seam.rs`.
   Fear or combat will be its first real reader.
+- The cell-contract seam (`provides_cells::<C>()`, `Builder::provide_cells`,
+  `Builder::contract_cells`) stays with no production provider too. Hunger
+  reads flora's plants through the key its `Ask<Graze>` carries, so flora
+  binds a private column, `flora.plants`, and `korr-contracts` holds no `Plants`. Its
+  implementations are the test fakes `Peat` in `tests/columns/main.rs` and
+  `Silt` in `tests/seam.rs`.
 - The seam is narrower than §2: no `PrepCtx::get`, no `CommitCtx`
   `insert`, `remove` or `set`, and `Rows` has only a two-column `join`.
   No mechanic uses them yet, and an abstraction waits for a real user:
@@ -263,14 +270,15 @@ Budget, in the `core` bench (not part of `verify`, reported in the PR):
 - §4's schedule check is a grid-placement check, not a clock equality: a
   popped `Due` runs only if its handle is still placed. The grid link
   compares generations, so the dead and recycled slots are skipped.
-- `PrepCtx::check` returns a `Checked<C>` token with its reply, and
+- `PrepCtx::check` returns a `Checked<C>` token carrying its reply, and
   `CommitCtx::order` takes only that token. An order without a check in
   the same run does not compile, and one check orders once. The token
   carries the ask's column, so `order` still refuses one from another
   ruleset.
 - §3's reach rule covers requests and remains too: `check` refuses a cell
-  beyond `SIGHT`, and `consume` eats nothing of remains beyond it. One
-  Chebyshev compare per check or committed action.
+  beyond `SIGHT`, `consume` eats nothing of remains beyond it, and `harm`
+  does nothing to a target beyond it. One Chebyshev compare per check or
+  committed action.
 - The core checks `requires` once per run, before the first `prepare`. An
   `Instead` hop checks again only when its action requires other keys: no
   `prepare` can change the store, so equal keys still hold.

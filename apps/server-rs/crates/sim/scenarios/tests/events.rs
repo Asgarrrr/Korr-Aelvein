@@ -1,4 +1,4 @@
-use korr_core::host::{EVENTS_PER_ROUND, Event, Pos, Seed, Vitality, World, keyed};
+use korr_core::host::{EVENTS_PER_ROUND, Event, Pos, Recording, Seed, Vitality, World, keyed};
 use korr_ecs::FloorId;
 use korr_engine::Registry;
 use korr_hunger::Diet;
@@ -23,11 +23,11 @@ fn cell(side: u16, k: u32) -> Pos {
 
 /// The hash after `ROUNDS` rounds of a meadow where some creatures graze
 /// and the rest starve, and how many died on the way.
-fn meadow(events: bool) -> (u64, usize) {
+fn meadow(recording: Recording) -> (u64, usize) {
     let game = game(Registry::default(), SEED);
     let ruleset = game.ruleset();
     let mut f = floor(ruleset, FIELD, SIDE, SIDE);
-    f.set_events(events);
+    f.set_recording(recording);
     for k in 0..6 {
         f.set_cell(
             ruleset,
@@ -57,24 +57,24 @@ fn meadow(events: bool) -> (u64, usize) {
 
 #[test]
 fn the_hash_is_the_same_with_events_on_and_off() {
-    let (on, deaths) = meadow(true);
+    let (on, deaths) = meadow(Recording::Kept);
     assert!(
         (1..CREATURES as usize).contains(&deaths),
         "some creatures starve and some graze: {deaths} deaths"
     );
-    assert_eq!(meadow(false), (on, 0));
+    assert_eq!(meadow(Recording::Counted), (on, 0));
 }
 
 bleed!(Doom, "doom", 1);
 
 /// A floor of things, each with one hit point and the wounds `Doom` joins.
 /// One round kills them all, each leaving remains in a free cell.
-fn doomed(victims: u32, events: bool) {
+fn doomed(victims: u32, recording: Recording) {
     let game = game(keyed(Doom::build), SEED);
     let ruleset = game.ruleset();
     let side = 100;
     let mut f = floor(ruleset, FIELD, side, side);
-    f.set_events(events);
+    f.set_recording(recording);
     let (wound, clot) = game.mechanics().keys();
     for k in 0..victims {
         let h = f.spawn_thing(cell(side, k));
@@ -87,18 +87,18 @@ fn doomed(victims: u32, events: bool) {
 
 #[test]
 fn a_round_of_exactly_the_cap_does_not_panic() {
-    doomed(EVENTS_PER_ROUND / 2, true);
-    doomed(EVENTS_PER_ROUND / 2, false);
+    doomed(EVENTS_PER_ROUND / 2, Recording::Kept);
+    doomed(EVENTS_PER_ROUND / 2, Recording::Counted);
 }
 
 #[test]
 #[should_panic(expected = "events in one round")]
 fn a_round_past_the_cap_panics_with_events_on() {
-    doomed(EVENTS_PER_ROUND / 2 + 1, true);
+    doomed(EVENTS_PER_ROUND / 2 + 1, Recording::Kept);
 }
 
 #[test]
 #[should_panic(expected = "events in one round")]
 fn a_round_past_the_cap_panics_with_events_off() {
-    doomed(EVENTS_PER_ROUND / 2 + 1, false);
+    doomed(EVENTS_PER_ROUND / 2 + 1, Recording::Counted);
 }

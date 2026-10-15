@@ -9,10 +9,10 @@ mod config;
 
 use core::convert::Infallible;
 
-use korr_contracts::{Graze, Plants};
+use korr_contracts::Graze;
 use korr_core::mechanic::{
-    Builder, CommitCtx, DrawIndex, Draws, Module, PrepCtx, Prepared, Proposals, Provided,
-    ReadCells, Senses, Served, Stencil, Target, provides_cells, serves,
+    Builder, CommitCtx, DrawIndex, Draws, Module, PrepCtx, Prepared, Proposals, ReadCells, Senses,
+    Served, Stencil, Target, serves,
 };
 
 use crate::config::{RIPE, SPROUT_CHANCE, SPROUT_ODDS};
@@ -48,7 +48,7 @@ impl Flora {
     #[must_use]
     pub fn build(b: &mut Builder<'_>) -> Self {
         Self {
-            plants: b.provide_cells::<Plants>(),
+            plants: b.cells("plants"),
         }
     }
 
@@ -62,7 +62,6 @@ impl Module for Flora {
     const NAME: &'static str = "flora";
     type Action = Infallible;
     type Plan = Infallible;
-    const PROVIDES: &'static [Provided] = &[provides_cells::<Plants>()];
     const SERVES: Option<Served> = Some(serves::<Graze>(graze, grazed));
 
     #[inline]

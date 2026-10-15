@@ -47,10 +47,15 @@ impl Store {
     }
 }
 
+const FOREIGN_STORE: &str = "a lent column serves only its lender";
+
 impl<T> Lent<T> {
+    /// # Panics
+    /// In debug builds, when another floor's store lent it.
     #[must_use]
     #[inline]
     pub fn get(&self, store: &Store, h: Handle) -> Option<&T> {
+        debug_assert!(self.floor == store.floor(), "{FOREIGN_STORE}");
         if !store.is_alive(h) {
             return None;
         }
@@ -60,9 +65,10 @@ impl<T> Lent<T> {
     /// Returns the value `h` held before.
     ///
     /// # Panics
-    /// When `h` is dead.
+    /// When `h` is dead; in debug builds, when another floor's store lent it.
     #[inline]
     pub fn insert(&mut self, store: &Store, h: Handle, value: T) -> Option<T> {
+        debug_assert!(self.floor == store.floor(), "{FOREIGN_STORE}");
         assert!(store.is_alive(h), "insert on a dead handle");
         self.column.insert(h.slot, value)
     }
@@ -70,9 +76,10 @@ impl<T> Lent<T> {
     /// Returns the value `h` held.
     ///
     /// # Panics
-    /// When `h` is dead.
+    /// When `h` is dead; in debug builds, when another floor's store lent it.
     #[inline]
     pub fn remove(&mut self, store: &Store, h: Handle) -> Option<T> {
+        debug_assert!(self.floor == store.floor(), "{FOREIGN_STORE}");
         assert!(store.is_alive(h), "remove on a dead handle");
         self.column.remove(h.slot)
     }

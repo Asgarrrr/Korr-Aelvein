@@ -43,7 +43,7 @@ pub mod host {
     pub use crate::build::{Assembly, Both, Declarations, Keyed, Recipe, Then, keyed};
     pub use crate::config::{EVENTS_PER_ROUND, ROT_PER_ROUND, SIGHT, TICKS_PER_ROUND};
     pub use crate::error::{LoadError, WorldError};
-    pub use crate::floor::{FlightImage, Floor, Sections};
+    pub use crate::floor::{FlightImage, Floor, Recording, Sections};
     pub use crate::game::Game;
     pub use crate::life::{Cause, Event, Remains, Vitality};
     pub use crate::module::{ActionKey, Mechanics, Visit};

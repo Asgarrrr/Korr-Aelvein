@@ -92,7 +92,7 @@ impl Action for Eating {
 
 #[derive(Debug)]
 pub enum Meal {
-    Graze { checked: Checked<Graze>, gain: u16 },
+    Graze { checked: Checked<Graze> },
     Feed { id: EntityId },
     Step(Dir),
 }
@@ -258,7 +258,8 @@ impl Module for Hunger {
 
     fn commit(&self, meal: Meal, ctx: &mut CommitCtx<'_>) {
         match meal {
-            Meal::Graze { checked, gain } => {
+            Meal::Graze { checked } => {
+                let gain = u16::from(checked.reply()) * PLANT_NUTRITION;
                 ctx.order(checked);
                 self.sate(gain, ctx);
             }
@@ -275,7 +276,7 @@ impl Module for Hunger {
 
 impl Hunger {
     fn graze_at(&self, action: Eating, at: Pos, ctx: &PrepCtx<'_>) -> Prepared<Eating, Meal> {
-        let Some((checked, growth)) = self.graze.and_then(|graze| ctx.check(graze, at)) else {
+        let Some(checked) = self.graze.and_then(|graze| ctx.check(graze, at)) else {
             return Prepared::Fail;
         };
         let pos = ctx.pos();
@@ -286,10 +287,7 @@ impl Hunger {
             },
             Eating::Eat => Prepared::Go {
                 cost: EAT_COST,
-                plan: Meal::Graze {
-                    checked,
-                    gain: u16::from(growth) * PLANT_NUTRITION,
-                },
+                plan: Meal::Graze { checked },
             },
             Eating::Approach => approach(ctx, pos, at),
         }
