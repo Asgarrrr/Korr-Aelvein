@@ -110,6 +110,11 @@ the code around it: every needless comment breeds more.
   build. The definition of done.
 - test: `bun run test` — single file: `bun test <path>` from the package dir
 - dev: `bun run dev` — server on :3000, web on Vite's port, `/ws` proxied
+- e2e: `bun run e2e` — builds the web app, runs Playwright on hermetic hosts.
+  Not part of `verify`; required after a change to `apps/web`, `apps/server`,
+  `packages/protocol` or `packages/engine`.
+- e2e browser: `bunx playwright install chromium-headless-shell`, once per
+  clone and after a Playwright upgrade.
 - lint fix: `bun run lint:fix`
 - New worktree or clone: run `bun install` first. Without it every check
   fails (exit 127) and the git hooks are not enabled.
@@ -127,7 +132,8 @@ the code around it: every needless comment breeds more.
 - `apps/web` — Vite + Three.js. Sends player commands, renders server
   snapshots. Never computes an outcome.
 - Dependency direction: `web → protocol`; `server → engine, protocol`.
-  `engine` imports no workspace package.
+  `engine` imports no workspace package. `e2e` imports only
+  `@korr/web/theme` and `@korr/protocol` types.
 - The Vite proxy targets `127.0.0.1`, not `localhost`: `localhost` resolves
   to `::1` first and the server listens on IPv4 only.
 

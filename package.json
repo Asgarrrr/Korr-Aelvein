@@ -14,6 +14,7 @@
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"check:arch": "bun scripts/check-architecture.ts && bun scripts/check-web-purity.ts",
+		"e2e": "turbo run build --filter=@korr/web && bun run --cwd apps/e2e e2e",
 		"verify": "biome check . && bun run check:arch && turbo run typecheck test build"
 	},
 	"devDependencies": {

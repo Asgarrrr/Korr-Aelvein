@@ -2,6 +2,9 @@
 	"name": "@korr/web",
 	"private": true,
 	"type": "module",
+	"exports": {
+		"./theme": "./src/theme.ts"
+	},
 	"scripts": {
 		"dev": "vite",
 		"build": "vite build",

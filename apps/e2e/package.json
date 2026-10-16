@@ -1,0 +1,17 @@
+{
+	"name": "@korr/e2e",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"e2e": "playwright test",
+		"typecheck": "tsc -p ."
+	},
+	"dependencies": {
+		"@korr/protocol": "workspace:*",
+		"@korr/web": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.4.2",
+		"@playwright/test": "1.64.1"
+	}
+}

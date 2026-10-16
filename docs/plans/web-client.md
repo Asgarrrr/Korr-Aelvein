@@ -536,3 +536,55 @@ Slice 4:
   loads three too.
 - Not run: WebGPU on a real GPU and `WEBGL_lose_context` under `?webgl`
   (no browser tool in the implementing session).
+
+Slice 5:
+- Investigation, against live docs and a scratch run. `@playwright/test`
+  1.64.1 is the registry's `latest` (published 2026-10-14) and is pinned.
+  Docs confirm the `webServer` array options (`command`, `cwd`, `env`,
+  `url`, `wait`, `reuseExistingServer`), `routeWebSocket` (`connectToServer`,
+  `onMessage` on a side stops its forwarding, `close({ code, reason })`),
+  `test.step`, `reducedMotion`, `deviceScaleFactor`, `screenshot` `clip`,
+  `forbidOnly`, `retries`. The docs do not say whether `webServer.env` merges
+  with `process.env`; a run shows it does (`HOME` survives an `env` with one
+  key). `wait.stdout` reads the command's stdout, and a named capture group
+  lands in `process.env`. A `webServer` entry with `wait` and no `url` or
+  `port` is accepted; with `reuseExistingServer: false`, a foreign listener
+  on the server port fails the run ("not able to start") instead of being
+  reused.
+- `--use-angle=swiftshader-webgl` is accepted by chromium-headless-shell
+  (WebGL2 on "ANGLE ... SwiftShader"), but the browser reports the same
+  renderer without it and has no `navigator.gpu`: WebGPU is absent in this
+  browser, so `?webgl` pins what would happen anyway. The flag stays for the
+  contract.
+- "Drawn" (decision 20) cannot be "`data-frames` advanced twice after the
+  snapshot": under reduced motion `app/` draws a snapshot once (progress is 1
+  on the first frame, the loop stops), so a snapshot advances the counter by
+  one. Under reduced motion each snapshot is drawn exactly once, and
+  `drawn(page, n)` asserts that `data-frames` equals the snapshot count n. A
+  double draw per frame fails the assertion.
+- T1 asserts "two commands and two snapshots" as two commands and three
+  snapshots on the wire: the opening one and one per command.
+- `data-backend` and `data-frames` live on the canvas. `data-backend` is set
+  after `init()` from `renderer.backend.isWebGPUBackend`; `data-frames` counts
+  `renderer.render` calls, not skipped draws.
+- `?webgl` already existed from slice 4 and was reused.
+- `SEED` is parsed in `main.ts`, which has no seam: its test starts the real
+  entry as a subprocess (`apps/server/test/main.test.ts`). An empty `SEED`
+  throws too, since `Number("")` is 0.
+- Ports: `10000 + sha256(apps/e2e path) % 20000` for the server, the next
+  one for `vite preview`. The server entry uses `wait` on "server listening"
+  only; the web entry uses `url`.
+- The pixel probe decodes the 1×1 PNG with `node:zlib` (no dependency) and
+  compares each channel to `palette.clear` within a tolerance of 8, because
+  the lit and colour-managed output is not exact.
+- `apps/e2e/tsconfig.json` uses `types: ["bun"]` (`@types/bun`, already in the
+  repo) for Node globals and adds the DOM lib for `page.evaluate` bodies.
+- `scripts/check-architecture.ts` walks `apps/e2e/test` but skips
+  `apps/e2e/playwright.config.ts`, as it skips `apps/web/vite.config.ts`. The
+  e2e import rule does not cover the config.
+- The `CLAUDE.md` "Dependency direction" line (Architecture) gained a
+  sentence: `e2e` imports only `@korr/web/theme` and `@korr/protocol` types.
+- The reporter is `dot` in the config; pass `--reporter=list` for step names.
+- Injected bugs, each seen failing and reverted: `hud(status)` removed from
+  the consumers (T1 fails at the HUD check); `lost(detail)` removed from
+  `createScene` (T2 fails at the hidden canvas).

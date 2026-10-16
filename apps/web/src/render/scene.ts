@@ -76,12 +76,18 @@ export async function createScene(
 		await renderer.init();
 		if (early !== undefined) return { ok: false, detail: early };
 		ready = true;
+		// The fallback replaces renderer.backend during init(); isWebGPURenderer stays true under it.
+		canvas.dataset.backend = (renderer.backend as { isWebGPUBackend?: boolean })
+			.isWebGPUBackend
+			? "webgpu"
+			: "webgl";
 		renderer.setClearColor(palette.clear);
 		view = stage();
 	} catch (error) {
 		return { ok: false, detail: messageOf(error) };
 	}
 	let size = { width: 0, height: 0, ratio: 0 };
+	let frames = 0;
 	return {
 		ok: true,
 		scene: {
@@ -102,6 +108,7 @@ export async function createScene(
 				}
 				view.draw(poses);
 				renderer.render(view.scene, view.camera);
+				canvas.dataset.frames = String(++frames);
 			},
 		},
 	};

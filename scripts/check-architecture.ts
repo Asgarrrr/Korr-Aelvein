@@ -61,6 +61,8 @@ const WEB_LAYERS = new Map<
 	["theme", { values: [], types: [] }],
 ]);
 
+const E2E = join(ROOT, "apps/e2e") + sep;
+
 const transpiler = new Bun.Transpiler({ loader: "tsx" });
 
 const errors: string[] = [];
@@ -159,6 +161,20 @@ const checkWebFile = (file: string, source: string) => {
 	}
 };
 
+// A browser test sees the app as a user does: the theme values and the wire types, never its code.
+const checkE2eFile = (file: string, source: string) => {
+	for (const { spec, typeOnly } of webImportsOf(source)) {
+		if (!spec.startsWith("@korr/")) continue;
+		if (spec === "@korr/web/theme" || (spec === PROTOCOL && typeOnly)) continue;
+		report(
+			file,
+			spec === PROTOCOL
+				? `e2e may import ${spec} only through \`import type\` or \`export type\``
+				: `e2e must not import ${spec}; it may import @korr/web/theme and ${PROTOCOL} types`,
+		);
+	}
+};
+
 // "modules/hunger/x.ts" → area "modules", module "hunger".
 const engineArea = (file: string) => {
 	const [area, name] = relative(ENGINE, file).split(sep);
@@ -218,6 +234,7 @@ for (const dir of workspaces) {
 			if (file.startsWith(ENGINE)) checkEngineImport(file, target);
 		}
 		if (file.startsWith(WEB)) checkWebFile(file, source);
+		if (file.startsWith(E2E)) checkE2eFile(file, source);
 		if (file.startsWith(MODULES))
 			for (const what of new Set(forbiddenIn(source)))
 				report(file, `${what} is forbidden in modules/`);
@@ -307,6 +324,28 @@ for (const [path, source, fires] of webProbes) {
 		report(
 			probe,
 			`the web layer rules fired ${errors.length - before} times, not ${fires}, on ${JSON.stringify(source)}`,
+		);
+	else errors.length = before;
+}
+
+// A known violation of the e2e import rule must still be reported; allowed imports must not be.
+const e2eProbes: [source: string, fires: number][] = [
+	['import { palette } from "@korr/web/theme";', 0],
+	['import { expect } from "@playwright/test";', 0],
+	['import type { Snapshot } from "@korr/protocol";', 0],
+	['import { Command } from "@korr/protocol";', 1],
+	['import { type Command } from "@korr/protocol";', 1],
+	['import { createClient } from "@korr/web/src/app/client";', 1],
+	['import { createApp } from "@korr/server/src/app";', 1],
+];
+for (const [source, fires] of e2eProbes) {
+	const probe = join(E2E, "test/probe.ts");
+	const before = errors.length;
+	checkE2eFile(probe, source);
+	if (errors.length - before !== fires)
+		report(
+			probe,
+			`the e2e import rule fired ${errors.length - before} times, not ${fires}, on ${JSON.stringify(source)}`,
 		);
 	else errors.length = before;
 }

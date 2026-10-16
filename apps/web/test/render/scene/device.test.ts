@@ -10,6 +10,7 @@ afterEach(() => {
 const canvas = () =>
 	({
 		style: {},
+		dataset: {},
 		clientWidth: 8,
 		clientHeight: 6,
 		setAttribute() {},
@@ -192,4 +193,40 @@ test("a change of device pixel ratio between draws is applied to the renderer on
 	result.scene.draw(poses);
 	result.scene.draw(poses);
 	expect(ratios.mock.calls).toEqual([[1], [2]]);
+});
+
+test("data-backend names the backend that ran after init, not the one requested", async () => {
+	fakeDevice((renderer) => {
+		Object.assign(renderer, { backend: { isWebGPUBackend: true } });
+	});
+	const webgpu = canvas();
+	await createScene(webgpu, { forceWebGL: true, lost: () => {} });
+	fakeDevice();
+	const webgl = canvas();
+	await createScene(webgl, { forceWebGL: true, lost: () => {} });
+	expect([webgpu.dataset.backend, webgl.dataset.backend]).toEqual([
+		"webgpu",
+		"webgl",
+	]);
+});
+
+test("data-frames counts the renders and not the draws skipped on an empty canvas", async () => {
+	fakeDevice();
+	spyOn(WebGPURenderer.prototype, "render").mockImplementation(() => {});
+	const surface = canvas();
+	Object.assign(surface, { clientHeight: 0 });
+	const result = await createScene(surface, {
+		forceWebGL: true,
+		lost: () => {},
+	});
+	if (!result.ok) throw new Error(result.detail);
+	const look = { stem: "player", tier: 0 };
+	const player = { id: 1, look, x: 0, y: 0, opacity: 1 };
+	const poses = { width: 2, height: 2, player, entities: [] };
+
+	result.scene.draw(poses);
+	Object.assign(surface, { clientHeight: 6 });
+	result.scene.draw(poses);
+	result.scene.draw(poses);
+	expect(surface.dataset.frames).toBe("2");
 });
