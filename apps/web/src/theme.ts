@@ -20,3 +20,5 @@ export const endTexts = {
 	broken: "the game broke",
 };
 export const noticeTexts = { rejected: "command rejected" };
+
+export const motion = { turnMs: 120 };

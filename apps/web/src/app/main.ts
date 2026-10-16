@@ -2,7 +2,7 @@ import { asciiView } from "../debug/ascii";
 import { watchdogs } from "../net/config";
 import { connect } from "../net/connect";
 import type { Ending } from "../play/types";
-import { endTexts } from "../theme";
+import { endTexts, motion } from "../theme";
 import { hud } from "../ui/hud";
 import { createClient, messageOf } from "./client";
 
@@ -35,6 +35,13 @@ const client = createClient({
 		}),
 	consumers: [asciiView(view), hud(status)],
 	ended: showEnd,
+	requestFrame: (callback) => {
+		const id = requestAnimationFrame(callback);
+		return () => cancelAnimationFrame(id);
+	},
+	turnMs: matchMedia("(prefers-reduced-motion: reduce)").matches
+		? 0
+		: motion.turnMs,
 });
 
 newGame.addEventListener("click", () => location.reload());

@@ -1,104 +1,13 @@
 import { afterEach, expect, mock, spyOn, test } from "bun:test";
-import type { Command } from "@korr/protocol";
-import { createClient } from "../../src/app/client";
-import { asciiView } from "../../src/debug/ascii";
-import type { KeyPress } from "../../src/input/keys";
-import * as stepModule from "../../src/play/step";
-import type { Ending, Play, PlayEvent } from "../../src/play/types";
-import { connectingText, endTexts } from "../../src/theme";
-import { hud } from "../../src/ui/hud";
-import { snapshot } from "../snapshot";
-
-const right: KeyPress = {
-	key: "l",
-	code: "KeyL",
-	repeat: false,
-	ctrlKey: false,
-	altKey: false,
-	metaKey: false,
-	isComposing: false,
-	keyCode: 76,
-};
-
-const consumers = () => [
-	asciiView({ textContent: null }),
-	hud({ textContent: null }),
-];
-
-test.each([0, 1])("without consumer %d the game still advances", (removed) => {
-	const sent: Command[] = [];
-	let deliver: (event: PlayEvent) => void = () => {};
-	const client = createClient({
-		connect: (onEvent) => {
-			deliver = onEvent;
-			return { send: (command) => sent.push(command), close: () => {} };
-		},
-		consumers: consumers().filter((_, i) => i !== removed),
-		ended: () => {},
-	});
-
-	for (const x of [4, 5]) {
-		deliver({ type: "message", message: snapshot({ x, y: 4 }) });
-		expect(client.press(right)).toBe(true);
-	}
-
-	expect(sent).toEqual([
-		{ type: "move", dx: 1, dy: 0 },
-		{ type: "move", dx: 1, dy: 0 },
-	]);
-});
+import { createClient } from "../../../src/app/client";
+import * as stepModule from "../../../src/play/step";
+import type { Ending, PlayEvent } from "../../../src/play/types";
+import { connectingText, endTexts } from "../../../src/theme";
+import * as deriveModule from "../../../src/view/derive";
+import { idle, opening, reply, right, started } from "./harness";
 
 afterEach(() => {
 	mock.restore();
-});
-
-function started(extra: { show(frame: { play: Play }): void }[] = []) {
-	const frames: Play[] = [];
-	const sent: Command[] = [];
-	const ended: Ending[] = [];
-	const text = { textContent: null as string | null };
-	const link = { closes: 0 };
-	let deliver: (event: PlayEvent) => void = () => {};
-	const client = createClient({
-		connect: (onEvent) => {
-			deliver = onEvent;
-			return {
-				send: (command) => sent.push(command),
-				close: () => link.closes++,
-			};
-		},
-		consumers: [{ show: ({ play }) => frames.push(play) }, hud(text), ...extra],
-		ended: (ending) => ended.push(ending),
-	});
-	return {
-		frames,
-		sent,
-		ended,
-		text,
-		link,
-		client,
-		deliver: (event: PlayEvent) => deliver(event),
-	};
-}
-
-const opening: PlayEvent = {
-	type: "message",
-	message: snapshot({ x: 4, y: 4 }),
-};
-
-test("consumers get one frame on start and one per changed play", () => {
-	const { frames, client, deliver } = started();
-	expect(frames).toHaveLength(1);
-
-	deliver(opening);
-	expect(frames).toHaveLength(2);
-
-	client.press(right);
-	expect(frames).toHaveLength(3);
-
-	client.press(right);
-	client.press({ ...right, key: "z", code: "KeyZ", keyCode: 90 });
-	expect(frames).toHaveLength(3);
 });
 
 test("an ending is reported once, closes the link once, and leaves the HUD to the end screen", () => {
@@ -114,18 +23,6 @@ test("an ending is reported once, closes the link once, and leaves the HUD to th
 	expect(text.textContent).not.toContain(endTexts.over);
 });
 
-test("a rejected command logs the command that was sent", () => {
-	const logged = spyOn(console, "error").mockImplementation(() => {});
-	const { client, sent, deliver } = started();
-	deliver(opening);
-	client.press(right);
-	deliver({
-		type: "message",
-		message: { type: "rejected", reason: "invalid" },
-	});
-	expect(logged).toHaveBeenCalledWith(expect.any(String), sent[0]);
-});
-
 const boom = new Error("boom");
 
 test.each([
@@ -139,6 +36,7 @@ test.each([
 			};
 			return [consumer];
 		},
+		0,
 	],
 	[
 		"step",
@@ -150,23 +48,56 @@ test.each([
 			});
 			return [];
 		},
+		0,
 	],
-])("a throw in %s ends broken once and sends nothing more", (_, arm) => {
-	spyOn(console, "error").mockImplementation(() => {});
-	const armed = { on: false };
-	const { client, sent, ended, link, deliver } = started(arm(armed));
-	deliver(opening);
-	armed.on = true;
+	[
+		"deriveView",
+		(armed: { on: boolean }) => {
+			const real = deriveModule.deriveView;
+			spyOn(deriveModule, "deriveView").mockImplementation((prev, next) => {
+				if (armed.on) throw boom;
+				return real(prev, next);
+			});
+			return [];
+		},
+		1,
+	],
+	[
+		"a consumer's draw",
+		(armed: { on: boolean }) => {
+			const consumer = {
+				show: () => {},
+				draw: () => {
+					if (armed.on) throw boom;
+				},
+			};
+			return [consumer];
+		},
+		1,
+	],
+] as const)(
+	"a throw in %s ends broken once and sends nothing more",
+	(_, arm, sends) => {
+		spyOn(console, "error").mockImplementation(() => {});
+		const armed = { on: false };
+		const { client, clock, sent, ended, link, deliver } = started(arm(armed));
+		deliver(opening);
+		clock.settle();
+		armed.on = true;
 
-	client.press(right);
-	armed.on = false;
-	deliver(opening);
-	client.press(right);
+		client.press(right);
+		deliver(reply);
+		clock.settle();
+		armed.on = false;
+		deliver(opening);
+		clock.settle();
+		client.press(right);
 
-	expect(ended).toEqual([{ kind: "broken", detail: boom.message }]);
-	expect(sent).toEqual([]);
-	expect(link.closes).toBe(1);
-});
+		expect(ended).toEqual([{ kind: "broken", detail: boom.message }]);
+		expect(sent).toHaveLength(sends);
+		expect(link.closes).toBe(1);
+	},
+);
 
 test.each([
 	[
@@ -195,7 +126,7 @@ test.each([
 	spyOn(console, "error").mockImplementation(() => {});
 	const ended: Ending[] = [];
 	expect(() =>
-		createClient({ ...wiring, ended: (ending) => ended.push(ending) }),
+		createClient({ ...wiring, ...idle, ended: (ending) => ended.push(ending) }),
 	).not.toThrow();
 	expect(ended).toEqual([{ kind: "broken", detail: boom.message }]);
 });
@@ -215,6 +146,7 @@ test("a step that always throws still ends broken exactly once", () => {
 });
 
 test("a consumer throwing on the ending frame keeps the first ending", () => {
+	spyOn(console, "error").mockImplementation(() => {});
 	const { ended, deliver } = started([
 		{
 			show: ({ play }) => {
@@ -243,6 +175,7 @@ test("a link whose close throws still gets its ending reported", () => {
 		},
 		consumers: [],
 		ended: (ending) => ended.push(ending),
+		...idle,
 	});
 	deliver(opening);
 	deliver({ type: "message", message: { type: "over" } });
@@ -271,6 +204,7 @@ test.each([
 			},
 			consumers: [],
 			ended: (ending) => ended.push(ending),
+			...idle,
 		});
 		expect(ended).toHaveLength(1);
 		expect(closes).toBe(1);
@@ -297,7 +231,17 @@ test("a consumer throw followed by a throwing ended does not escape receive", ()
 			calls++;
 			throw new Error("ended");
 		},
+		...idle,
 	});
 	expect(() => deliver(opening)).not.toThrow();
 	expect(calls).toBe(1);
+});
+
+test("an ending cancels the pending frame", () => {
+	const { clock, deliver } = started();
+	deliver(opening);
+	expect(clock.pending()).toBe(1);
+
+	deliver({ type: "closed", detail: "1006" });
+	expect(clock.pending()).toBe(0);
 });

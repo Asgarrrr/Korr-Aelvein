@@ -457,3 +457,34 @@ Slice 2:
 - The end screen title is a `<p>`: Biome refuses an empty heading.
 - `apps/server` declares `@sinclair/typebox` (the version `@korr/protocol`
   pins) as a dev dependency for `Value.Check`.
+
+Slice 3:
+- Slice 2 deviations resolved: `createClient` takes `requestFrame` and
+  `turnMs`, and the single cleanup cancels a pending frame. `replace` still
+  arrives with slice 4.
+- Blocking entities: the engine's `step` (`core/turns/turn.ts`) fails into a
+  cell where `grid.holdsOtherActor`, so every actor blocks: `rat`, `stoat`
+  and the generated `herbivore.0`. `play/step.ts` keys on the look stem
+  (`rat`, `stoat`), so a generated species of an actor archetype blocks
+  too. The "not edible" clause of decision 4 is not coded: no actor stem is
+  in the player's diet.
+- Every snapshot unsettles the turn, the first one included (its settle
+  frame shows nothing, from = to). A press right after a snapshot is queued
+  until that frame. Slice 1 and 2 tests now step `settled` or run the fake
+  frames before such a press, and the frame-count test counts the settle
+  frame.
+- A gesture before the first snapshot is still ignored, not queued.
+  `initialPlay.settled` is false.
+- `sample` drops poses with opacity 0: an incoming entity is absent at
+  t = 0 and an outgoing one at t = 1.
+- A species with no `looks` entry gets the look `{ stem: "", tier: 0 }`. No
+  theme row matches it, so consumers draw the unknown fallback, as
+  `debug/` does today.
+- `app/` derives a timeline when the snapshot object changes. The decoder
+  builds a new object per message, so every snapshot animates.
+- The player look `{ stem: "player", tier: 0 }` exists in `view/derive.ts`
+  and `debug/ascii.ts`: `debug/` may import `view/` only as types.
+- `apps/web/test/app/client.test.ts` passed 400 lines: it is split into
+  `test/app/client/{harness.ts,turns.test.ts,endings.test.ts}`.
+- Reduced motion is read once at startup: a change mid-game applies after a
+  reload.

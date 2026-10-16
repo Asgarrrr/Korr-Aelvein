@@ -17,7 +17,8 @@ export type PlayEvent =
 	| { type: "message"; message: ServerMessage }
 	| { type: "closed"; detail: string }
 	| { type: "fault"; detail: string }
-	| { type: "gesture"; gesture: Gesture };
+	| { type: "gesture"; gesture: Gesture }
+	| { type: "settled" };
 
 export type Play = {
 	status: "connecting" | "playing" | Ending;
@@ -25,4 +26,6 @@ export type Play = {
 	snapshot: Snapshot | undefined;
 	inFlight: boolean;
 	notice: Notice | undefined;
+	queued: Gesture | undefined;
+	settled: boolean;
 };
