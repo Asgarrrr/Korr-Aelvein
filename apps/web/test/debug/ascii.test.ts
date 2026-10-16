@@ -47,3 +47,18 @@ test("a player at x === width does not appear in the next row", () => {
 
 	expect(element.textContent).not.toContain(glyph("player"));
 });
+
+test("the player is drawn over an entity on its cell", () => {
+	const snapshot: Snapshot = {
+		type: "snapshot",
+		width: 3,
+		height: 1,
+		player: { id: 1, x: 1, y: 0, hp: 10, satiety: 800 },
+		entities: [[2, "cheese", 1, 0]],
+		looks: { cheese: { stem: "cheese", tier: 0 } },
+	};
+	const element: { textContent: string | null } = { textContent: null };
+	asciiView(element).show({ play: { ...initialPlay, snapshot } });
+
+	expect([...(element.textContent ?? "")][1]).toBe(glyph("player"));
+});

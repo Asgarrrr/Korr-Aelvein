@@ -1,7 +1,8 @@
 import type { Play } from "../play/types";
 import { floorGlyph, stems, unknownStem } from "../theme";
+import type { Pose } from "../view/sample";
 
-type Look = { stem: string; tier: number };
+type Look = Pose["look"];
 
 const playerLook: Look = { stem: "player", tier: 0 };
 

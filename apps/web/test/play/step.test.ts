@@ -290,3 +290,11 @@ test("settling while a command is in flight keeps the queued gesture unsent", ()
 	expect(sent).toHaveLength(1);
 	expect(play.queued).toEqual(wait);
 });
+
+test("a snapshot after a reply reopens the turn: a gesture before it settles is queued, not sent", () => {
+	const reply = run([opening, settled, gesture(east), moved({ x: 5, y: 4 })]);
+	const early = run([gesture(wait)], reply.play);
+	expect(early.sent).toEqual([]);
+	expect(early.play.queued).toEqual(wait);
+	expect(run([settled], early.play).sent).toEqual([{ type: "wait" }]);
+});

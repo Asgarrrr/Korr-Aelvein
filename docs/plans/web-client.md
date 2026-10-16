@@ -106,7 +106,7 @@ type Playback = { duration: number; start: number | undefined };
 frame(playback: Playback, now: number): { playback: Playback; progress: number };
 
 // app/
-type Frame = { play: Play; timeline: Timeline | undefined };
+type Frame = { play: Play };
 type Consumer = { show(frame: Frame): void; draw?(poses: Poses): void };
 type Link = { send(command: Command): void; close(): void };
 createClient(options: {
@@ -245,7 +245,7 @@ the diff before commit.
   push, `createClient`.
 - Approach: the game plays as today in the ASCII view: one command in
   flight, a gesture while in flight is dropped (queue arrives in slice 3),
-  no timeline (`Frame.timeline` undefined, no `draw`), `debug/` renders the
+  no timeline (no `draw`), `debug/` renders the
   snapshot directly. `net/decode.ts` is strict as in decision 14 from the
   start. Errors: endings and the end screen are slice 2; here a close shows
   a plain status line in the HUD.
@@ -514,8 +514,9 @@ Slice 4:
   directional light (`theme.lights`).
 - The camera looks at the player's cell from behind and above
   (`theme.cameraRig`), so grid y + 1 is below on screen.
-- The canvas size is read on each draw. A window resize after a turn has
-  settled stretches the last image until the next turn's frames.
+- The canvas size is read on each draw. A window resize between turns
+  redraws the last poses once (`scene.ts` keeps them and listens to
+  `resize`); a reported loss removes the listener.
 - `@types/three` 0.186.0 types `onError` with a string; three 0.186.1 passes
   `{ api, type, message }`. The detail reads `message`.
 - `main.ts` awaits `createScene` at the top level; `?debug` skips it. A
@@ -525,8 +526,9 @@ Slice 4:
 - `replace` runs inside the client's guard: a throw from the swapped-in
   consumer's `show` ends broken once. The "throw in a scene draw" case is
   slice 2's "a consumer's draw" row: the real scene needs a device.
-- The renderer is not disposed after a loss or a failed setup: the dead
-  renderer keeps three's internal frame loop and its context until reload.
+- The renderer is not disposed after a loss (`onDeviceLost` or `onError`) or
+  a failed setup: the dead renderer keeps three's internal frame loop and
+  its context until reload.
 - `main.ts` awaits `createScene` before the client and the fault listeners
   exist: an `init()` that never settles leaves a blank page.
 - `data-backend` and `data-frames` stay in slice 5: no slice 4 test needs
@@ -588,3 +590,9 @@ Slice 5:
 - Injected bugs, each seen failing and reverted: `hud(status)` removed from
   the consumers (T1 fails at the HUD check); `lost(detail)` removed from
   `createScene` (T2 fails at the hidden canvas).
+
+Whole-diff review:
+- `Frame` carries only `play`: no consumer reads the timeline, which stays
+  client-internal state for drawing.
+- `messageOf` exists in `app/client.ts` and in `render/scene.ts`: `render/`
+  may not import `app/`.

@@ -17,12 +17,13 @@ const samples: [path: string, source: string, fires: number][] = [
 		"const { random } = Math;\nexport const a = random();",
 		1,
 	],
+	["view/probe-date.ts", "export const a = Date.now();", 1],
 	["input/probe-global.ts", "export const a = globalThis.Math.random();", 1],
 	["input/probe-alias.ts", "const M = Math;\nexport const a = M.random();", 1],
 ];
 
 // An interrupted run leaves its probe files behind, and they would fail biome.
-for (const stale of globSync("{play,input,net}/probe-*.ts", { cwd: WEB }))
+for (const stale of globSync("{play,input,net,view}/probe-*.ts", { cwd: WEB }))
 	rmSync(join(WEB, stale), { force: true });
 
 const files = samples.map(([path]) => join(WEB, path));

@@ -7,7 +7,7 @@ import { outCubic } from "../view/easing";
 import { frame, type Playback } from "../view/playback";
 import { type Poses, sample } from "../view/sample";
 
-type Frame = { play: Play; timeline: Timeline | undefined };
+type Frame = { play: Play };
 export type Consumer = { show(frame: Frame): void; draw?(poses: Poses): void };
 type Link = { send(command: Command): void; close(): void };
 
@@ -69,7 +69,7 @@ export function createClient({
 		}
 	};
 	const show = () => {
-		for (const consumer of list) consumer.show({ play, timeline });
+		for (const consumer of list) consumer.show({ play });
 	};
 	const receive = (event: PlayEvent) =>
 		guarded(() => {
@@ -124,7 +124,7 @@ export function createClient({
 				const index = list.indexOf(from);
 				if (index < 0) return;
 				list[index] = to;
-				to.show({ play, timeline });
+				to.show({ play });
 			}),
 	};
 }

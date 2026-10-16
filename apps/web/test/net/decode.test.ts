@@ -39,6 +39,22 @@ test("ignores extra fields", () => {
 	});
 });
 
+test("a species named __proto__ stays a look of its own", () => {
+	const text = JSON.stringify(snapshot).replace(
+		'"looks":{',
+		'"looks":{"__proto__":{"stem":"stoat","tier":2},',
+	);
+	const result = decode(text);
+
+	expect(result?.type).toBe("snapshot");
+	if (result?.type !== "snapshot") return;
+	expect(Object.hasOwn(result.looks, "__proto__")).toBe(true);
+	expect(
+		Object.getOwnPropertyDescriptor(result.looks, "__proto__")?.value,
+	).toEqual({ stem: "stoat", tier: 2 });
+	expect(Object.getPrototypeOf(result.looks)).toBe(Object.prototype);
+});
+
 const broken = (patch: Record<string, unknown>) =>
 	JSON.stringify({ ...snapshot, ...patch });
 

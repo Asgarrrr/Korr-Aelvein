@@ -58,6 +58,7 @@ export async function createScene(
 		if (!ready) early ??= detail;
 		else if (!reported) {
 			reported = true;
+			window.removeEventListener("resize", redraw);
 			lost(detail);
 		}
 	};
@@ -88,27 +89,37 @@ export async function createScene(
 	}
 	let size = { width: 0, height: 0, ratio: 0 };
 	let frames = 0;
+	let last: Poses | undefined;
+	function draw(poses: Poses): void {
+		const { clientWidth: width, clientHeight: height } = canvas;
+		const ratio = window.devicePixelRatio;
+		if (width === 0 || height === 0) return;
+		if (
+			width !== size.width ||
+			height !== size.height ||
+			ratio !== size.ratio
+		) {
+			size = { width, height, ratio };
+			renderer.setPixelRatio(ratio);
+			renderer.setSize(width, height, false);
+			view.fit(width / height);
+		}
+		view.draw(poses);
+		renderer.render(view.scene, view.camera);
+		canvas.dataset.frames = String(++frames);
+	}
+	// The client loop runs only while a turn animates, so a resize between turns needs its own draw.
+	function redraw(): void {
+		if (last) draw(last);
+	}
+	window.addEventListener("resize", redraw);
 	return {
 		ok: true,
 		scene: {
 			show() {},
 			draw(poses) {
-				const { clientWidth: width, clientHeight: height } = canvas;
-				const ratio = window.devicePixelRatio;
-				if (width === 0 || height === 0) return;
-				if (
-					width !== size.width ||
-					height !== size.height ||
-					ratio !== size.ratio
-				) {
-					size = { width, height, ratio };
-					renderer.setPixelRatio(ratio);
-					renderer.setSize(width, height, false);
-					view.fit(width / height);
-				}
-				view.draw(poses);
-				renderer.render(view.scene, view.camera);
-				canvas.dataset.frames = String(++frames);
+				last = poses;
+				draw(poses);
 			},
 		},
 	};

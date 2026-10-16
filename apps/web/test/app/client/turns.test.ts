@@ -3,7 +3,6 @@ import type { Command } from "@korr/protocol";
 import { createClient } from "../../../src/app/client";
 import type { PlayEvent } from "../../../src/play/types";
 import { motion } from "../../../src/theme";
-import { deriveView, type Timeline } from "../../../src/view/derive";
 import { outCubic } from "../../../src/view/easing";
 import type { Poses } from "../../../src/view/sample";
 import { snapshot } from "../../snapshot";
@@ -59,10 +58,12 @@ test("consumers get one frame on start and one per changed play", () => {
 	clock.settle();
 	expect(frames).toHaveLength(3);
 
-	client.press(right);
-	expect(frames).toHaveLength(4);
+	expect(client.press({ ...right, key: "e", code: "KeyE", keyCode: 69 })).toBe(
+		true,
+	);
+	expect(frames).toHaveLength(3);
 
-	client.press({ ...right, key: "z", code: "KeyZ", keyCode: 90 });
+	client.press(right);
 	expect(frames).toHaveLength(4);
 });
 
@@ -140,23 +141,6 @@ test("a gesture queued mid-turn is sent on the frame where progress reaches 1, n
 		{ type: "move", dx: 1, dy: 0 },
 		{ type: "move", dx: 0, dy: 1 },
 	]);
-});
-
-test("show carries the timeline of the latest snapshot", () => {
-	const timelines: (Timeline | undefined)[] = [];
-	const { client, clock, deliver } = started([
-		{ show: ({ timeline }) => timelines.push(timeline) },
-	]);
-	expect(timelines).toEqual([undefined]);
-
-	const before = snapshot({ x: 4, y: 4 });
-	const after = snapshot({ x: 5, y: 4 });
-	deliver({ type: "message", message: before });
-	clock.settle();
-	client.press(right);
-	deliver({ type: "message", message: after });
-
-	expect(timelines.at(-1)).toEqual(deriveView(before, after));
 });
 
 test("two snapshots with no frame between them leave one pending frame", () => {

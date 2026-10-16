@@ -28,8 +28,23 @@ const loss = (message: string) => ({
 
 // Stands in for a device: init resolves after `during` runs, and the renderer is kept to report later losses.
 function fakeDevice(during: (renderer: WebGPURenderer) => void = () => {}) {
-	Object.assign(globalThis, { window: { devicePixelRatio: 1 } });
-	const device: { renderer?: WebGPURenderer } = {};
+	const resizes = new Set<() => void>();
+	Object.assign(globalThis, {
+		window: {
+			devicePixelRatio: 1,
+			addEventListener: (type: string, listener: () => void) => {
+				if (type === "resize") resizes.add(listener);
+			},
+			removeEventListener: (type: string, listener: () => void) => {
+				if (type === "resize") resizes.delete(listener);
+			},
+		},
+	});
+	const device: { renderer?: WebGPURenderer; resize: () => void } = {
+		resize: () => {
+			for (const listener of [...resizes]) listener();
+		},
+	};
 	spyOn(WebGPURenderer.prototype, "init").mockImplementation(function (
 		this: WebGPURenderer,
 	) {
@@ -229,4 +244,63 @@ test("data-frames counts the renders and not the draws skipped on an empty canva
 	result.scene.draw(poses);
 	result.scene.draw(poses);
 	expect(surface.dataset.frames).toBe("2");
+});
+
+test("a window resize after a draw renders the last poses again at the new size", async () => {
+	const device = fakeDevice();
+	const sizes = spyOn(WebGPURenderer.prototype, "setSize");
+	const renders = spyOn(WebGPURenderer.prototype, "render").mockImplementation(
+		() => {},
+	);
+	const surface = canvas();
+	const result = await createScene(surface, {
+		forceWebGL: true,
+		lost: () => {},
+	});
+	if (!result.ok) throw new Error(result.detail);
+	const look = { stem: "player", tier: 0 };
+	const player = { id: 1, look, x: 0, y: 0, opacity: 1 };
+	result.scene.draw({ width: 2, height: 2, player, entities: [] });
+
+	Object.assign(surface, { clientWidth: 12 });
+	device.resize();
+	expect(renders).toHaveBeenCalledTimes(2);
+	expect(sizes.mock.calls).toEqual([
+		[8, 6, false],
+		[12, 6, false],
+	]);
+});
+
+test("a window resize before any draw renders nothing", async () => {
+	const device = fakeDevice();
+	const renders = spyOn(WebGPURenderer.prototype, "render").mockImplementation(
+		() => {},
+	);
+	const result = await createScene(canvas(), {
+		forceWebGL: true,
+		lost: () => {},
+	});
+	expect(result.ok).toBe(true);
+
+	device.resize();
+	expect(renders).not.toHaveBeenCalled();
+});
+
+test("a window resize after a loss does not render on the dead device", async () => {
+	const device = fakeDevice();
+	const renders = spyOn(WebGPURenderer.prototype, "render").mockImplementation(
+		() => {},
+	);
+	const result = await createScene(canvas(), {
+		forceWebGL: true,
+		lost: () => {},
+	});
+	if (!result.ok) throw new Error(result.detail);
+	const look = { stem: "player", tier: 0 };
+	const player = { id: 1, look, x: 0, y: 0, opacity: 1 };
+	result.scene.draw({ width: 2, height: 2, player, entities: [] });
+	device.renderer?.onDeviceLost(loss("gone"));
+
+	device.resize();
+	expect(renders).toHaveBeenCalledTimes(1);
 });
