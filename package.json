@@ -13,7 +13,7 @@
 		"typecheck": "turbo run typecheck",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
-		"check:arch": "bun scripts/check-architecture.ts",
+		"check:arch": "bun scripts/check-architecture.ts && bun scripts/check-web-purity.ts",
 		"verify": "biome check . && bun run check:arch && turbo run typecheck test build"
 	},
 	"devDependencies": {

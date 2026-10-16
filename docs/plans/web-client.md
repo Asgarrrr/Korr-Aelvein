@@ -422,3 +422,17 @@ the diff before commit.
 - An automated WebGPU check on a host with a real adapter.
 - A git hook running `e2e` once it is fast and stable, or straight into
   `verify`.
+
+## 8. Deviations
+
+Slice 1:
+- §4 fields unread in slice 1 are absent (`opened`, the `open` event,
+  `detail`, `Frame.timeline`, `draw`, `Link.close`, the extra `createClient`
+  members); each arrives with the slice that reads it.
+- `notice` is a key union (`rejected | closed | fault`) looked up in
+  `theme.noticeTexts`, not a string.
+- The HUD shows the over text until slice 2's end screen replaces it.
+- `apps/web/test/protocol-imports.test.ts` is gone: `check-architecture.ts`
+  enforces type-only protocol imports, including type-position `import()`.
+- `scripts/check-web-purity.ts` (in `check:arch`) proves biome loads
+  `web-purity.grit`: `determinism.grit` had no sample harness to copy.

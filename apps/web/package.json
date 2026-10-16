@@ -5,7 +5,7 @@
 	"scripts": {
 		"dev": "vite",
 		"build": "vite build",
-		"typecheck": "tsc -p .",
+		"typecheck": "tsc -p . && tsc -p tsconfig.pure.json",
 		"test": "bun test --pass-with-no-tests"
 	},
 	"dependencies": {

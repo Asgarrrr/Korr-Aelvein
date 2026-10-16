@@ -1,37 +1,62 @@
-import type { Command, Snapshot } from "@korr/protocol";
+import type { Gesture } from "../play/types";
 
-// The player is a rat: the engine's hunger module lets its forage diet eat only forage-class food.
-const edible: ReadonlySet<string> = new Set(["cheese", "mushroom"]);
+export type KeyPress = {
+	key: string;
+	code: string;
+	repeat: boolean;
+	ctrlKey: boolean;
+	altKey: boolean;
+	metaKey: boolean;
+	isComposing: boolean;
+	keyCode: number;
+};
 
-const commands: ReadonlyMap<string, Command> = new Map<string, Command>([
-	["ArrowLeft", { type: "move", dx: -1, dy: 0 }],
-	["ArrowRight", { type: "move", dx: 1, dy: 0 }],
-	["ArrowUp", { type: "move", dx: 0, dy: -1 }],
-	["ArrowDown", { type: "move", dx: 0, dy: 1 }],
-	["h", { type: "move", dx: -1, dy: 0 }],
-	["l", { type: "move", dx: 1, dy: 0 }],
-	["k", { type: "move", dx: 0, dy: -1 }],
-	["j", { type: "move", dx: 0, dy: 1 }],
-	["y", { type: "move", dx: -1, dy: -1 }],
-	["u", { type: "move", dx: 1, dy: -1 }],
-	["b", { type: "move", dx: -1, dy: 1 }],
-	["n", { type: "move", dx: 1, dy: 1 }],
-	[".", { type: "wait" }],
+// Some browsers report a key that an IME consumes with this keyCode and isComposing still false.
+const IME_KEY_CODE = 229;
+
+const west: Gesture = { kind: "move", dx: -1, dy: 0 };
+const east: Gesture = { kind: "move", dx: 1, dy: 0 };
+const north: Gesture = { kind: "move", dx: 0, dy: -1 };
+const south: Gesture = { kind: "move", dx: 0, dy: 1 };
+const northWest: Gesture = { kind: "move", dx: -1, dy: -1 };
+const northEast: Gesture = { kind: "move", dx: 1, dy: -1 };
+const southWest: Gesture = { kind: "move", dx: -1, dy: 1 };
+const southEast: Gesture = { kind: "move", dx: 1, dy: 1 };
+const wait: Gesture = { kind: "wait" };
+
+// By code: the numpad means the same with NumLock on ("4") or off ("ArrowLeft", "Clear").
+const byCode: ReadonlyMap<string, Gesture> = new Map<string, Gesture>([
+	["Numpad1", southWest],
+	["Numpad2", south],
+	["Numpad3", southEast],
+	["Numpad4", west],
+	["Numpad5", wait],
+	["Numpad6", east],
+	["Numpad7", northWest],
+	["Numpad8", north],
+	["Numpad9", northEast],
 ]);
 
-export function commandFor(
-	key: string,
-	snapshot: Snapshot,
-): Command | undefined {
-	return key === "e" ? eat(snapshot) : commands.get(key);
-}
+const byKey: ReadonlyMap<string, Gesture> = new Map<string, Gesture>([
+	["ArrowLeft", west],
+	["ArrowRight", east],
+	["ArrowUp", north],
+	["ArrowDown", south],
+	["h", west],
+	["l", east],
+	["k", north],
+	["j", south],
+	["y", northWest],
+	["u", northEast],
+	["b", southWest],
+	["n", southEast],
+	[".", wait],
+	["e", { kind: "eat" }],
+]);
 
-function eat({ player, entities }: Snapshot): Command | undefined {
-	let target: number | undefined;
-	for (const [id, species, x, y] of entities) {
-		if (!edible.has(species)) continue;
-		if (Math.max(Math.abs(x - player.x), Math.abs(y - player.y)) > 1) continue;
-		if (target === undefined || id < target) target = id;
-	}
-	return target === undefined ? undefined : { type: "eat", target };
+export function gestureOf(press: KeyPress): Gesture | undefined {
+	if (press.repeat || press.ctrlKey || press.altKey || press.metaKey)
+		return undefined;
+	if (press.isComposing || press.keyCode === IME_KEY_CODE) return undefined;
+	return byCode.get(press.code) ?? byKey.get(press.key);
 }

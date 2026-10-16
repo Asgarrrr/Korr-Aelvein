@@ -1,0 +1,9 @@
+or {
+	`Math.random`,
+	`Math[$key]`,
+	`$_ = Math`,
+	`globalThis.Math`,
+	`Date`
+} as $call where {
+	register_diagnostic(span=$call, message="Clock or randomness in the web's pure core: take time and chance as inputs.")
+}

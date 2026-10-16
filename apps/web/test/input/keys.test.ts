@@ -1,23 +1,79 @@
 import { expect, test } from "bun:test";
-import type { Entity, Snapshot } from "@korr/protocol";
-import { commandFor } from "../../src/input/keys";
+import { gestureOf, type KeyPress } from "../../src/input/keys";
 
-function snapshot(entities: Entity[] = []): Snapshot {
+function press(key: string, code = "", rest: Partial<KeyPress> = {}): KeyPress {
 	return {
-		type: "snapshot",
-		width: 8,
-		height: 8,
-		player: { id: 1, x: 4, y: 4, hp: 10, satiety: 800 },
-		entities,
-		looks: {},
+		key,
+		code,
+		repeat: false,
+		ctrlKey: false,
+		altKey: false,
+		metaKey: false,
+		isComposing: false,
+		keyCode: 0,
+		...rest,
 	};
 }
 
 test.each([
-	["ArrowLeft", -1, 0],
-	["ArrowRight", 1, 0],
-	["ArrowUp", 0, -1],
-	["ArrowDown", 0, 1],
+	["repeat", { repeat: true }],
+	["Ctrl", { ctrlKey: true }],
+	["Alt", { altKey: true }],
+	["Meta", { metaKey: true }],
+	["IME composition", { isComposing: true }],
+	["IME keyCode 229", { keyCode: 229 }],
+] as const)("a bound key with %s gives no gesture", (_, rest) => {
+	for (const [key, code] of [
+		["h", "KeyH"],
+		["4", "Numpad4"],
+	] as const) {
+		expect(gestureOf(press(key, code))).toBeDefined();
+		expect(gestureOf(press(key, code, rest))).toBeUndefined();
+	}
+});
+
+test("Shift + the AZERTY key that types '.' waits", () => {
+	expect(gestureOf(press(".", "Comma"))).toEqual({ kind: "wait" });
+});
+
+test.each([
+	["Numpad4", "4", "ArrowLeft", { kind: "move", dx: -1, dy: 0 }],
+	["Numpad7", "7", "Home", { kind: "move", dx: -1, dy: -1 }],
+	["Numpad5", "5", "Clear", { kind: "wait" }],
+] as const)(
+	"%s gives the same gesture with NumLock on or off",
+	(code, on, off, gesture) => {
+		expect(gestureOf(press(on, code))).toEqual(gesture);
+		expect(gestureOf(press(off, code))).toEqual(gesture);
+	},
+);
+
+test("vi keys, arrows and the numpad name the same directions, y growing down", () => {
+	const by = (keys: string[], codes: string[] = []) =>
+		keys.map((key, i) => gestureOf(press(key, codes[i])));
+	const vi = by(["h", "l", "k", "j", "y", "u", "b", "n"]);
+	expect(vi.slice(0, 4)).toEqual(
+		by(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]),
+	);
+	expect(vi).toEqual(
+		by(
+			["4", "6", "8", "2", "7", "9", "1", "3"],
+			[
+				"Numpad4",
+				"Numpad6",
+				"Numpad8",
+				"Numpad2",
+				"Numpad7",
+				"Numpad9",
+				"Numpad1",
+				"Numpad3",
+			],
+		),
+	);
+	expect(gestureOf(press("k"))).toEqual({ kind: "move", dx: 0, dy: -1 });
+});
+
+test.each([
 	["h", -1, 0],
 	["l", 1, 0],
 	["k", 0, -1],
@@ -26,70 +82,12 @@ test.each([
 	["u", 1, -1],
 	["b", -1, 1],
 	["n", 1, 1],
-])("%s moves by (%d, %d)", (key, dx, dy) => {
-	expect(commandFor(key, snapshot())).toEqual({ type: "move", dx, dy });
+] as const)("vi key %s moves by (%d, %d)", (key, dx, dy) => {
+	expect(gestureOf(press(key))).toEqual({ kind: "move", dx, dy });
 });
 
-test(". waits", () => {
-	expect(commandFor(".", snapshot())).toEqual({ type: "wait" });
-});
-
-test("an unknown key, or a key named like an Object property, gives no command", () => {
-	expect(commandFor("q", snapshot())).toBeUndefined();
-	expect(commandFor("constructor", snapshot())).toBeUndefined();
-});
-
-test("e eats the lowest-id adjacent edible entity", () => {
-	const command = commandFor(
-		"e",
-		snapshot([
-			[9, "cheese", 5, 5],
-			[7, "mushroom", 3, 4],
-			[8, "cheese", 4, 4],
-		]),
-	);
-	expect(command).toEqual({ type: "eat", target: 7 });
-});
-
-test("e eats an edible entity on the player's cell", () => {
-	const command = commandFor("e", snapshot([[3, "cheese", 4, 4]]));
-	expect(command).toEqual({ type: "eat", target: 3 });
-});
-
-test("e skips non-edible and non-adjacent entities to pick an adjacent edible one", () => {
-	const command = commandFor(
-		"e",
-		snapshot([
-			[2, "stoat", 4, 5],
-			[3, "moss", 3, 3],
-			[4, "cheese", 6, 4],
-			[5, "mushroom", 2, 2],
-			[6, "cheese", 5, 3],
-		]),
-	);
-	expect(command).toEqual({ type: "eat", target: 6 });
-});
-
-test("e picks the cheese over a lower-id adjacent rat, which the player rat cannot eat", () => {
-	const command = commandFor(
-		"e",
-		snapshot([
-			[2, "rat", 4, 3],
-			[3, "cheese", 5, 4],
-		]),
-	);
-	expect(command).toEqual({ type: "eat", target: 3 });
-});
-
-test("e gives no command with no entity, or with only non-edible or distant ones", () => {
-	expect(commandFor("e", snapshot())).toBeUndefined();
-	expect(
-		commandFor(
-			"e",
-			snapshot([
-				[2, "stoat", 4, 5],
-				[3, "cheese", 6, 6],
-			]),
-		),
-	).toBeUndefined();
+test("e eats; an unbound key or a key named like an Object property gives nothing", () => {
+	expect(gestureOf(press("e", "KeyE"))).toEqual({ kind: "eat" });
+	expect(gestureOf(press("q", "KeyQ"))).toBeUndefined();
+	expect(gestureOf(press("constructor"))).toBeUndefined();
 });

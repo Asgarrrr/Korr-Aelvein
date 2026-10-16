@@ -152,6 +152,10 @@ Plan: `docs/plans/generative-species.md`. Code:
 
 - **Command**: what a client sends for its player's turn (`move`, `wait`, `eat`).
   The server maps it to an engine action. Not an Intent.
+- **Gesture**: what the player asks for (a key, later a click), before it
+  becomes a Command. Code: `Gesture` (`apps/web/src/play/types.ts`).
+- **Play**: the client's state of one game: status, last Snapshot, command
+  in flight, notice. Code: `Play` (`apps/web/src/play/types.ts`).
 - **Session**: One connection owns one Session. A Session holds one World
   and one player, in memory. Code: `Session` (`apps/server/src/session.ts`).
 - **Snapshot**: the server's message to the client after each of its

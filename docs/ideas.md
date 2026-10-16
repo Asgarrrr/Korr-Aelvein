@@ -69,3 +69,25 @@ See `docs/plans/generative-species.md`.
   their neighbours.
 - Class-aware alarms: an alarm byte holds eaten-class bits, but `alarmed()` wakes every actor with the required components. With a second prey class, check the bits against the actor's own class.
 - Reactive far floors: an alarm stamped over sight (radius 3), separate from danger's reach (4), wakes far rats when a predator comes into view, so they really flee and watch. Measured +28% world round (`docs/plans/creature-decision.md`, D6). Needs a second stamp in fear.
+
+## Web client
+
+See `docs/plans/web-client.md`.
+
+- Mouse picking (`render` exports `cellAt`, `app` hands the cell to `input`).
+- Eating generated food species.
+- Unprompted server snapshots (need a sequence number).
+- Held-key walking at a fixed cadence.
+- Attack and bite animations, HUD at the hit: need events in the protocol.
+- A snapshot (or final HP) on `Over`.
+- Floor identity in the snapshot, once the player can change floor.
+- An application heartbeat in the protocol.
+- Reconnect to a held game.
+- The Rust server must send WebSocket pings.
+- Shared protocol fixtures and a JSON Schema export, once the Rust server
+  speaks the protocol.
+- Telemetry for broken reports.
+- CI running `verify` and `e2e` on Linux.
+- An automated WebGPU check on a host with a real adapter.
+- A git hook running `e2e` once it is fast and stable, or straight into
+  `verify`.
