@@ -89,9 +89,41 @@ test("a rejected command leaves a notice until the next server message", () => {
 	expect(run([opening], retried.play).play.notice).toBeUndefined();
 });
 
+const opened: PlayEvent = { type: "open" };
+const closed = (detail: string): PlayEvent => ({ type: "closed", detail });
+const fault = (detail: string): PlayEvent => ({ type: "fault", detail });
+
+test("an ending is final: over then closed, a fault or a snapshot stays over", () => {
+	const over = run([opening, message({ type: "over" })]).play;
+	expect(run([closed("1006")], over).play).toBe(over);
+	expect(run([fault("late"), opening], over).play).toBe(over);
+});
+
+test("broken keeps its first detail", () => {
+	const { play } = run([
+		opening,
+		fault("first"),
+		fault("second"),
+		closed("1006"),
+	]);
+	expect(play.status).toEqual({ kind: "broken", detail: "first" });
+});
+
 test.each([
-	[{ type: "closed" }, "closed"],
-	[{ type: "fault" }, "fault"],
-] as const)("%o leaves the %s notice", (event, notice) => {
-	expect(run([opening, event]).play.notice).toBe(notice);
+	["before the socket opened", "unreachable", "1006", []],
+	["after the socket opened", "dropped", "1011", [opened]],
+	["after the socket opened", "dropped", "1006", [opened, opening]],
+] as const)("a close %s is lost/%s, detail %s", (_, cause, code, before) => {
+	const { play } = run([...before, closed(code)]);
+	expect(play.status).toEqual({ kind: "lost", cause, detail: code });
+});
+
+test("rejected: over while playing is broken", () => {
+	const { play } = run([
+		opened,
+		opening,
+		gesture(east),
+		message({ type: "rejected", reason: "over" }),
+	]);
+	expect(play.status).toMatchObject({ kind: "broken" });
 });

@@ -436,3 +436,24 @@ Slice 1:
   enforces type-only protocol imports, including type-position `import()`.
 - `scripts/check-web-purity.ts` (in `check:arch`) proves biome loads
   `web-purity.grit`: `determinism.grit` had no sample harness to copy.
+
+Slice 2:
+- `Notice` keeps only `rejected`: closed and faults are endings now, so the
+  `closed` and `fault` keys had no writer left.
+- `config.visible` is named `onVisible`: it takes a listener.
+- `createClient` takes `ended` and returns `receive`; `requestFrame`,
+  `turnMs` and `replace` arrive with slices 3 and 4. No rAF to cancel yet.
+- One watchdog timer serves both budgets: the first message clears the open
+  budget and a command is only sent after it, so they never overlap.
+- A hidden period's fresh budget runs from the moment the page turns
+  visible again (`onVisible` re-arms); an expiry while still hidden re-arms.
+- `main.ts` turns `error` and `unhandledrejection` into
+  `receive({ type: "fault" })`, so they take the same single cleanup path.
+- Details not fixed by decision 9: `rejected: over` for that message,
+  `undecodable server message` for a bad frame, `restored from the
+  back-forward cache` for `pageshow`.
+- `app/` also logs every caught throw with `console.error`, so a broken
+  ending keeps its stack trace.
+- The end screen title is a `<p>`: Biome refuses an empty heading.
+- `apps/server` declares `@sinclair/typebox` (the version `@korr/protocol`
+  pins) as a dev dependency for `Value.Check`.

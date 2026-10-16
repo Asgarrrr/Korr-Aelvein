@@ -5,18 +5,23 @@ export type Gesture =
 	| { kind: "wait" }
 	| { kind: "eat" };
 
-export type Ending = { kind: "over" };
+export type Ending =
+	| { kind: "over" }
+	| { kind: "lost"; cause: "unreachable" | "dropped"; detail: string }
+	| { kind: "broken"; detail: string };
 
-export type Notice = "rejected" | "closed" | "fault";
+export type Notice = "rejected";
 
 export type PlayEvent =
+	| { type: "open" }
 	| { type: "message"; message: ServerMessage }
-	| { type: "closed" }
-	| { type: "fault" }
+	| { type: "closed"; detail: string }
+	| { type: "fault"; detail: string }
 	| { type: "gesture"; gesture: Gesture };
 
 export type Play = {
 	status: "connecting" | "playing" | Ending;
+	opened: boolean;
 	snapshot: Snapshot | undefined;
 	inFlight: boolean;
 	notice: Notice | undefined;

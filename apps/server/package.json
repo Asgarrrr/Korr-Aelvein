@@ -13,6 +13,7 @@
 		"elysia": "1.4.30"
 	},
 	"devDependencies": {
+		"@sinclair/typebox": "0.34.52",
 		"@types/bun": "^1.4.2"
 	}
 }

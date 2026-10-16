@@ -1,8 +1,9 @@
 import { afterAll, expect, test } from "bun:test";
-import type { Command, ServerMessage } from "@korr/protocol";
+import { type Command, ServerMessage } from "@korr/protocol";
+import { Value } from "@sinclair/typebox/value";
 import { createApp } from "../src/app";
 import { Session } from "../src/session";
-import { connect } from "./client";
+import { type Client, connect as connectRaw } from "./client";
 
 const SEED = 7;
 const OTHER_SEED = 8;
@@ -24,6 +25,20 @@ const player = (message: ServerMessage) => {
 	if (message.type !== "snapshot")
 		throw new Error(`expected a snapshot, got ${message.type}`);
 	return message.player;
+};
+
+const matchesSchema = (message: ServerMessage) => {
+	expect(Value.Check(ServerMessage, message)).toBe(true);
+	return message;
+};
+
+const connect = async (port: number | undefined): Promise<Client> => {
+	const client = await connectRaw(port);
+	return {
+		...client,
+		next: () => client.next().then(matchesSchema),
+		send: (raw) => client.send(raw).then(matchesSchema),
+	};
 };
 
 const isPending = (promise: Promise<unknown>) => Bun.peek(promise) === promise;

@@ -1,5 +1,5 @@
 import type { Play } from "../play/types";
-import { connectingText, endTexts, noticeTexts } from "../theme";
+import { connectingText, noticeTexts } from "../theme";
 
 export function hud(element: { textContent: string | null }) {
 	return {
@@ -9,11 +9,7 @@ export function hud(element: { textContent: string | null }) {
 				const { hp, satiety } = play.snapshot.player;
 				lines.push(`hp ${hp}  satiety ${satiety}`);
 			}
-			if (play.status === "connecting") {
-				if (!play.notice) lines.push(connectingText);
-			} else if (play.status !== "playing") {
-				lines.push(endTexts[play.status.kind]);
-			}
+			if (play.status === "connecting") lines.push(connectingText);
 			if (play.notice) lines.push(noticeTexts[play.notice]);
 			element.textContent = lines.join("\n");
 		},

@@ -13,9 +13,10 @@ export const unknownStem = { glyph: "?" };
 export const floorGlyph = ".";
 
 export const connectingText = "connecting…";
-export const endTexts = { over: "game over" };
-export const noticeTexts = {
-	rejected: "command rejected",
-	closed: "connection lost",
-	fault: "unreadable server message",
+export const endTexts = {
+	over: "game over",
+	unreachable: "server unreachable",
+	dropped: "connection lost",
+	broken: "the game broke",
 };
+export const noticeTexts = { rejected: "command rejected" };
