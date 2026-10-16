@@ -488,3 +488,51 @@ Slice 3:
   `test/app/client/{harness.ts,turns.test.ts,endings.test.ts}`.
 - Reduced motion is read once at startup: a change mid-game applies after a
   reload.
+
+Slice 4:
+- `three/webgpu` imports under `bun test` without a DOM. `new
+  WebGPURenderer()` without a `canvas` throws (`document is not defined`);
+  with a fake canvas it constructs, and `init()` rejects. R1 and R2 run.
+- `render/scene.ts` also exports `stage()`: the scene graph (lights, floor,
+  entities, player, camera rig) without a device. `createScene` adds the
+  renderer to it. R1, R2, the floor and opacity tests drive `stage()`.
+- The loss rules of decision 15 and the canvas fit are tested through
+  `createScene` with `WebGPURenderer.prototype.init` and `render` stubbed
+  and a fake canvas. Losses during `init()` keep the first detail. The fit
+  test asserts the camera aspect and `setSize(width, height, false)`, called
+  once per canvas size change and not on an unchanged size.
+- The scene's consumer is the structural `{ show(): void; draw(poses) }`:
+  `render/` may not import `app/client`. Its `show` does nothing: the scene
+  reads only poses.
+- No shared geometry or material per stem: each body owns both, and both
+  are disposed when its id leaves the poses. The floor is one
+  `InstancedMesh`, rebuilt and disposed when the floor size changes.
+- A body keeps the shape of its first look: an entity's species never
+  changes. `tier` is not drawn in 3D.
+- Body materials are always `transparent`, so a fade changes no pipeline.
+  Materials are `MeshLambertNodeMaterial` under a hemisphere and a
+  directional light (`theme.lights`).
+- The camera looks at the player's cell from behind and above
+  (`theme.cameraRig`), so grid y + 1 is below on screen.
+- The canvas size is read on each draw. A window resize after a turn has
+  settled stretches the last image until the next turn's frames.
+- `@types/three` 0.186.0 types `onError` with a string; three 0.186.1 passes
+  `{ api, type, message }`. The detail reads `message`.
+- `main.ts` awaits `createScene` at the top level; `?debug` skips it. A
+  promise holds a loss reported before `createClient` returns. The canvas
+  is hidden under `?debug`, on failure and on loss; `index.html` places it
+  behind the HUD.
+- `replace` runs inside the client's guard: a throw from the swapped-in
+  consumer's `show` ends broken once. The "throw in a scene draw" case is
+  slice 2's "a consumer's draw" row: the real scene needs a device.
+- The renderer is not disposed after a loss or a failed setup: the dead
+  renderer keeps three's internal frame loop and its context until reload.
+- `main.ts` awaits `createScene` before the client and the fault listeners
+  exist: an `init()` that never settles leaves a blank page.
+- `data-backend` and `data-frames` stay in slice 5: no slice 4 test needs
+  them. The backend that ran is `renderer.backend.isWebGPUBackend` after
+  `init()` (the fallback replaces `renderer.backend`).
+- The bundle is 802 kB minified (Vite's chunk-size warning), and `?debug`
+  loads three too.
+- Not run: WebGPU on a real GPU and `WEBGL_lose_context` under `?webgl`
+  (no browser tool in the implementing session).

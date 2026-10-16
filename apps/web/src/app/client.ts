@@ -26,7 +26,12 @@ export function createClient({
 	ended: (ending: Ending) => void;
 	requestFrame: (callback: (now: number) => void) => () => void;
 	turnMs: number;
-}): { receive(event: PlayEvent): void; press(press: KeyPress): boolean } {
+}): {
+	receive(event: PlayEvent): void;
+	press(press: KeyPress): boolean;
+	replace(from: Consumer, to: Consumer): void;
+} {
+	const list = [...consumers];
 	let play = initialPlay;
 	let timeline: Timeline | undefined;
 	let playback: Playback = { duration: turnMs, start: undefined };
@@ -64,7 +69,7 @@ export function createClient({
 		}
 	};
 	const show = () => {
-		for (const consumer of consumers) consumer.show({ play, timeline });
+		for (const consumer of list) consumer.show({ play, timeline });
 	};
 	const receive = (event: PlayEvent) =>
 		guarded(() => {
@@ -97,7 +102,7 @@ export function createClient({
 			const result = frame(playback, now);
 			playback = result.playback;
 			const poses = sample(timeline, outCubic(result.progress));
-			for (const consumer of consumers) consumer.draw?.(poses);
+			for (const consumer of list) consumer.draw?.(poses);
 			if (result.progress < 1) cancelFrame = requestFrame(animate);
 			else if (!play.settled) receive({ type: "settled" });
 		});
@@ -114,5 +119,12 @@ export function createClient({
 			receive({ type: "gesture", gesture });
 			return true;
 		},
+		replace: (from, to) =>
+			guarded(() => {
+				const index = list.indexOf(from);
+				if (index < 0) return;
+				list[index] = to;
+				to.show({ play, timeline });
+			}),
 	};
 }

@@ -9,10 +9,12 @@
 		"test": "bun test --pass-with-no-tests"
 	},
 	"dependencies": {
-		"@korr/protocol": "workspace:*"
+		"@korr/protocol": "workspace:*",
+		"three": "0.186.1"
 	},
 	"devDependencies": {
 		"@types/bun": "^1.4.2",
+		"@types/three": "0.186.0",
 		"vite": "8.3.2"
 	}
 }
