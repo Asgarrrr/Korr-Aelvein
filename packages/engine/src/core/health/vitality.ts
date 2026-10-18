@@ -9,6 +9,9 @@ export const coreSchema = {
 
 export type CoreSchema = typeof coreSchema;
 
+// Few entities lead somewhere: their link lives in the sparse pool.
+export const coreSparse: readonly string[] = ["link"];
+
 export const I16_MAX = 0x7fff;
 
 // The same rule a load applies, so a spawn cannot write a save that load rejects.

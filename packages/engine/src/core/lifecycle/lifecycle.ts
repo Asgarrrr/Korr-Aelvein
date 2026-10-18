@@ -73,7 +73,7 @@ function readValues(
 	species: CompiledSpecies,
 	values: SpawnValues,
 ): number {
-	const { spawnColumns, spawnValues } = e;
+	const { spawnColumns, spawnValues, spawnPooled } = e;
 	const { label } = species;
 	let count = 0;
 	for (const componentName in values) {
@@ -87,11 +87,6 @@ function readValues(
 				label,
 				`values for ${componentName}, which the species lacks`,
 			);
-		if (component.sparse)
-			throw speciesError(
-				label,
-				`${componentName} is sparse: it takes no values`,
-			);
 		const fields = values[componentName];
 		for (const field in fields) {
 			const value = fields[field];
@@ -103,6 +98,7 @@ function readValues(
 				label,
 			);
 			spawnValues[count] = value ?? 0;
+			spawnPooled[count] = component.sparse;
 			count++;
 		}
 	}
@@ -190,16 +186,15 @@ export function place(
 	e.speciesIndex[slot] = species.index;
 	for (let i = 0; i < columns.length; i++)
 		(columns[i] as Column)[slot] = values[i] ?? 0;
-	if (species.sparse) {
-		const row = storage.sparse.take(floor, slot);
-		const { sparseColumns, sparseValues } = species;
-		for (let i = 0; i < sparseColumns.length; i++)
-			(sparseColumns[i] as Column)[row] = sparseValues[i] ?? 0;
-	}
+	const row = species.sparse ? storage.sparse.take(floor, slot) : NONE;
+	const { sparseColumns, sparseValues } = species;
+	for (let i = 0; i < sparseColumns.length; i++)
+		(sparseColumns[i] as Column)[row] = sparseValues[i] ?? 0;
 	if (species.ranges.length > 0) drawRanges(e, slot, species.ranges, overrides);
-	const { spawnColumns, spawnValues } = e;
+	const { spawnColumns, spawnValues, spawnPooled } = e;
 	for (let i = 0; i < overrides; i++)
-		(spawnColumns[i] as Column)[slot] = spawnValues[i] ?? 0;
+		(spawnColumns[i] as Column)[spawnPooled[i] ? row : slot] =
+			spawnValues[i] ?? 0;
 	attach(e, floor, slot, x, y, at);
 	return (storage.ids[slot] ?? 0) as EntityId;
 }

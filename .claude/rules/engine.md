@@ -25,7 +25,8 @@ slot across all columns. An `EntityId` names an entity for life.
   period P > 1, an actor re-executes its intent unless
   `(round + id) % P == 0` (`decide` in `turn.ts`). P comes from
   `LOD_PERIODS` by floor distance to the nearest player, fixed at round
-  start (`startRound` in `core/turns/round.ts`). No player anywhere: P = 1.
+  start (`startRound` in `core/turns/round.ts`). No player anywhere: P =
+  `Engine.unwatchedPeriod` (default 1, never saved).
 - FAIL means "this decision is invalid". A FAIL on a cached intent clears
   it and arbitrates in the same turn. A FAIL on a fresh choice clears the
   intent and costs the turn. A step that is only blocked must reach
@@ -57,8 +58,9 @@ slot across all columns. An `EntityId` names an entity for life.
   poisoning (`core/world/game-world.ts`).
 - Travel: `core.travel` posts the row to the destination inbox at
   `time + STAIR_TIME`. Position, schedule and intent are not carried. The
-  mask and every other saved column are (`Engine.carried`, copied by
-  `Inbox.post` and `Inbox.land`). Cell columns never travel.
+  mask, every other saved column and the pool row are (`Engine.carried`
+  and the pool columns, copied by `Inbox.post` and `Inbox.land`). Cell
+  columns never travel.
 - An entity joins or leaves a floor's rows only through `attach` /
   `detach` (`core/lifecycle/membership.ts`). They keep the grid, the
   schedule and `Engine.players` in step. `players[f]` counts the player
@@ -84,11 +86,11 @@ slot across all columns. An `EntityId` names an entity for life.
 | `space/` | Grid lists, `approach`, cell readers and writers. |
 | `events/` | Per-floor event ring and its cap. |
 | `random/` | Keyed `draw` and bounded ints (D6). |
-| `health/` | `coreSchema` (vitality, link) and the harm drain. |
+| `health/` | `coreSchema` (vitality, link), `coreSparse`, the harm drain. |
 | `ecs/` | Storage, masks, queries, getter views; imports nothing else from core. |
 | `lifecycle/` | Spawn by name or shape, `values`, kill, deferred lists, floor membership. |
 | `persistence/image.ts` | Floor image layout, header codec, `FORMAT_VERSION`, `sectionsOf`, checksum. |
-| `persistence/validate.ts`, `rows.ts`, `sparse.ts` | Load checks, fast and full; `sparse.ts` checks the pool. |
+| `persistence/validate.ts`, `rows.ts`, `sparse.ts`, `links.ts` | Load checks, fast and full; `sparse.ts` checks the pool, `links.ts` the stairs. |
 | `audit/` | Audit mode: column diffs around callbacks, range-checked writes. |
 
 ## Recipes
@@ -128,10 +130,11 @@ For a component held by few entities. List it in the module's `sparse`
 and access it with `b.sparse(name)`, never `b.write`. Index its columns
 by `row(slot)`, which is `NONE` for a slot without one. `b.query` and
 `requires` work unchanged. The pool holds `SPARSE_CAP` rows per floor:
-`world.spawn` throws on a full pool and a deferred spawn is dropped.
-Until travel carries pool rows, an actor species, a range or spawn values
-on a sparse component throw. `b.read` on a sparse component throws. The
-fingerprint folds the list, so the golden hash moves.
+`world.spawn` throws on a full pool and a deferred spawn is dropped. An
+arrival that needs a row waits in the inbox. A range on a sparse field
+throws; spawn values are written at the pool row. `b.read` on a sparse
+component throws. The fingerprint folds the list, so the golden hash
+moves. The core `link` is sparse: read it at `storage.sparse.row(slot)`.
 
 ### Change the frozen core API
 
@@ -221,8 +224,9 @@ typecheck lists any you miss.
   reference. `bun bench/reference.ts` prints one row per section 1 budget.
 - PASS means the median is within budget on this machine. The world round
   row also bounds p95. The plan set budgets on an M5 Pro.
-- It throws if a rerun or a permuted floor order changes the hash. Its
-  exit code ignores budget FAIL rows: read them.
+- It throws if a rerun or a permuted floor order changes the hash. Only
+  the allocated row sets the exit code; read the other FAIL rows.
+  `bun bench/sparse.ts` prints the read cost of dense and pool paths.
 - Determinism tests to reuse: `reversed()` ticks, `floorOrder`
   permutations, events on and off (`core/events/events.test.ts`), save
   plus load mid-run equals an unbroken run, audit on and off.

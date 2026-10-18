@@ -24,6 +24,10 @@ export class MaskQuery implements SlotList {
 		this.#mask = new MaskBits(storage, [{ word: 0, bit: ALIVE }, ...required]);
 	}
 
+	get bytes(): number {
+		return this.#list.byteLength;
+	}
+
 	has(slot: Slot): boolean {
 		return this.#mask.has(slot);
 	}

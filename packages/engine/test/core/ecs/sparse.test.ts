@@ -129,14 +129,10 @@ test("a sparse list names only own components, once; dense and sparse access do 
 	).toThrow(/a is sparse and has no read view/);
 });
 
-test("an actor, a range or spawn values on a sparse component throw", () => {
+test("a range on a sparse component throws", () => {
 	const engine = createEngine(
 		{ seed: 1, floors: 1, width: 4, height: 4, popCap: 8, events: false },
 		[twoSparse],
-	);
-	const item = { actor: false, components: { a: { v: 1 } } };
-	expect(() => spawn(engine, 0, { ...item, actor: true }, 0, 0)).toThrow(
-		/sparse/,
 	);
 	expect(() =>
 		spawn(
@@ -146,11 +142,7 @@ test("an actor, a range or spawn values on a sparse component throw", () => {
 			0,
 			0,
 		),
-	).toThrow(/sparse/);
-	expect(() => spawn(engine, 0, item, 0, 0, false, { a: { v: 2 } })).toThrow(
-		/sparse/,
-	);
-	expect(() => spawn(engine, 0, item, 0, 0)).not.toThrow();
+	).toThrow(/sparse: it takes no range/);
 });
 
 test("the audit refuses a pool write to a free row or to a component the owner lacks", () => {

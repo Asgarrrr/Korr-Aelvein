@@ -19,10 +19,11 @@ export const thirst = defineModule({
 		hydration: { value: "i32", max: "i32", drank: "i32" },
 		spring: { gives: "i16", left: "i16" },
 	},
+	sparse: ["spring"],
 	config: thirstConfig,
 	setup(b, cfg) {
 		const hydration = b.write("hydration");
-		const spring = b.write("spring");
+		const spring = b.sparse("spring");
 		const drinkers = b.query(["hydration"]);
 		const springs = b.query(["spring"]);
 
@@ -36,11 +37,11 @@ export const thirst = defineModule({
 				value[s] = left > 0 ? left : 0;
 			}
 			const wells = springs.slots(ctx);
-			const sips = spring.left;
+			const sips = spring.columns.left;
 			for (let i = 0; i < wells.length; i++) {
-				const s = wells.at(i);
-				const left = (sips[s] ?? 0) + cfg.refill;
-				sips[s] = left < cfg.fill ? left : cfg.fill;
+				const r = spring.row(wells.at(i));
+				const left = (sips[r] ?? 0) + cfg.refill;
+				sips[r] = left < cfg.fill ? left : cfg.fill;
 			}
 		});
 
@@ -50,12 +51,10 @@ export const thirst = defineModule({
 			["hydration"],
 			(ctx, actor, target) => {
 				const well = ctx.slotOf(target);
-				if (
-					well === NONE ||
-					!springs.has(well) ||
-					(spring.left[well] ?? 0) <= 0
-				)
-					return FAIL;
+				if (well === NONE || !springs.has(well)) return FAIL;
+				const { gives, left } = spring.columns;
+				const r = spring.row(well);
+				if ((left[r] ?? 0) <= 0) return FAIL;
 				const dx = ctx.x(well) - ctx.x(actor);
 				const dy = ctx.y(well) - ctx.y(actor);
 				if (Math.max(Math.abs(dx), Math.abs(dy)) > 1) {
@@ -64,12 +63,12 @@ export const thirst = defineModule({
 						? ctx.instead(ctx.idle, null)
 						: ctx.instead(ctx.step, cell);
 				}
-				const gives = spring.gives[well] ?? 0;
-				const full = (hydration.value[actor] ?? 0) + gives;
+				const sip = gives[r] ?? 0;
+				const full = (hydration.value[actor] ?? 0) + sip;
 				const max = hydration.max[actor] ?? 0;
 				hydration.value[actor] = full < max ? full : max;
-				hydration.drank[actor] = (hydration.drank[actor] ?? 0) + gives;
-				spring.left[well] = (spring.left[well] ?? 0) - 1;
+				hydration.drank[actor] = (hydration.drank[actor] ?? 0) + sip;
+				left[r] = (left[r] ?? 0) - 1;
 				return cfg.sipCost;
 			},
 		);
@@ -79,7 +78,8 @@ export const thirst = defineModule({
 			if ((hydration.value[actor] ?? 0) >= cfg.thirstyBelow) return;
 			for (let i = 0; i < perception.count; i++) {
 				const s = perception.slot(i);
-				if (!springs.has(s) || (spring.left[s] ?? 0) <= 0) continue;
+				if (!springs.has(s)) continue;
+				if ((spring.columns.left[spring.row(s)] ?? 0) <= 0) continue;
 				out.push(drink, perception.id(i), cfg.score);
 				return;
 			}

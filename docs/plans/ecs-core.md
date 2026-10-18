@@ -28,6 +28,7 @@ Budgets (Bun 1.4.3, Apple M5 Pro; prototype in brackets):
 | Cached-action re-execution | <= 120 ns per actor turn | ~95 ns |
 | Bulk tick range scan | <= 20 µs per floor | 10 µs |
 | World RSS | <= 160 MB | 113 MB |
+| Allocated typed-array bytes (sets the exit code) | <= 137 MB | 135.7 MB (S2) |
 | Floor snapshot / fast floor restore | <= 0.1 ms / <= 0.2 ms | 68 µs / 107 µs |
 | Floor hash | <= 0.5 ms | 227 µs |
 
@@ -63,9 +64,21 @@ Evolvability: a new mechanic touches its folder, `registry.ts`, at most one
   each floor has `SPARSE_CAP` rows shared by every sparse component. A u16
   `rowOf` column (local row + 1, 0 = none) is the only per-slot cost. A
   release swap-removes the floor's last row into the freed one. Saved as a
-  `POOL_COUNT` header word plus one POOL section per pool column. Non-actor
-  components only until travel carries pool rows
-  (`docs/plans/generative-species.md` S2).
+  `POOL_COUNT` header word plus one POOL section per pool column. An inbox
+  entry carries one word per pool column; landing takes a row. An arrival
+  that needs a row on a full pool stays queued, with every entry behind
+  it, until a row frees: arrivals ignore `popCap`, never the pool. The
+  core `link` lives in the pool, as do the bench's `tracker` and `spring`.
+- Measured (S2, `bench/sparse.ts`, u8 field, 1M random reads on a 10k-row
+  floor; M5 Pro): dense array 0.43 ns, `FieldView.get` 0.49 ns, pool
+  `row()` + column 1.61 ns (x3.75) at 2048 holders; 0.53 / 0.58 / 2.52 ns
+  (x4.75) at 8000 holders. Bytes per floor: a dense u8 column 16,384; a
+  pool u8 column 2,048 at `SPARSE_CAP`, plus 32,768 of `rowOf` and 8,192
+  of back pointers shared by every sparse component. Reference world
+  allocated bytes: 147.1 MB before S2, 135.7 MB after; round median
+  95.3 ms before, 96.9 ms after (both over 80 ms on this machine).
+- Genes and temperament stay dense. Every creature holds them, so a pool
+  would need `CAP` rows: no byte saved, and 4-5x the read cost.
 - Rejected: archetypes (churn 1.8x, table explosion with tags), per-component
   sparse sets (5x slower random reads), AoS/Map (memory, 10x random reads),
   global free list (budget-split dependence), growable capacity (stale

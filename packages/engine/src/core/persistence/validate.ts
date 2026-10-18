@@ -10,7 +10,6 @@ import {
 import { ACTOR, ALIVE, indexInsert, knownBits, PLAYER } from "../ecs/storage";
 import { type Engine, FLOOR_STAGE } from "../engine";
 import { END } from "../space/grid";
-import { validLink } from "../travel/link";
 import {
 	FLOOR_HEADER,
 	FORMAT_VERSION,
@@ -26,17 +25,16 @@ import {
 	WORD,
 } from "./image";
 import { inboxProblem } from "./inbox-check";
+import { checkLinks } from "./links";
 import {
 	checkAbsent,
 	checkDead,
 	checkFree,
 	checkIntent,
-	checkLinks,
 	checkLists,
 	checkLive,
 	checkVitality,
 	describe,
-	type Links,
 	OK,
 	playersSeen,
 	type Rows,
@@ -176,7 +174,9 @@ export function checkFloor(
 	};
 	const fieldView = (column: Section["array"]) =>
 		byUnit(bySection.get(column) as Section);
-	const pooled = checkPool(engine, rows, pool, fieldView, check === "full");
+	const pooled =
+		checkPool(engine, rows, pool, fieldView, check === "full") ??
+		checkLinks(engine, rows, fieldView, floor);
 	if (pooled !== undefined) fail(pooled);
 	if (check === "fast")
 		return indexRows(
@@ -189,17 +189,6 @@ export function checkFloor(
 				now,
 				heads: int32(grid.heads),
 				cells: grid.cells,
-				links: {
-					word: engine.link.word,
-					bit: engine.link.bit,
-					floor: uint8(engine.link.floor),
-					x: int16(engine.link.x),
-					y: int16(engine.link.y),
-				},
-				floor,
-				floors: storage.floors,
-				width: grid.width,
-				height: grid.height,
 			},
 			fail,
 		);
@@ -233,20 +222,6 @@ export function checkFloor(
 			engine.vitality.bit,
 			int16(engine.vitality.hp),
 			int16(engine.vitality.max),
-		) ||
-		checkLinks(
-			rows,
-			{
-				word: engine.link.word,
-				bit: engine.link.bit,
-				floor: uint8(engine.link.floor),
-				x: int16(engine.link.x),
-				y: int16(engine.link.y),
-			},
-			floor,
-			storage.floors,
-			grid.width,
-			grid.height,
 		) ||
 		checkAbsent(
 			rows,
@@ -289,18 +264,11 @@ function indexRows(
 		readonly now: number;
 		readonly heads: Int32Array;
 		readonly cells: number;
-		readonly links: Links;
-		readonly floor: number;
-		readonly floors: number;
-		readonly width: number;
-		readonly height: number;
 	},
 	fail: (why: string) => never,
 ): number {
 	const { base, highWater, maskWords, ids, masks, cellOf, next, prev } = rows;
-	const { free, freeCount, nextAt, now, heads, cells, links } = guard;
-	// Most worlds keep the link bit in the first mask word, which the loop has already read.
-	const linkInFirst = links.word === 0;
+	const { free, freeCount, nextAt, now, heads, cells } = guard;
 	// One unsigned compare per range: below base wraps past highWater.
 	for (let i = 0; i < freeCount; i++) {
 		const slot = free[i] ?? 0;
@@ -335,24 +303,6 @@ function indexRows(
 			fail(`slot ${base + row} links to slot ${after}, outside this floor`);
 		if (!((before - base) >>> 0 < highWater || before === END))
 			fail(`slot ${base + row} links to slot ${before}, outside this floor`);
-		const linkWord = linkInFirst
-			? mask
-			: (masks[row * maskWords + links.word] ?? 0);
-		if (
-			(linkWord & links.bit) !== 0 &&
-			!validLink(
-				guard.floor,
-				links.floor[row] ?? 0,
-				links.x[row] ?? 0,
-				links.y[row] ?? 0,
-				guard.floors,
-				guard.width,
-				guard.height,
-			)
-		)
-			fail(
-				`slot ${base + row} has a link to floor ${links.floor[row]} that leads nowhere`,
-			);
 	}
 	return players;
 }

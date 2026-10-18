@@ -161,5 +161,5 @@ test("a full two-floor game with a moving player, saved midway, ends on the pinn
 	expect(loaded.hash()).toBe(unbroken.hash());
 
 	// Regression lock: re-pin only for an intended change of behaviour.
-	expect(unbroken.hash()).toBe("c443f2f7c14628d6");
+	expect(unbroken.hash()).toBe("b42a30907318e1be");
 });

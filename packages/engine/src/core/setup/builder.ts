@@ -136,6 +136,7 @@ export class ModuleBuilder implements Builder<Schema, Schema> {
 			this.#engine.storage,
 			this.#bits(names, "queries"),
 		);
+		this.#engine.queries.push(query);
 		return query as unknown as Query;
 	}
 

@@ -8,10 +8,17 @@ import {
 	type EntityId,
 	FAIL,
 } from "../../../src/core/module/api";
+import { engineDigest, hashHex } from "../../../src/core/persistence/hash";
+import { saveWorld } from "../../../src/core/persistence/save";
 import { hashName } from "../../../src/core/random/rng";
 import { createEngine } from "../../../src/core/setup/registration";
 import { advance, playerTurn } from "../../../src/core/turns/round";
-import { createWorld, loadWorld } from "../../../src/core/world/world";
+import {
+	createWorld,
+	loadEngine,
+	loadWorld,
+} from "../../../src/core/world/world";
+import { game } from "../../../src/game";
 
 const TURN = 100;
 const ROUNDS = 64;
@@ -314,4 +321,74 @@ test("a cached decision that fails gets no inertia in the decision that replaces
 		for (let due = w.advance(); due.length > 0; due = w.advance())
 			for (const p of due) w.input(p, "core/idle", null);
 	expect(bRounds[0]).toBe(failAt);
+});
+
+// Hungry rats, cheese and a stoat on each floor: cached replays move them differently from full decisions.
+const unwatched = (period: number, floors = 3, order?: readonly number[]) => {
+	const e = createEngine(
+		{ seed: 3, floors, width: 16, height: 16, popCap: 256, events: false },
+		game.modules,
+		game.species,
+	);
+	if (order) e.floorOrder = order;
+	for (let f = 0; f < floors; f++) {
+		for (let i = 0; i < 8; i++) {
+			spawn(e, f, "rat", i * 2, 1, false, { satiety: { value: 520 } });
+			spawn(e, f, "cheese", i * 2 + 1, 12);
+		}
+		spawn(e, f, "stoat", 15, 15);
+	}
+	e.unwatchedPeriod = period;
+	return e;
+};
+
+const play = (e: Engine, rounds: number) => {
+	for (let r = 0; r < rounds; r++)
+		for (let due = advance(e); due.length > 0; due = advance(e))
+			for (const p of due) {
+				const f = e.storage.floorOf(p);
+				playerTurn(e, f, e.storage.slotOf(f, p), e.idleIndex, 0);
+			}
+};
+
+const hashOf = (e: Engine) => {
+	engineDigest(e);
+	return hashHex(e.digest);
+};
+
+const after = (e: Engine, rounds: number) => {
+	play(e, rounds);
+	return hashOf(e);
+};
+
+test("with no player, the unwatched period sets every floor's period, whatever the floor order", () => {
+	const sixteen = after(unwatched(16), ROUNDS);
+	expect(sixteen).not.toBe(after(unwatched(1), ROUNDS));
+	expect(after(unwatched(16), ROUNDS)).toBe(sixteen);
+	expect(after(unwatched(16, 3, [2, 1, 0]), ROUNDS)).toBe(sixteen);
+});
+
+test("a world saved under an unwatched period and loaded with it plays on as the unbroken run", () => {
+	const half = ROUNDS / 2;
+	const first = unwatched(16);
+	play(first, half);
+	const loaded = loadEngine(saveWorld(first), game);
+	loaded.unwatchedPeriod = 16;
+	expect(after(loaded, half)).toBe(after(unwatched(16), ROUNDS));
+});
+
+test("a watched world ignores the unwatched period", () => {
+	const watched = (period: number) => {
+		const e = unwatched(period);
+		spawn(e, 0, "rat", 15, 0, true);
+		return after(e, ROUNDS);
+	};
+	expect(watched(16)).toBe(watched(1));
+});
+
+test("an unwatched period that is not an integer of at least 1 is refused", () => {
+	for (const period of [0, 1.5]) {
+		const e = unwatched(period);
+		expect(() => e.runRound()).toThrow(/unwatched period/);
+	}
 });

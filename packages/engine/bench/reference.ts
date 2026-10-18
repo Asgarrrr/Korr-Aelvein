@@ -5,6 +5,7 @@ import { engineDigest, hashHex } from "../src/core/persistence/hash";
 import { floorChecksum, saveFloor } from "../src/core/persistence/image";
 import { type LoadCheck, loadFloor } from "../src/core/persistence/validate";
 import { stats } from "./floor";
+import { allocated } from "./reference/allocated";
 import {
 	countTurns,
 	drainEvents,
@@ -55,6 +56,7 @@ const BUDGET = {
 	snapshotMs: 0.1,
 	restoreMs: 0.2,
 	hashMs: 0.5,
+	allocatedMb: 137,
 } as const;
 
 interface Row {
@@ -172,6 +174,7 @@ function rounds(): void {
 		);
 	});
 	persistence(e);
+	memory(e);
 	const live = [...Array(FLOORS).keys()].map(
 		(f) => (e.storage.highWater[f] ?? 0) - (e.storage.freeCount[f] ?? 0),
 	);
@@ -256,6 +259,21 @@ function persistence(e: Engine): void {
 	bound("floor restore, fast check", restores.fast, BUDGET.restoreMs);
 	bound("floor restore, full check", restores.full, undefined);
 	bound("floor hash", hashes, BUDGET.hashMs);
+}
+
+// The one gated row: bytes are deterministic, so a FAIL here is a real regression, not noise.
+function memory(e: Engine): void {
+	const { total, owners } = allocated(e);
+	const mb = (bytes: number) => `${(bytes / BYTES_PER_MB).toFixed(1)} MB`;
+	const pass = total <= BUDGET.allocatedMb * BYTES_PER_MB;
+	add("allocated", `${BUDGET.allocatedMb} MB`, mb(total), "", pass);
+	for (const { owner, bytes } of owners)
+		add(`  ${owner}`, "", mb(bytes), "", undefined);
+	if (!pass) process.exitCode = 1;
+	const { counts, rowsPerFloor } = e.storage.sparse;
+	console.log(
+		`sparse pool: at most ${Math.max(...counts)} of ${rowsPerFloor} rows on a floor`,
+	);
 }
 
 async function rss(): Promise<void> {

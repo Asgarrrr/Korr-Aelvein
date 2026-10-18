@@ -1,0 +1,15 @@
+[package]
+name = "korr-core"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+korr-ecs.workspace = true
+korr-grid.workspace = true
+korr-random.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

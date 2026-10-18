@@ -1,4 +1,4 @@
-import type { EntityId, Slot } from "../ecs/ids";
+import { type EntityId, NONE, type Slot } from "../ecs/ids";
 import type { Column } from "../ecs/schema";
 import { PLAYER, type Storage } from "../ecs/storage";
 
@@ -6,7 +6,7 @@ export const TIME = 0;
 export const ID = 1;
 export const X = 2;
 export const Y = 3;
-// Then the entity's mask words, then one word per carried column.
+// Then the entity's mask words, one word per carried column, one per pool column.
 export const ENTRY_HEAD = 4;
 const FIRST_SIZE = 4;
 
@@ -16,14 +16,24 @@ export class Inbox {
 	private readonly entryWidth: number;
 	private readonly storage: Storage;
 	private readonly carried: readonly Column[];
+	private readonly pooled: readonly Column[];
+	private readonly sparseMask: Int32Array;
 	private readonly lists: Int32Array[];
 	private readonly counts: Int32Array;
 	private readonly transit: Int32Array;
 
-	constructor(storage: Storage, carried: readonly Column[]) {
+	constructor(
+		storage: Storage,
+		carried: readonly Column[],
+		pooled: readonly Column[],
+		sparseMask: Int32Array,
+	) {
 		this.storage = storage;
 		this.carried = carried;
-		this.entryWidth = ENTRY_HEAD + storage.maskWords + carried.length;
+		this.pooled = pooled;
+		this.sparseMask = sparseMask;
+		this.entryWidth =
+			ENTRY_HEAD + storage.maskWords + carried.length + pooled.length;
 		this.lists = Array.from(
 			{ length: storage.floors },
 			() => new Int32Array(0),
@@ -78,6 +88,13 @@ export class Inbox {
 		const carried = this.carried;
 		for (let c = 0; c < carried.length; c++)
 			list[body + c] = carried[c]?.[slot] ?? 0;
+		const row = this.storage.sparse.row(slot);
+		if (row !== NONE) {
+			const pooled = this.pooled;
+			const from = body + carried.length;
+			for (let c = 0; c < pooled.length; c++)
+				list[from + c] = pooled[c]?.[row] ?? 0;
+		}
 		if (((list[at + ENTRY_HEAD] ?? 0) & PLAYER) !== 0)
 			this.transit[to] = (this.transit[to] ?? 0) + 1;
 	}
@@ -97,6 +114,23 @@ export class Inbox {
 			const column = carried[c];
 			if (column) column[slot] = list[body + c] ?? 0;
 		}
+		if (!this.needsRow(floor, n)) return;
+		const row = this.storage.sparse.take(floor, slot);
+		const pooled = this.pooled;
+		const from = body + carried.length;
+		for (let c = 0; c < pooled.length; c++) {
+			const column = pooled[c];
+			if (column) column[row] = list[from + c] ?? 0;
+		}
+	}
+
+	needsRow(floor: number, n: number): boolean {
+		const list = this.words(floor);
+		const at = n * this.entryWidth + ENTRY_HEAD;
+		const sparseMask = this.sparseMask;
+		for (let w = 0; w < sparseMask.length; w++)
+			if (((list[at + w] ?? 0) & (sparseMask[w] ?? 0)) !== 0) return true;
+		return false;
 	}
 
 	holds(id: EntityId): boolean {

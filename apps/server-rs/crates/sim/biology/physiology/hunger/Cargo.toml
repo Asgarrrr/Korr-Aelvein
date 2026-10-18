@@ -1,0 +1,17 @@
+[package]
+name = "korr-hunger"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+test = false
+doctest = false
+
+[dependencies]
+korr-contracts.workspace = true
+korr-core.workspace = true
+
+[lints]
+workspace = true

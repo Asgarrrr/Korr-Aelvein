@@ -24,9 +24,10 @@ export function travel(e: Engine, actor: Slot, stairs: EntityId): number {
 	const dx = Math.abs((x[slot] ?? 0) - (x[actor] ?? 0));
 	const dy = Math.abs((y[slot] ?? 0) - (y[actor] ?? 0));
 	if ((dx > dy ? dx : dy) > 1) return FAIL;
-	e.leaveFloor = e.link.floor[slot] ?? 0;
-	e.leaveX = e.link.x[slot] ?? 0;
-	e.leaveY = e.link.y[slot] ?? 0;
+	const row = e.storage.sparse.row(slot);
+	e.leaveFloor = e.link.floor[row] ?? 0;
+	e.leaveX = e.link.x[row] ?? 0;
+	e.leaveY = e.link.y[row] ?? 0;
 	return TICKS_PER_TURN;
 }
 
@@ -56,7 +57,8 @@ export function depart(
 	e.emit(floor, e.departed, id, id, to);
 }
 
-// Lands every entry due before `end`; one with no free cell or slot waits for a later round.
+// Lands every entry due before `end`; one with no free cell, slot or pool row it needs waits for
+// a later round. Arrivals ignore popCap: only the slots and the pool bound them.
 export function ingest(
 	e: Engine,
 	floor: number,
@@ -65,14 +67,17 @@ export function ingest(
 ): void {
 	const { inbox } = e;
 	if (inbox.count(floor) === 0) return;
-	// Arrivals only fill the floor: once one finds no cell or slot, none after it will.
+	// Arrivals only fill the floor: once one is refused, every later one waits behind it.
 	let blocked = false;
 	inbox.keep(floor, (n) => {
 		const time = inbox.time(floor, n);
 		if (time >= end || blocked) return true;
-		const cell = e.storage.full(floor)
-			? NO_CELL
-			: freeCell(e, floor, inbox.x(floor, n), inbox.y(floor, n));
+		const { storage } = e;
+		const cell =
+			storage.full(floor) ||
+			(storage.sparse.full(floor) && inbox.needsRow(floor, n))
+				? NO_CELL
+				: freeCell(e, floor, inbox.x(floor, n), inbox.y(floor, n));
 		if (cell === NO_CELL) {
 			blocked = true;
 			return true;

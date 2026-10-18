@@ -1,0 +1,42 @@
+[package]
+name = "korr-ecs-bench"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+bevy_ecs.workspace = true
+hecs.workspace = true
+korr-ecs.workspace = true
+korr-random.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+korr-core.workspace = true
+korr-engine.workspace = true
+korr-flora.workspace = true
+korr-grid.workspace = true
+korr-hunger.workspace = true
+korr-scenarios.workspace = true
+korr-server.workspace = true
+rayon.workspace = true
+
+[[bench]]
+name = "ecs"
+harness = false
+
+[[bench]]
+name = "presence"
+harness = false
+
+[[bench]]
+name = "grid"
+harness = false
+
+[[bench]]
+name = "core"
+harness = false
+
+[lints]
+workspace = true
