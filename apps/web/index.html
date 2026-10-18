@@ -3,10 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <title>Korr Aelvein</title>
+    <style>
+      #scene { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; }
+    </style>
   </head>
   <body>
+    <canvas id="scene"></canvas>
     <pre id="view"></pre>
-    <p id="status">connecting…</p>
-    <script type="module" src="/src/main.ts"></script>
+    <pre id="hud"></pre>
+    <section id="end" hidden>
+      <p id="end-title"></p>
+      <p id="end-detail"></p>
+      <button id="new-game" type="button">New game</button>
+    </section>
+    <script type="module" src="/src/app/main.ts"></script>
   </body>
 </html>

@@ -39,6 +39,40 @@ const MODULES = join(ENGINE, "modules") + sep;
 const TYPE_IMPORT =
 	/^\s*(?:import|export)\s+(?:type\b|\{[^}]*\btype\b)[^;'"]*?\bfrom\s*["']([^"']+)["']/gm;
 
+const WEB = join(ROOT, "apps/web/src") + sep;
+const PROTOCOL = "@korr/protocol";
+const EVERY_WEB_LAYER = [
+	"play",
+	"view",
+	"input",
+	"net",
+	"render",
+	"ui",
+	"debug",
+	"theme",
+];
+// What each web layer may import: `values` in any form, `types` only through `import type` or `export type`.
+const WEB_LAYERS = new Map<
+	string,
+	{ values: readonly string[]; types: readonly string[] }
+>([
+	["play", { values: [], types: [PROTOCOL] }],
+	["view", { values: [], types: [PROTOCOL] }],
+	["input", { values: [], types: ["play"] }],
+	["net", { values: [], types: ["play", PROTOCOL] }],
+	["render", { values: ["theme", "three"], types: ["view", "play"] }],
+	["ui", { values: ["theme"], types: ["play"] }],
+	["debug", { values: ["theme"], types: ["view", "play"] }],
+	["app/client", { values: EVERY_WEB_LAYER, types: [PROTOCOL] }],
+	[
+		"app/main",
+		{ values: [...EVERY_WEB_LAYER, "app/client"], types: [PROTOCOL] },
+	],
+	["theme", { values: [], types: [] }],
+]);
+
+const E2E = join(ROOT, "apps/e2e") + sep;
+
 const transpiler = new Bun.Transpiler({ loader: "tsx" });
 
 const errors: string[] = [];
@@ -89,6 +123,80 @@ const importsOf = (source: string) => [
 		spec ? [spec] : [],
 	),
 ];
+
+// Only `import type` and `export type` are erased under verbatimModuleSyntax: `import { type X }` still loads the module.
+const STATIC_IMPORT =
+	/^(?:\s|\/\*.*?\*\/)*(?:import|export)\s+(type\s)?[^;'"]*?\bfrom\s*["']([^"']+)["']/gm;
+
+// Type-position `import("x")` is erased like `import type`, so Bun's scanner never sees it.
+const IMPORT_TYPE = /\bimport\(\s*["']([^"']+)["']\s*\)/g;
+
+const webImportsOf = (source: string) => {
+	const values = new Set(
+		transpiler.scanImports(source).map((entry) => entry.path),
+	);
+	const types = new Set<string>();
+	for (const [, type, spec] of source.matchAll(STATIC_IMPORT))
+		if (spec) (type ? types : values).add(spec);
+	for (const [, spec] of source.matchAll(IMPORT_TYPE))
+		if (spec) types.add(spec);
+	return [
+		...[...values].map((spec) => ({ spec, typeOnly: false })),
+		...[...types]
+			.filter((spec) => !values.has(spec))
+			.map((spec) => ({ spec, typeOnly: true })),
+	];
+};
+
+// "play/step.ts" → "play", "app/main.ts" → "app/main", "theme.ts" → "theme".
+const webLayer = (path: string) => {
+	const parts = relative(WEB, path)
+		.replace(/\.tsx?$/, "")
+		.split(sep);
+	return parts[0] === "app" ? parts.join("/") : (parts[0] ?? "");
+};
+
+const packageOf = (spec: string) =>
+	spec
+		.split("/")
+		.slice(0, spec.startsWith("@") ? 2 : 1)
+		.join("/");
+
+const checkWebFile = (file: string, source: string) => {
+	const layer = webLayer(file);
+	const allowed = WEB_LAYERS.get(layer);
+	if (!allowed) {
+		report(file, `${layer} is not a layer of the web layer matrix`);
+		return;
+	}
+	for (const { spec, typeOnly } of webImportsOf(source)) {
+		const target = spec.startsWith(".")
+			? webLayer(resolveImport(file, spec))
+			: packageOf(spec);
+		if (target === layer || allowed.values.includes(target)) continue;
+		if (!allowed.types.includes(target))
+			report(file, `${layer} must not import ${target}`);
+		else if (!typeOnly)
+			report(
+				file,
+				`${layer} may import ${target} only through \`import type\` or \`export type\``,
+			);
+	}
+};
+
+// A browser test sees the app as a user does: the theme values and the wire types, never its code.
+const checkE2eFile = (file: string, source: string) => {
+	for (const { spec, typeOnly } of webImportsOf(source)) {
+		if (!spec.startsWith("@korr/")) continue;
+		if (spec === "@korr/web/theme" || (spec === PROTOCOL && typeOnly)) continue;
+		report(
+			file,
+			spec === PROTOCOL
+				? `e2e may import ${spec} only through \`import type\` or \`export type\``
+				: `e2e must not import ${spec}; it may import @korr/web/theme and ${PROTOCOL} types`,
+		);
+	}
+};
 
 // "modules/hunger/x.ts" → area "modules", module "hunger".
 const engineArea = (file: string) => {
@@ -142,6 +250,8 @@ for (const dir of workspaces) {
 				);
 			if (file.startsWith(ENGINE)) checkEngineImport(file, target);
 		}
+		if (file.startsWith(WEB)) checkWebFile(file, source);
+		if (file.startsWith(E2E)) checkE2eFile(file, source);
 		if (file.startsWith(MODULES))
 			for (const what of new Set(forbiddenIn(source)))
 				report(file, `${what} is forbidden in modules/`);
@@ -250,6 +360,80 @@ if (errors.length - ecsBefore !== 1)
 		"the core/ecs -> rest of core rule did not fire exactly once",
 	);
 else errors.length = ecsBefore;
+
+// A known violation of each web layer rule must still be reported; allowed imports must not be.
+const webProbes: [path: string, source: string, fires: number][] = [
+	[
+		"play/probe.ts",
+		'import type { Snapshot } from "@korr/protocol";\nimport { edible } from "./edible";',
+		0,
+	],
+	["play/probe.ts", 'import { notices } from "../theme";', 1],
+	["play/probe.ts", 'import { decode } from "@korr/protocol";', 1],
+	["view/probe.ts", 'import type { Play } from "../play/types";', 1],
+	["view/probe.ts", 'import { decode } from "@korr/protocol";', 1],
+	["input/probe.ts", 'import { connect } from "../net/connect";', 1],
+	["input/probe.ts", 'import { step } from "../play/step";', 1],
+	["net/probe.ts", 'import { asciiView } from "../debug/ascii";', 1],
+	["net/probe.ts", 'import { step } from "../play/step";', 1],
+	["render/probe.ts", 'import type { Hud } from "../ui/hud";', 1],
+	["render/probe.ts", 'import { step } from "../play/step";', 1],
+	["ui/probe.ts", 'import { connect } from "../net/connect";', 1],
+	["debug/probe.ts", 'import type { Hud } from "../ui/hud";', 1],
+	["debug/probe.ts", 'import { step } from "../play/step";', 1],
+	["app/client.ts", 'import { decode } from "@korr/protocol";', 1],
+	["app/main.ts", 'import { decode } from "@korr/protocol";', 1],
+	["app/main.ts", 'import { Scene } from "three";', 1],
+	["theme.ts", 'import type { Play } from "./play/types";', 1],
+	["ui/probe.ts", 'import type { Snapshot } from "@korr/protocol";', 1],
+	["ui/probe.ts", 'import { step } from "../play/step";', 1],
+	["ui/probe.ts", 'import { type Play } from "../play/types";', 1],
+	["ui/probe.ts", 'export type S = import("@korr/protocol").Snapshot;', 1],
+	["ui/probe.ts", '/* hud */ import { type Play } from "../play/types";', 1],
+	["debug/probe.ts", 'import type { Link } from "../net/connect";', 1],
+	["debug/probe.ts", 'export type L = typeof import("../net/connect");', 1],
+	["net/probe.ts", 'import { type ServerMessage } from "@korr/protocol";', 1],
+	["app/client.ts", 'import "./main";', 1],
+	[
+		"app/main.ts",
+		'import { createClient } from "./client";\nexport type { Play } from "../play/types";',
+		0,
+	],
+	["probe.ts", "", 1],
+];
+for (const [path, source, fires] of webProbes) {
+	const probe = join(WEB, path);
+	const before = errors.length;
+	checkWebFile(probe, source);
+	if (errors.length - before !== fires)
+		report(
+			probe,
+			`the web layer rules fired ${errors.length - before} times, not ${fires}, on ${JSON.stringify(source)}`,
+		);
+	else errors.length = before;
+}
+
+// A known violation of the e2e import rule must still be reported; allowed imports must not be.
+const e2eProbes: [source: string, fires: number][] = [
+	['import { palette } from "@korr/web/theme";', 0],
+	['import { expect } from "@playwright/test";', 0],
+	['import type { Snapshot } from "@korr/protocol";', 0],
+	['import { Command } from "@korr/protocol";', 1],
+	['import { type Command } from "@korr/protocol";', 1],
+	['import { createClient } from "@korr/web/src/app/client";', 1],
+	['import { createApp } from "@korr/server/src/app";', 1],
+];
+for (const [source, fires] of e2eProbes) {
+	const probe = join(E2E, "test/probe.ts");
+	const before = errors.length;
+	checkE2eFile(probe, source);
+	if (errors.length - before !== fires)
+		report(
+			probe,
+			`the e2e import rule fired ${errors.length - before} times, not ${fires}, on ${JSON.stringify(source)}`,
+		);
+	else errors.length = before;
+}
 
 if (
 	!DENY_FLOATS.test("#![no_std]\n#![deny(clippy::float_arithmetic)]\n") ||

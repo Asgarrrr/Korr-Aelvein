@@ -50,6 +50,14 @@
 			"plugins": ["./scripts/lint/runtime.grit"]
 		},
 		{
+			"includes": [
+				"apps/web/src/play/**",
+				"apps/web/src/view/**",
+				"apps/web/src/input/**"
+			],
+			"plugins": ["./scripts/lint/web-purity.grit"]
+		},
+		{
 			"includes": ["packages/engine/src/**", "packages/engine/bench/**"],
 			"plugins": ["./scripts/lint/determinism.grit"],
 			"linter": {

@@ -50,10 +50,16 @@ row fits, that is a design question: propose a new row before coding.
 | Floor and world generation | `packages/engine/src/world/` |
 | Message between web and server | `packages/protocol/src/` |
 | Connections, sessions, persistence, hosting the engine | `apps/server/src/` |
+| The client's state of one game: `step(play, event)`, gesture → command, notice | `apps/web/src/play/` |
+| Snapshot pair → timeline, sampling, playback, easing | `apps/web/src/view/` |
+| Keys and clicks → gestures | `apps/web/src/input/` |
+| The socket: connect, strict decode of server messages | `apps/web/src/net/` |
 | 3D rendering | `apps/web/src/render/` |
+| HUD | `apps/web/src/ui/` |
 | ASCII debug view | `apps/web/src/debug/` |
-| Keys and clicks → player commands | `apps/web/src/input/` |
-| Rendering settings: sizes, durations, palette | `apps/web/src/theme.ts` |
+| Wiring: the client and its consumers; the Vite entry | `apps/web/src/app/` |
+| Rendering settings: one row per look stem, palette, durations, texts | `apps/web/src/theme.ts` |
+| Browser end-to-end tests (`bun run e2e`, not part of `verify`) | `apps/e2e/` |
 | Tests | `<package>/test/`, mirroring `src/` |
 | Engine benchmarks (`bun run bench`, not part of `verify`) | `packages/engine/bench/` |
 | Design plans | `docs/plans/` |
@@ -74,12 +80,15 @@ row fits, that is a design question: propose a new row before coding.
   the code, or propose a rule change.
   - Biome (`biome.json`): undeclared dependencies everywhere; in the engine,
     Node modules, magic numbers and nondeterministic calls
-    (`scripts/lint/determinism.grit`).
-  - `scripts/check-architecture.ts`: the module graph, relative imports
-    leaving their package, the file size limit (`.ts` and `.rs`), one sim
-    `clippy.toml`, `deny(clippy::float_arithmetic)` in every sim crate, the
-    Rust crate graph (mechanics, `korr-random` users, foundations), and
-    mechanics naming `korr_core` only through `korr_core::mechanic`.
+    (`scripts/lint/determinism.grit`); in the web's `play/`, `view/` and
+    `input/`, clock and randomness (`scripts/lint/web-purity.grit`).
+  - `scripts/check-architecture.ts`: the module graph, the web layer
+    matrix, relative imports leaving their package, the file size limit
+    (`.ts` and `.rs`), one sim `clippy.toml`, `deny(clippy::float_arithmetic)`
+    in every sim crate, the Rust crate graph (mechanics, `korr-random` users,
+    foundations), and mechanics naming `korr_core` only through
+    `korr_core::mechanic`. `scripts/check-web-purity.ts`: proves the web
+    purity rule is loaded.
   - Hooks: `.claude/settings.json` runs the architecture check after every
     `.ts` edit by Claude; `scripts/githooks/pre-commit` runs `verify` before
     every commit (enabled by `bun install`). Never bypass with `--no-verify`.
@@ -110,6 +119,11 @@ the code around it: every needless comment breeds more.
   build. The definition of done.
 - test: `bun run test` — single file: `bun test <path>` from the package dir
 - dev: `bun run dev` — server on :3000, web on Vite's port, `/ws` proxied
+- e2e: `bun run e2e` — builds the web app, runs Playwright on hermetic hosts.
+  Not part of `verify`; required after a change to `apps/web`, `apps/server`,
+  `packages/protocol` or `packages/engine`.
+- e2e browser: `bunx playwright install chromium-headless-shell`, once per
+  clone and after a Playwright upgrade.
 - lint fix: `bun run lint:fix`
 - Rust: `verify` also runs `cargo test`, `clippy -D warnings` and
   `fmt --check`, as scripts of `apps/server-rs/package.json`. Rules:
@@ -132,7 +146,8 @@ the code around it: every needless comment breeds more.
 - `apps/web` — Vite + Three.js. Sends player commands, renders server
   snapshots. Never computes an outcome.
 - Dependency direction: `web → protocol`; `server → engine, protocol`.
-  `engine` imports no workspace package.
+  `engine` imports no workspace package. `e2e` imports only
+  `@korr/web/theme` and `@korr/protocol` types.
 - The Vite proxy targets `127.0.0.1`, not `localhost`: `localhost` resolves
   to `::1` first and the server listens on IPv4 only.
 
