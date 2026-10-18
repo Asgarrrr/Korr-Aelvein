@@ -1,0 +1,192 @@
+use std::collections::BTreeMap;
+use std::num::NonZeroU32;
+
+use korr_ecs::{
+    Component, EntityId, FloorId, Handle, ImageError, Own, Reader, SchemaBuilder, Store, Writer,
+};
+use korr_random::{DrawIndex, ModuleKey, Phase, Seed, Stream, Subject};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct A(u32);
+
+impl Component for A {
+    const VERSION: u16 = 0;
+
+    fn write(&self, w: &mut Writer) {
+        w.write_u32(self.0);
+    }
+
+    fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> {
+        r.read_u32().map(Self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct B(u32);
+
+impl Component for B {
+    const VERSION: u16 = 0;
+
+    fn write(&self, w: &mut Writer) {
+        w.write_u32(self.0);
+    }
+
+    fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> {
+        r.read_u32().map(Self)
+    }
+}
+
+type Row = (Option<u32>, Option<u32>);
+
+struct Fixture {
+    store: Store,
+    a: Own<A>,
+    b: Own<B>,
+    model: BTreeMap<EntityId, Row>,
+}
+
+fn fixture() -> Fixture {
+    let mut builder = SchemaBuilder::default();
+    let a = builder.register::<A>("a");
+    let b = builder.register::<B>("b");
+    let mut store = Store::new(&builder.build(), FloorId(0));
+    let stream = Stream::new(Seed(7), ModuleKey::of("ecs-join"), Phase::Spawn, 0);
+    let range = NonZeroU32::new(1_000).expect("not zero");
+    let mut model = BTreeMap::new();
+    let mut handles = Vec::new();
+    for i in 0..2_000_u64 {
+        let h = store.spawn();
+        let id = store.id(h).expect("a spawned handle is alive");
+        let subject = Subject::Entity(id.to_bits());
+        let mut row: Row = (None, None);
+        if i % 2 == 0 {
+            let value = stream.below(subject, DrawIndex(0), range);
+            store.insert(&a, h, A(value));
+            row.0 = Some(value);
+        }
+        if i % 3 == 0 {
+            let value = stream.below(subject, DrawIndex(1), range);
+            store.insert(&b, h, B(value));
+            row.1 = Some(value);
+        }
+        model.insert(id, row);
+        handles.push((h, id));
+    }
+    for (i, &(h, id)) in handles.iter().enumerate() {
+        if i % 7 == 0 {
+            store.despawn(h);
+            model.remove(&id);
+        } else if i % 11 == 0 && store.remove(&a, h).is_some() {
+            model.get_mut(&id).expect("model holds live rows").0 = None;
+        }
+    }
+    Fixture { store, a, b, model }
+}
+
+fn id_of(store: &Store, h: Handle) -> EntityId {
+    store.id(h).expect("a join yields live handles")
+}
+
+#[test]
+fn join_mut_touches_only_rows_with_both() {
+    let mut f = fixture();
+    let mut touched = Vec::new();
+    f.store.join_mut(&f.a, &f.b, &mut touched, |a, b| {
+        a.0 += b.0;
+        Some(())
+    });
+
+    let touched_ids: Vec<EntityId> = touched.iter().map(|&(h, ())| id_of(&f.store, h)).collect();
+    let expected_ids: Vec<EntityId> = f
+        .store
+        .iter(f.a.read())
+        .map(|(h, _)| id_of(&f.store, h))
+        .filter(|id| f.model[id].1.is_some())
+        .collect();
+    assert!(expected_ids.len() > 100);
+    assert_eq!(touched_ids, expected_ids);
+
+    let a_after: BTreeMap<EntityId, u32> = f
+        .store
+        .iter(f.a.read())
+        .map(|(h, v)| (id_of(&f.store, h), v.0))
+        .collect();
+    for (&id, &(a, b)) in &f.model {
+        assert_eq!(
+            a_after.get(&id).copied(),
+            a.map(|a| a + b.unwrap_or(0)),
+            "{id:?}"
+        );
+    }
+    for (h, value) in f.store.iter(f.b.read()) {
+        assert_eq!(Some(value.0), f.model[&id_of(&f.store, h)].1);
+    }
+}
+
+fn lone_store() -> (Store, Own<A>, Own<B>) {
+    let mut builder = SchemaBuilder::default();
+    let a = builder.register::<A>("a");
+    let b = builder.register::<B>("b");
+    (Store::new(&builder.build(), FloorId(0)), a, b)
+}
+
+#[test]
+#[should_panic(expected = "join of a component with itself")]
+fn join_mut_of_a_key_with_itself_panics() {
+    let (mut store, a, _) = lone_store();
+    store.join_mut(&a, &a, &mut Vec::new(), |_: &mut A, _: &mut A| None::<()>);
+}
+
+/// Keys 1 and 2 of a three-component schema: the first has the wrong type
+/// for `lone_store`, the second is out of its range.
+fn foreign_keys() -> (Own<A>, Own<A>) {
+    let mut builder = SchemaBuilder::default();
+    builder.register::<A>("x");
+    let mismatched = builder.register::<A>("y");
+    let out_of_range = builder.register::<A>("z");
+    (mismatched, out_of_range)
+}
+
+#[test]
+#[should_panic(expected = "component key from another schema")]
+fn join_mut_with_an_out_of_range_key_panics() {
+    let (mut store, a, _) = lone_store();
+    let (_, out_of_range) = foreign_keys();
+    store.join_mut(
+        &a,
+        &out_of_range,
+        &mut Vec::new(),
+        |_: &mut A, _: &mut A| None::<()>,
+    );
+}
+
+#[test]
+#[should_panic(expected = "component key from another schema")]
+fn join_mut_with_a_mismatched_key_panics() {
+    let (mut store, a, _) = lone_store();
+    let (mismatched, _) = foreign_keys();
+    store.join_mut(&a, &mismatched, &mut Vec::new(), |_: &mut A, _: &mut A| {
+        None::<()>
+    });
+}
+
+#[test]
+fn join_mut_pairs_rows_by_owner_when_dense_orders_differ() {
+    let (mut store, a, b) = lone_store();
+    let handles: Vec<Handle> = (0..4).map(|_| store.spawn()).collect();
+    for (i, &h) in (0_u32..).zip(&handles) {
+        store.insert(&a, h, A(i));
+    }
+    for (i, &h) in (0_u32..4).zip(&handles).rev() {
+        store.insert(&b, h, B(10 * i));
+    }
+    store.join_mut(&a, &b, &mut Vec::new(), |a, b| {
+        a.0 += b.0;
+        None::<()>
+    });
+    let sums: Vec<u32> = handles
+        .iter()
+        .map(|&h| store.get(a.read(), h).expect("every handle holds a").0)
+        .collect();
+    assert_eq!(sums, [0, 11, 22, 33]);
+}

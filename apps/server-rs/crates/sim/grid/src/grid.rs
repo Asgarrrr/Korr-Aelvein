@@ -1,0 +1,191 @@
+use korr_ecs::{EntityId, Handle, Store};
+
+use crate::config::MAX_STEP;
+use crate::error::StepError;
+use crate::occupancy::{Layer, Occupancy};
+use crate::shape::{CellIdx, Dir, Interior, Pos, Shape};
+use crate::terrain::{Material, Terrain};
+
+#[derive(Debug)]
+pub struct Grid {
+    shape: Shape,
+    pub(crate) terrain: Terrain,
+    pub(crate) occupancy: Occupancy,
+}
+
+impl Grid {
+    #[must_use]
+    pub fn new(shape: Shape) -> Self {
+        Self {
+            shape,
+            terrain: Terrain::new(shape),
+            occupancy: Occupancy::new(shape),
+        }
+    }
+
+    #[must_use]
+    #[inline]
+    pub fn shape(&self) -> Shape {
+        self.shape
+    }
+
+    /// Walkability is not checked: worldgen and arrival choose the cell.
+    ///
+    /// # Panics
+    /// When `h` is dead in `store`, the slot of `h` is still linked, `at` holds an
+    /// actor, or `at` is not an interior cell of this floor.
+    pub fn link_actor(&mut self, store: &Store, h: Handle, at: Interior) {
+        self.link(h, live_id(store, h), at, Layer::Actor);
+    }
+
+    /// Things never block a step and never touch the actor layer.
+    ///
+    /// # Panics
+    /// When `h` is dead in `store`, the slot of `h` is still linked, or `at` is not
+    /// an interior cell of this floor.
+    pub fn link_thing(&mut self, store: &Store, h: Handle, at: Interior) {
+        self.link(h, live_id(store, h), at, Layer::Thing);
+    }
+
+    pub(crate) fn link(&mut self, h: Handle, id: EntityId, at: Interior, layer: Layer) {
+        self.check_interior(at);
+        match layer {
+            Layer::Actor => self.occupancy.link_actor(h, id, at),
+            Layer::Thing => self.occupancy.link_thing(h, id, at),
+        }
+    }
+
+    /// Call before `Store::despawn` and before `Store::detach`: the slot is recycled after.
+    ///
+    /// # Panics
+    /// When `h` is not linked on this grid, a stale handle on a recycled slot included.
+    pub fn unlink(&mut self, h: Handle) {
+        self.occupancy.unlink(h);
+    }
+
+    /// # Panics
+    /// When `at` is not an interior cell of this floor.
+    pub fn set_material(&mut self, at: Interior, m: Material) {
+        self.check_interior(at);
+        self.terrain.set_material(at, m);
+    }
+
+    /// # Panics
+    /// When `at` is not an interior cell of this floor.
+    pub fn set_height(&mut self, at: Interior, h: i8) {
+        self.check_interior(at);
+        self.terrain.set_height(at, h);
+    }
+
+    /// One load, without reading the link: the blocking test.
+    #[must_use]
+    #[inline]
+    pub fn holds_actor(&self, at: CellIdx) -> bool {
+        self.shape.check(at);
+        self.occupancy.holds_actor(at)
+    }
+
+    #[must_use]
+    #[inline]
+    pub fn actor_at(&self, at: CellIdx) -> Option<Handle> {
+        self.shape.check(at);
+        self.occupancy.actor_at(at)
+    }
+
+    /// The things linked at `at`, in ascending `EntityId` order.
+    pub fn things(&self, at: CellIdx) -> impl Iterator<Item = Handle> + '_ {
+        self.shape.check(at);
+        self.occupancy.things(at)
+    }
+
+    /// Height is not a placement rule.
+    ///
+    /// # Panics
+    /// When `at` is not an interior cell of this floor.
+    #[must_use]
+    pub fn can_place(&self, at: Interior, layer: Layer) -> bool {
+        self.check_interior(at);
+        self.terrain.material(at.cell()).walkable()
+            && match layer {
+                Layer::Actor => !self.occupancy.holds_actor(at.cell()),
+                Layer::Thing => true,
+            }
+    }
+
+    /// The first cell that [`Grid::can_place`] accepts, in neighbourhood order from
+    /// `from` clamped to the interior. `None` only when no interior cell fits.
+    #[must_use]
+    pub fn nearest_place(&self, from: Pos, layer: Layer) -> Option<Interior> {
+        let reach = self.shape.width().max(self.shape.height());
+        self.shape
+            .neighbourhood(self.shape.clamp(from), reach)
+            .find(|&at| self.can_place(at, layer))
+    }
+
+    /// `None` when `h` is not linked, a stale handle on a recycled slot included.
+    #[must_use]
+    pub fn pos(&self, h: Handle) -> Option<Pos> {
+        self.occupancy
+            .linked_cell(h)
+            .map(|at| self.shape.pos(at.cell()))
+    }
+
+    /// The target [`Grid::step`] would move `h` to; writes nothing.
+    ///
+    /// # Errors
+    /// The errors of [`Grid::step`], in the same order.
+    ///
+    /// # Panics
+    /// When `h` is not a linked actor.
+    #[inline]
+    pub fn check_step(&self, h: Handle, dir: Dir) -> Result<Pos, StepError> {
+        self.target(h, dir).map(|to| self.shape.pos(to.cell()))
+    }
+
+    /// Moves `h` one cell; a refused step changes nothing.
+    ///
+    /// # Errors
+    /// Checked in this order: [`StepError::Blocked`] when the target is not walkable,
+    /// [`StepError::TooSteep`] when |Δh| is above [`MAX_STEP`],
+    /// [`StepError::Occupied`] when another actor holds the target.
+    ///
+    /// # Panics
+    /// When `h` is not a linked actor.
+    pub fn step(&mut self, h: Handle, dir: Dir) -> Result<Pos, StepError> {
+        let to = self.target(h, dir)?;
+        self.occupancy.move_actor(h, to);
+        Ok(self.shape.pos(to.cell()))
+    }
+
+    #[inline]
+    fn target(&self, h: Handle, dir: Dir) -> Result<Interior, StepError> {
+        let from = self
+            .occupancy
+            .cell_of(h)
+            .expect("step of an entity that is not a linked actor");
+        let to = self.shape.neighbour(from, dir);
+        if !self.terrain.material(to).walkable() {
+            return Err(StepError::Blocked);
+        }
+        if self
+            .terrain
+            .height(from.cell())
+            .abs_diff(self.terrain.height(to))
+            > MAX_STEP
+        {
+            return Err(StepError::TooSteep);
+        }
+        if self.occupancy.holds_actor(to) {
+            return Err(StepError::Occupied);
+        }
+        Ok(Interior::of_walkable(to))
+    }
+
+    fn check_interior(&self, at: Interior) {
+        self.shape.check_interior(at);
+    }
+}
+
+fn live_id(store: &Store, h: Handle) -> EntityId {
+    store.id(h).expect("link of a dead handle")
+}

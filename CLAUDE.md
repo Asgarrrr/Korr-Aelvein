@@ -59,6 +59,11 @@ row fits, that is a design question: propose a new row before coding.
 | Design plans | `docs/plans/` |
 | Domain glossary: one name per concept | `CONTEXT.md` |
 | Repository tooling | `scripts/` |
+| Rust simulation crates, during the rewrite (layout: `docs/plans/rust-structure.md`) | `apps/server-rs/crates/sim/<crate>/` |
+| Rust entity storage: ids, handles, columns, floor images, travellers (imports no workspace crate) | `apps/server-rs/crates/sim/ecs/` |
+| Rust benchmarks: korr-ecs against hecs and bevy_ecs, korr-grid occupancy, korr-core rounds (cargo bench, not part of verify) | `apps/server-rs/crates/host/tools/ecs-bench/` |
+| Rust server, during the rewrite | `apps/server-rs/crates/host/server/` |
+| Rust tooling: toolchain pin, workspace lints | `apps/server-rs/` root files |
 
 - One file = one subject. Past ~400 lines, or when a second subject
   appears, split into a folder by subject: `combat/{damage,status}.ts`,
@@ -71,7 +76,10 @@ row fits, that is a design question: propose a new row before coding.
     Node modules, magic numbers and nondeterministic calls
     (`scripts/lint/determinism.grit`).
   - `scripts/check-architecture.ts`: the module graph, relative imports
-    leaving their package, the file size limit.
+    leaving their package, the file size limit (`.ts` and `.rs`), one sim
+    `clippy.toml`, `deny(clippy::float_arithmetic)` in every sim crate, the
+    Rust crate graph (mechanics, `korr-random` users, foundations), and
+    mechanics naming `korr_core` only through `korr_core::mechanic`.
   - Hooks: `.claude/settings.json` runs the architecture check after every
     `.ts` edit by Claude; `scripts/githooks/pre-commit` runs `verify` before
     every commit (enabled by `bun install`). Never bypass with `--no-verify`.
@@ -103,6 +111,11 @@ the code around it: every needless comment breeds more.
 - test: `bun run test` — single file: `bun test <path>` from the package dir
 - dev: `bun run dev` — server on :3000, web on Vite's port, `/ws` proxied
 - lint fix: `bun run lint:fix`
+- Rust: `verify` also runs `cargo test`, `clippy -D warnings` and
+  `fmt --check`, as scripts of `apps/server-rs/package.json`. Rules:
+  `.claude/rules/rust.md`.
+- Rust ECS bench: `cargo bench -p korr-ecs-bench --bench ecs` in
+  `apps/server-rs/`. Not part of `verify`.
 - New worktree or clone: run `bun install` first. Without it every check
   fails (exit 127) and the git hooks are not enabled.
 - Turborepo changes between versions: read `node_modules/turbo/docs/` before
@@ -160,12 +173,17 @@ the code around it: every needless comment breeds more.
   transcendental functions: their precision differs between engines.
 - Entity ids are `originFloor * 2^25 + counter`: monotonic per origin floor,
   never reused. Storage slots are recycled and never leave a core callback.
+- In korr-ecs an `EntityId` is `origin floor << 47 | counter`, 63 bits, never
+  reused. A `Handle` (slot, generation) is floor-local and never sent to
+  another floor or over the network; a slot retires at generation `u32::MAX`.
+  A floor image keeps slots, free stack and dense order, so a reloaded floor
+  replays identically.
 - Every floor runs every system every turn. Creatures re-decide every P
   turns, P set by distance to the nearest player; otherwise they repeat
   their cached action. No separate aggregate model unless measurement
   proves it necessary.
-- Hot bulk ticks are monomorphic inline loops over columns, never a shared
-  per-row callback.
+- Hot bulk ticks are monomorphic: a core walk generic over the module's
+  closure is fine, a dynamic (dyn/fn-pointer) call per row is not.
 
 ## Testing
 

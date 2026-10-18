@@ -1,0 +1,128 @@
+//! Travellers: entities in flight between floors. The byte layout and the
+//! order of the checks are in `docs/plans/rust-structure.md`, section 7.
+
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+
+use crate::codec::{Reader, Writer};
+use crate::column::ErasedColumn;
+use crate::entities::Arrival;
+use crate::error::ImageError;
+use crate::id::{EntityId, Handle, SlotIdx};
+use crate::store::Store;
+
+/// An entity off every floor: its id and its row, encoded per column.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Traveller {
+    id: EntityId,
+    row: Vec<u8>,
+}
+
+impl Traveller {
+    #[must_use]
+    #[inline]
+    pub fn id(&self) -> EntityId {
+        self.id
+    }
+
+    /// # Panics
+    /// When the row is longer than `u32::MAX` bytes.
+    pub fn write(&self, w: &mut Writer) {
+        w.write_u64(self.id.to_bits());
+        w.write_u32(u32::try_from(self.row.len()).expect("a row fits u32 bytes"));
+        w.write_bytes(&self.row);
+    }
+
+    /// The row is checked only by `Store::attach`.
+    ///
+    /// # Errors
+    /// When the id has bit 63 set or the bytes run out.
+    pub fn read(r: &mut Reader<'_>) -> Result<Self, ImageError> {
+        let id = EntityId::from_bits(r.read_u64()?).ok_or(ImageError::Corrupt("entity id"))?;
+        let len = r.read_u32()?;
+        let row = r.read_bytes(len as usize)?.to_vec();
+        Ok(Self { id, row })
+    }
+}
+
+impl Store {
+    /// Takes `h` off this floor with every component. Its slot is freed as
+    /// by `despawn`; its id leaves with the traveller.
+    ///
+    /// # Panics
+    /// When `h` is dead.
+    #[must_use]
+    pub fn detach(&mut self, h: Handle) -> Traveller {
+        let id = self.entities.id(h).expect("detach of a dead handle");
+        let mut w = Writer::new();
+        w.write_u64(self.fingerprint);
+        for column in &mut self.columns {
+            column.detach_row(h.slot, &mut w);
+        }
+        self.entities.free(h);
+        Traveller {
+            id,
+            row: w.into_bytes(),
+        }
+    }
+
+    /// All or nothing: on `Err` the store is unchanged. Checks that the id is
+    /// not alive on this store; does not check the other floors, as detach
+    /// always precedes attach.
+    ///
+    /// # Errors
+    /// When the id is alive on this store, the id is beyond this floor's
+    /// counter, or the row does not match the schema.
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "taking the traveller keeps one value from attaching twice"
+    )]
+    pub fn attach(&mut self, t: Traveller) -> Result<Handle, ImageError> {
+        let (arrival, r) = self.open(&t)?;
+        let slot = arrival.slot();
+        if let Err(error) = attach_columns(&mut self.columns, slot, r) {
+            for column in &mut self.columns {
+                column.clear_slot(slot);
+            }
+            return Err(error);
+        }
+        Ok(self.entities.arrive(arrival))
+    }
+
+    /// Runs the checks of [`Store::attach`] and writes nothing: on the same
+    /// store, it is `Ok` exactly when `attach` would be.
+    ///
+    /// # Errors
+    /// The error `attach` would return.
+    pub fn check_arrival(&self, t: &Traveller) -> Result<(), ImageError> {
+        let (_, mut r) = self.open(t)?;
+        for column in &self.columns {
+            column.check_row(&mut r)?;
+        }
+        r.finish()
+    }
+
+    fn open<'t>(&self, t: &'t Traveller) -> Result<(Arrival, Reader<'t>), ImageError> {
+        let arrival = self.entities.admit(t.id)?;
+        let mut r = Reader::new(&t.row);
+        let saved = r.read_u64()?;
+        if saved != self.fingerprint {
+            return Err(ImageError::Fingerprint {
+                saved,
+                running: self.fingerprint,
+            });
+        }
+        Ok((arrival, r))
+    }
+}
+
+fn attach_columns(
+    columns: &mut [Box<dyn ErasedColumn>],
+    slot: SlotIdx,
+    mut r: Reader<'_>,
+) -> Result<(), ImageError> {
+    for column in columns {
+        column.attach_row(slot, &mut r)?;
+    }
+    r.finish()
+}

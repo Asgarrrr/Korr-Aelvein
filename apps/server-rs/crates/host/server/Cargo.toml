@@ -1,0 +1,19 @@
+[package]
+name = "korr-server"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+korr-core.workspace = true
+korr-engine.workspace = true
+rayon.workspace = true
+
+[dev-dependencies]
+korr-ecs.workspace = true
+korr-hunger.workspace = true
+korr-scenarios.workspace = true
+
+[lints]
+workspace = true

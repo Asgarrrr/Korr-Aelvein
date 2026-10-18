@@ -1,0 +1,315 @@
+use core::ops::RangeInclusive;
+
+/// One interior cell inside the wall ring.
+const MIN_SIDE: u16 = 3;
+/// Every position of the shape fits `i16`.
+const MAX_SIDE: u16 = i16::MAX.unsigned_abs();
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Pos {
+    pub x: i16,
+    pub y: i16,
+}
+
+impl Pos {
+    /// The distance in king moves.
+    #[inline]
+    #[must_use]
+    pub fn chebyshev(self, other: Self) -> u16 {
+        self.x.abs_diff(other.x).max(self.y.abs_diff(other.y))
+    }
+}
+
+/// Any cell of the padded frame, ring included, in row-major order.
+/// Carries the width of its shape: an index means the same cell on every
+/// shape of that width, so a width check catches a cell of another floor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CellIdx {
+    at: u32,
+    width: u16,
+}
+
+impl CellIdx {
+    #[inline]
+    pub(crate) const fn index(self) -> usize {
+        self.at as usize
+    }
+}
+
+/// A cell inside the wall ring: its 8 neighbours are in bounds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Interior(CellIdx);
+
+/// An [`Interior`] without its width, for a record that knows its shape.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PackedCell(u32);
+
+impl Interior {
+    #[inline]
+    pub(crate) const fn pack(self) -> PackedCell {
+        PackedCell(self.0.at)
+    }
+
+    /// The ring is never walkable, so a walkable cell is interior.
+    #[inline]
+    pub(crate) const fn of_walkable(cell: CellIdx) -> Self {
+        Self(cell)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn cell(self) -> CellIdx {
+        self.0
+    }
+}
+
+/// A floor's size, wall ring included.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Shape {
+    width: u16,
+    height: u16,
+}
+
+impl Shape {
+    /// `None` unless both sides are within `3..=i16::MAX`.
+    #[must_use]
+    pub const fn new(width: u16, height: u16) -> Option<Self> {
+        if width < MIN_SIDE || width > MAX_SIDE || height < MIN_SIDE || height > MAX_SIDE {
+            return None;
+        }
+        Some(Self { width, height })
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn width(self) -> u16 {
+        self.width
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn height(self) -> u16 {
+        self.height
+    }
+
+    pub(crate) fn cell_count(self) -> usize {
+        usize::from(self.width) * usize::from(self.height)
+    }
+
+    /// `None` on the ring and outside the shape.
+    #[must_use]
+    pub fn idx(self, p: Pos) -> Option<Interior> {
+        let x = u16::try_from(p.x).ok()?;
+        let y = u16::try_from(p.y).ok()?;
+        if x == 0 || y == 0 || x > self.width - 2 || y > self.height - 2 {
+            return None;
+        }
+        Some(Interior(self.cell(u32::from(y), u32::from(x))))
+    }
+
+    #[inline]
+    pub(crate) const fn unpack(self, at: PackedCell) -> Interior {
+        Interior(CellIdx {
+            at: at.0,
+            width: self.width,
+        })
+    }
+
+    #[inline]
+    const fn cell(self, y: u32, x: u32) -> CellIdx {
+        CellIdx {
+            at: y * self.width as u32 + x,
+            width: self.width,
+        }
+    }
+
+    /// # Panics
+    /// When `at` is not a cell of this shape.
+    #[must_use]
+    pub fn pos(self, at: CellIdx) -> Pos {
+        self.check(at);
+        let width = u32::from(self.width);
+        let coord = |v: u32| i16::try_from(v).expect("a cell of this shape has an i16 position");
+        Pos {
+            x: coord(at.at % width),
+            y: coord(at.at / width),
+        }
+    }
+
+    #[inline]
+    pub(crate) fn check(self, at: CellIdx) {
+        assert!(
+            at.width == self.width && at.index() < self.cell_count(),
+            "cell of another floor"
+        );
+    }
+
+    pub(crate) fn check_interior(self, at: Interior) {
+        self.check(at.0);
+        let width = u32::from(self.width);
+        let (x, y) = (at.0.at % width, at.0.at / width);
+        assert!(
+            (1..width - 1).contains(&x) && (1..u32::from(self.height) - 1).contains(&y),
+            "cell of another floor"
+        );
+    }
+
+    /// The nearest interior position.
+    #[must_use]
+    pub fn clamp(self, p: Pos) -> Pos {
+        // Lossless: `Shape::new` caps each side at `i16::MAX`.
+        let last = |side: u16| side.cast_signed() - 2;
+        Pos {
+            x: p.x.clamp(1, last(self.width)),
+            y: p.y.clamp(1, last(self.height)),
+        }
+    }
+
+    /// The columns and rows of the interior within Chebyshev distance `radius`
+    /// of `centre`, which may lie off the floor. A range is empty when no
+    /// interior line lies within `radius`.
+    #[must_use]
+    #[inline]
+    #[expect(
+        clippy::missing_panics_doc,
+        reason = "both bounds fit i16: the lower lies in 1..=max(centre, 1), the upper between min(centre, last line) and the last line"
+    )]
+    pub fn window(self, centre: Pos, radius: u16) -> (RangeInclusive<i16>, RangeInclusive<i16>) {
+        let last = |side: u16| i32::from(side) - 2;
+        let span = |at: i16, side: u16| {
+            let (at, r) = (i32::from(at), i32::from(radius));
+            let narrow = |v: i32| i16::try_from(v).expect("clamped within i16");
+            narrow((at - r).max(1))..=narrow((at + r).min(last(side)))
+        };
+        (span(centre.x, self.width), span(centre.y, self.height))
+    }
+
+    /// The interior cells within Chebyshev distance `radius` of `centre`, ring by
+    /// ring, row-major within a ring. `centre` may lie off the floor.
+    pub fn neighbourhood(self, centre: Pos, radius: u16) -> impl Iterator<Item = Interior> {
+        let (cx, cy) = (i32::from(centre.x), i32::from(centre.y));
+        let (last_x, last_y) = (i32::from(self.width) - 2, i32::from(self.height) - 2);
+        let row = move |y: i32, left: i32, right: i32| {
+            (1..=last_y)
+                .contains(&y)
+                .then(|| (left.max(1)..=right.min(last_x)).map(move |x| (x, y)))
+                .into_iter()
+                .flatten()
+        };
+        (0..=i32::from(radius))
+            .flat_map(move |d| {
+                let (left, right) = (cx - d, cx + d);
+                let sides = ((cy - d + 1).max(1)..=(cy + d - 1).min(last_y)).flat_map(move |y| {
+                    [left, right]
+                        .into_iter()
+                        .filter(move |x| (1..=last_x).contains(x))
+                        .map(move |x| (x, y))
+                });
+                let bottom = (d > 0).then_some(cy + d).into_iter();
+                row(cy - d, left, right)
+                    .chain(sides)
+                    .chain(bottom.flat_map(move |y| row(y, left, right)))
+            })
+            .map(move |(x, y)| Interior(self.cell(y.unsigned_abs(), x.unsigned_abs())))
+    }
+
+    /// Calls `f` on the cells of [`Self::neighbourhood`], in the same order. A
+    /// plain loop: perception walks it for every actor, every turn.
+    #[inline]
+    pub fn scan_rings(self, centre: Pos, radius: u16, mut f: impl FnMut(Pos, Interior)) {
+        let (cx, cy) = (i32::from(centre.x), i32::from(centre.y));
+        let (last_x, last_y) = (i32::from(self.width) - 2, i32::from(self.height) - 2);
+        let mut visit = |x: i32, y: i32| {
+            let at = Interior(self.cell(y.unsigned_abs(), x.unsigned_abs()));
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "interior coordinates fit i16"
+            )]
+            f(
+                Pos {
+                    x: x as i16,
+                    y: y as i16,
+                },
+                at,
+            );
+        };
+        let inside_x = |x: i32| (1..=last_x).contains(&x);
+        let inside_y = |y: i32| (1..=last_y).contains(&y);
+        for d in 0..=i32::from(radius) {
+            let (left, right) = ((cx - d).max(1), (cx + d).min(last_x));
+            let (top, bottom) = (cy - d, cy + d);
+            if inside_y(top) {
+                for x in left..=right {
+                    visit(x, top);
+                }
+            }
+            let (west, east) = (inside_x(cx - d), inside_x(cx + d));
+            for y in (top + 1).max(1)..=(bottom - 1).min(last_y) {
+                if west {
+                    visit(cx - d, y);
+                }
+                if east {
+                    visit(cx + d, y);
+                }
+            }
+            if d > 0 && inside_y(bottom) {
+                for x in left..=right {
+                    visit(x, bottom);
+                }
+            }
+        }
+    }
+
+    #[must_use]
+    #[inline]
+    pub(crate) fn neighbour(self, at: Interior, dir: Dir) -> CellIdx {
+        let (dx, dy) = dir.offset();
+        let delta = i32::from(dy) * i32::from(self.width) + i32::from(dx);
+        // The wall ring keeps every neighbour of an interior cell in bounds: no wrap.
+        CellIdx {
+            at: at.0.at.wrapping_add_signed(delta),
+            width: self.width,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Dir {
+    NorthWest,
+    North,
+    NorthEast,
+    West,
+    East,
+    SouthWest,
+    South,
+    SouthEast,
+}
+
+impl Dir {
+    /// Row-major; y grows down.
+    pub const ALL: [Self; 8] = [
+        Self::NorthWest,
+        Self::North,
+        Self::NorthEast,
+        Self::West,
+        Self::East,
+        Self::SouthWest,
+        Self::South,
+        Self::SouthEast,
+    ];
+
+    /// `(dx, dy)`.
+    #[must_use]
+    pub const fn offset(self) -> (i16, i16) {
+        match self {
+            Self::NorthWest => (-1, -1),
+            Self::North => (0, -1),
+            Self::NorthEast => (1, -1),
+            Self::West => (-1, 0),
+            Self::East => (1, 0),
+            Self::SouthWest => (-1, 1),
+            Self::South => (0, 1),
+            Self::SouthEast => (1, 1),
+        }
+    }
+}
