@@ -2,6 +2,9 @@
 
 ## 1. Inputs
 
+Status: S1, S2 and S3 are built. S4, S5 and S6 are not built: they wait on
+flagged decision 4 (memory budget). The audit gaps below are open too.
+
 - Target: `docs/plans/vision.md`. Binding research and decisions:
   `docs/plans/generative-species-research.md`.
 - v2 of this plan. Its S1 is built on `feat/generative-species`: the
@@ -88,10 +91,61 @@ mutation checks named in the slice, `bun run verify` green.
    gene means and per-bit verb frequencies, with a split streak. The table
    is a world save section. Extinction is permanent.
 
-Memory path (allocated bytes, reference world): about 142.3 MB today,
-about 128.5 MB after S2, then S4 +4.1 (bud), S5 +0.82 (physique), S6
-+1.64 (taxon) +0.2 (table): about 135.3 MB against 137. One more dense u8
-gene fits; the next needs the CAP decision.
+Memory path (allocated bytes, reference world, measured by
+`bench/reference/allocated.ts`): 147.1 MB before S2 (query lists not counted yet, about 148.3), 135.7 MB after S2.
+Then S4 +4.1 (bud), S5 +0.82 (physique), S6 +1.64 (taxon) +0.2 (table):
+about 142.5 MB against 137. The estimate of v3 (142.3 before, 128.5
+after) appears to leave out the pool and the ticks' previous-turn buffers. S4 alone
+crosses the budget by about 2.8 MB: see flagged decision 4.
+
+Dense against sparse for a u8 gene (S2, `bench/sparse.ts`, M5 Pro): a
+dense column costs 16,384 B per floor (0.82 MB per world) and reads in
+0.43-0.53 ns. A pool column costs 2,048 B per floor at `SPARSE_CAP` but
+reads in 1.61-2.52 ns (x3.75-4.75), and its 2,048 rows cannot hold a gene
+every creature carries (about 8,000 per floor). At `CAP` rows the pool
+saves no byte. Genes stay dense.
+
+Season bench (S3, `bun run season <mode>` from `packages/engine`, M5 Pro,
+Bun 1.4.3). The season world is 40 floors of 128x128 with no player.
+Floor f holds (f + 1) / 40 of the reference density, so floors hold
+188 to 7,692 actors after 200 rounds.
+
+- Time (`time 200`): 51.7 ms per round at P = 1, 38.4 at P = 4, 28.5 at
+  P = 16, 24.3 at P = 64. A rerun at P = 16 gives the same hash. Per-floor
+  time needs a core timing seam that is not built.
+- Memory (`memory`, 60 rounds at P = 1, fresh process): 56-57 MB built,
+  77-79 MB running. The image is 21.6 MB, and RSS after `saveWorld` is
+  100-102 MB. After `loadWorld` into a second engine RSS is 144-145 MB.
+  The peak (maxRSS) is 188-196 MB. No row passes 160 MB. The peak row
+  gates the exit code at 320 MB: the checkpoint model of flagged decision
+  3 holds two worlds at once, each within the 160 MB budget, and the
+  checkpoint image fits in their slack.
+- Id budget: the busiest floor issues 17.4 ids per round, almost all
+  from flora's regrowth up to `popCap`. That gives 1,923,441 rounds until
+  2^25 ids per floor, against 21,474,836 rounds of `MAX_TICK`. Ids run out
+  first, at about 1/11 of the time budget.
+- Fidelity (`fidelity 30`, 4 floors of 64x64, 1000 rounds, seeds 1..30):
+  D*n of each P against P = 1, rejected at 13 or more. These rows are
+  findings for the season-period decision, not gates. The calibration
+  rows pass: null (D*n 6 4 5 3 7 0), power (hunger decay x2, rat
+  population D*n 30) and sanity (P = 16 differs from P = 1 in every seed).
+
+  | Metric | P = 4 | P = 16 | P = 64 |
+  |---|---|---|---|
+  | herbivore.0 population | 23 | 27 | 27 |
+  | rat population | 12 | 23 | 30 |
+  | stoat population | 7 | 13 | 30 |
+  | deaths | 9 | 5 | 29 |
+  | boldness x100 | 12 | 7 | 12 |
+  | extinct species | 0 | 0 | 0 |
+
+  Every P above 1 shifts at least one population. P = 64 shifts every
+  population and the death count. A season jump at any P > 1 is not
+  faithful to P = 1 today.
+- Food web at P = 1, median end population over the 30 seeds:
+  herbivore.0 (65) and rat (411) eat cheese (0) and mushroom (2,841);
+  stoat (125) eats herbivore.0 and rat. Cheese is gone by round 1000 in at least half
+  the seeds.
 
 ## 5. Decisions kept from the research
 
@@ -136,7 +190,8 @@ heart from this run. Their seams stay open:
 2. **Lifetime id exhaustion (D2).** An origin floor allows 33,554,431
    births. `MAX_TICK` bounds a world to about 21.47M rounds. The taxa
    allow 65,535 lifetime u16 labels. Deferred, and budgeted by a
-   `bench/season.ts` row. It must be decided before saves are frozen for
+   `bench/season.ts` row: about 1.9M rounds per floor at the measured
+   birth rate, before any breeding (see the season bench above). It must be decided before saves are frozen for
    permanent worlds.
 3. **Season jump memory.** A save image is about 78 MB; RSS after a save
    is about 210-220 MB. The world, the checkpoint and the worker together
@@ -152,10 +207,15 @@ heart from this run. Their seams stay open:
      result and reloads the checkpoint. A loaded result frees the
      checkpoint.
    Which of the three copies may coexist is the memory decision.
+   The season bench measures the two-world part of this model (see the
+   season bench above): peak 188-196 MB on the 40-floor season world.
+
+4. **Memory budget before S4.** Measured after S2, the gate has 1.3 MB
+   of headroom; S4's bud needs 4.1 MB. Raise the 137 MB budget, or take
+   the `CAP` reduction before S4 instead of after S6.
 
 Also flagged for later, with no decision needed in this run:
 
-- `CAP` reduction as the memory lever after S6.
 - Permanent extinction until the dungeon heart refills niches.
 - The u16 taxa label budget (`TAXA_MAX` below 65,536); a split past it is
   refused and counted, never thrown.

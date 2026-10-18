@@ -72,6 +72,9 @@ a second name anywhere.
   A matching candidate gets inertia; a FAIL clears it.
 - **Period (P)**: how often an actor re-decides. Set per floor by distance
   to the nearest player; between decisions the actor repeats its intent.
+- **Unwatched period**: the period of every floor while no player exists
+  anywhere. A run parameter (`Engine.unwatchedPeriod`, default 1), never
+  saved: a season jump sets it to trade fidelity for speed.
 - **Alarm**: a u8 cell field a module sets only on the turn an eater first
   comes within the module's alarm radius of a cell. An actor there with the
   alarm's required components decides in full instead of replaying its
