@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { catalogue } from "../src/content/catalogue";
 import { Engine } from "../src/core/engine";
 import { createWorld, loadWorld } from "../src/core/world/world";
 import { game } from "../src/game";
@@ -49,7 +50,10 @@ test("createGame builds the game with the options it is given", () => {
 	};
 	const seed1 = ended(createGame(OPTIONS));
 	expect(ended(createGame({ ...OPTIONS, seed: 2 }))).not.toBe(seed1);
-	expect(ended(createWorld({ ...OPTIONS, ...game }))).toBe(seed1);
+	// The core World lists species as strings; the table is the game's own.
+	const { species } = catalogue(OPTIONS.seed);
+	const core = createWorld({ ...OPTIONS, modules: game.modules, species });
+	expect(ended(core as World)).toBe(seed1);
 });
 
 test("a load takes the world from the save: option keys other than check cannot override it", () => {
@@ -59,7 +63,11 @@ test("a load takes the world from the save: option keys other than check cannot 
 	const options = { check: "full" as const, seed: 99, floors: 1, popCap: 5 };
 	const loads = [
 		loadGame(bytes, options),
-		loadWorld(bytes, { ...game, ...options }),
+		loadWorld(bytes, {
+			modules: game.modules,
+			species: catalogue(OPTIONS.seed).species,
+			...options,
+		}) as World,
 	];
 	playRounds(source, 6);
 	for (const loaded of loads) {
@@ -153,5 +161,5 @@ test("a full two-floor game with a moving player, saved midway, ends on the pinn
 	expect(loaded.hash()).toBe(unbroken.hash());
 
 	// Regression lock: re-pin only for an intended change of behaviour.
-	expect(unbroken.hash()).toBe("e57ab56850cf3140");
+	expect(unbroken.hash()).toBe("b42a30907318e1be");
 });

@@ -43,6 +43,13 @@ a second name anywhere.
   sparse set.
 - **Cell column**: one typed array holding one field for every cell of
   every floor.
+- **Sparse component**: a component a module lists in `sparse`. Its
+  fields live in the floor's pool rows, not in a column per slot. Only
+  non-actors hold one for now.
+- **Pool row**: the row of a sparse component's values for one entity, in
+  its floor's pool (`SparsePool`, `core/ecs/sparse.ts`). Resolve it with
+  `row(slot)` in each callback: an applied kill moves the floor's last
+  pool row into the freed one.
 - **ColumnIdx**: a cell column's place in its ruleset: contract columns in
   provider visit order, then private columns in build order. In Rust
   (korr-core): a `u16` newtype, never a Slot.
@@ -94,6 +101,9 @@ a second name anywhere.
   registry order. A floor whose mechanics read no perception skips the scan.
 - **Period (P)**: how often an actor re-decides. Set per floor by distance
   to the nearest player; between decisions the actor repeats its intent.
+- **Unwatched period**: the period of every floor while no player exists
+  anywhere. A run parameter (`Engine.unwatchedPeriod`, default 1), never
+  saved: a season jump sets it to trade fidelity for speed.
 - **Alarm**: a u8 cell field a module sets only on the turn an eater first
   comes within the module's alarm radius of a cell. An actor there with the
   alarm's required components decides in full instead of replaying its
@@ -171,6 +181,40 @@ a second name anywhere.
   build a World running the Game.
   In Rust (korr-core): `Game`, the ruleset, the mechanics and the seed,
   bound at build.
+
+## Generated species
+
+Plan: `docs/plans/generative-species.md`. Code:
+`packages/engine/src/content/catalogue/`.
+
+- **Archetype**: a hand-authored species template for a Niche: a body, a
+  stem and gene bounds. Rat is the first herbivore Archetype.
+- **Catalogue**: one World's species table and Looks, built from its seed
+  by `catalogue(seed)`. `createGame` builds it; `loadGame` rebuilds it
+  from the saved seed.
+- **Gene**: a named integer 0..`GENE_MAX` (255), such as `size`.
+- **Genome**: the values of every Gene of a generated species, drawn from
+  the seed within its Archetype's bounds.
+- **Expression**: the data rows `{gene, component, field, min, max}` and
+  the one pure function that turns a Genome into species field values.
+- **Niche**: the trophic place of a species: producer, herbivore,
+  predator, apex.
+- **Rank** (planned): the standing of a species or individual: normal,
+  boss; later mutant, tamed.
+- **Look**: what the player sees of a species: its stem, its size tier,
+  later its hue. Sent in the Snapshot.
+- **Stratum**: a band of floors deep in the dungeon. Each generated Niche
+  has one species per Stratum.
+- **Budget**: the gene points a generated species spends, set per Niche
+  by a Curve over depth.
+- **Mutant** (planned): an individual whose values differ from its
+  species: stronger, or with a need its species lacks.
+- **Boss** (planned): one boosted apex per Stratum, with the boss Rank,
+  named and announced to the player.
+- **Litter**: the offspring of one `breed` action, placed on free cells
+  around the parent; a crowded neighbourhood gives a partial Litter.
+- **Remains** (planned): what a death leaves on its cell: a carcass that
+  persists as food.
 
 ## Server and client
 

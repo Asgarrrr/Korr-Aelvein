@@ -38,6 +38,7 @@ import {
 	type Schema,
 	type Slot,
 	type SlotList,
+	type SparseColumns,
 	type SpeciesRef,
 	type SpeciesShape,
 	type TargetKind,
@@ -143,6 +144,7 @@ interface SpeciesShapePin {
 }
 interface BuilderPin<S extends Schema, K extends Schema> {
 	write<N extends keyof S & string>(name: N): Columns<S[N]>;
+	sparse<N extends keyof S & string>(name: N): SparseColumns<S[N]>;
 	cells<N extends keyof K & string>(name: N): CellColumns<K[N]>;
 	previous<N extends keyof K & string>(name: N): CellReadView<K[N]>;
 	read<N extends keyof Contracts | keyof CellContracts>(
@@ -182,8 +184,13 @@ interface ModuleDefPin<S extends Schema, C, K extends Schema> {
 	readonly name: string;
 	readonly schema: S;
 	readonly cells?: K;
+	readonly sparse?: readonly (keyof S & string)[];
 	readonly config: C;
 	setup(b: Builder<S, K>, cfg: C): void;
+}
+interface SparseColumnsPin<F extends Fields> {
+	row(slot: Slot): number;
+	readonly columns: Columns<F>;
 }
 
 type Owned = { readonly mark: { readonly n: "u8" } };
@@ -217,7 +224,9 @@ export const surface: [
 	Kinds<{ [K in FieldKind]: Equal<CellWriter<K>, CellWriterPin<K>> }>,
 	Kinds<{ [K in FieldKind]: Equal<CellView<K>, CellViewPin<K>> }>,
 	Kinds<{ [K in FieldKind]: Equal<CellField<K>, CellFieldPin<K>> }>,
+	Equal<SparseColumns<Owned["mark"]>, SparseColumnsPin<Owned["mark"]>>,
 ] = [
+	true,
 	true,
 	true,
 	true,

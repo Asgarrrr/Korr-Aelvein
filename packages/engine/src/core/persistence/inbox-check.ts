@@ -23,7 +23,9 @@ export function inboxProblem(
 	const width = engine.inbox.width;
 	const words = storage.maskWords;
 	const known = knownBits(words, components.size);
-	const slotOf = new Map<Column, number>(carried.map((c, i) => [c, i]));
+	const wordOf = new Map<Column, number>(
+		[...carried, ...storage.sparse.columns].map((c, i) => [c, i]),
+	);
 	const seen = new Set<number>();
 	for (let n = 0; n < count; n++) {
 		const at = n * width;
@@ -57,15 +59,15 @@ export function inboxProblem(
 			if (has && name === "link") return `${where} is an actor with a link`;
 			if (has) continue;
 			for (const column of Object.values(columns))
-				if (entries[body + (slotOf.get(column) ?? 0)] !== 0)
+				if (entries[body + (wordOf.get(column) ?? 0)] !== 0)
 					return `${where} keeps a value in ${name}, a component it does not have`;
 		}
 		const lives =
 			((entries[at + ENTRY_HEAD + vitality.word] ?? 0) & vitality.bit) !== 0;
-		const hp = entries[body + (slotOf.get(vitality.hp) ?? 0)] ?? 0;
-		const max = entries[body + (slotOf.get(vitality.max) ?? 0)] ?? 0;
+		const hp = entries[body + (wordOf.get(vitality.hp) ?? 0)] ?? 0;
+		const max = entries[body + (wordOf.get(vitality.max) ?? 0)] ?? 0;
 		if (lives && !healthy(hp, max)) return `${where} has hp ${hp} of ${max}`;
-		const named = entries[body + (slotOf.get(engine.speciesIndex) ?? 0)] ?? 0;
+		const named = entries[body + (wordOf.get(engine.speciesIndex) ?? 0)] ?? 0;
 		if (!(named >= 0 && named <= engine.speciesNames.length))
 			return `${where} has species index ${named}, outside the species table`;
 	}

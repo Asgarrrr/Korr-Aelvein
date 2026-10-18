@@ -1,14 +1,15 @@
 import type { Audit } from "./audit/audit";
-import { CAP, TICKS_PER_TURN } from "./config";
+import { CAP, SPARSE_CAP, TICKS_PER_TURN } from "./config";
 import { CandidateBuffer } from "./decision/arbitration";
 import { PerceptionBuffer } from "./decision/perception";
 import type { EntityId } from "./ecs/ids";
 import { MaskBits } from "./ecs/mask";
+import type { MaskQuery } from "./ecs/query";
 import type { Column } from "./ecs/schema";
 import { INDEX_SIZE, type MaskBit, Storage } from "./ecs/storage";
 import { EventLog } from "./events/events";
 import { Harms } from "./health/harm";
-import { coreSchema } from "./health/vitality";
+import { coreSchema, coreSparse } from "./health/vitality";
 import { DeferredKills, DeferredSpawns } from "./lifecycle/deferred";
 import type { CompiledSpecies } from "./lifecycle/species";
 import type {
@@ -38,6 +39,7 @@ export interface Component {
 	readonly bit: MaskBit;
 	readonly columns: Readonly<Record<string, Column>>;
 	readonly ownerKey: number;
+	readonly sparse: boolean;
 }
 
 export interface ActionEntry {
@@ -81,6 +83,7 @@ export interface Vitality {
 	readonly bit: number;
 }
 
+// Pool columns: index them by `storage.sparse.row(slot)`.
 export interface Link {
 	readonly floor: Uint8Array;
 	readonly x: Int16Array;
@@ -149,6 +152,8 @@ export class Engine {
 	readonly traffic: Int32Array;
 	// Order the floors run in within a round: results must not depend on it.
 	floorOrder: readonly number[];
+	// Every floor's period while no player exists anywhere: a run parameter, never saved.
+	unwatchedPeriod = 1;
 
 	// Reused buffers: hashing and saving allocate nothing per call, loading little.
 	readonly sum = new Checksum();
@@ -158,6 +163,8 @@ export class Engine {
 	readonly shape: { -readonly [K in keyof WorldFields]: WorldFields[K] };
 	readonly checkFreed = new Uint8Array(CAP);
 	readonly checkListed = new Uint8Array(CAP);
+	readonly checkPooled = new Uint8Array(SPARSE_CAP);
+	readonly sparseMask: Int32Array;
 	readonly checkIndex = new Int32Array(INDEX_SIZE);
 
 	readonly components = new Map<string, Component>();
@@ -166,6 +173,7 @@ export class Engine {
 	readonly actionByKey = new Map<number, number>();
 	readonly actionByName = new Map<string, number>();
 	readonly ticks: TickHook[] = [];
+	readonly queries: MaskQuery[] = [];
 	readonly proposers: Hook<ProposeFn>[] = [];
 	readonly alarms: Alarm[] = [];
 	readonly eventNames = new Map<number, string>();
@@ -175,6 +183,7 @@ export class Engine {
 	// One spawn's values, read once: the checks and the writes see the same numbers.
 	readonly spawnColumns: Column[] = [];
 	readonly spawnValues: number[] = [];
+	readonly spawnPooled: boolean[] = [];
 	spawning = false;
 
 	readonly vitality: Vitality;
@@ -209,6 +218,7 @@ export class Engine {
 		this.intentKey = this.storage.column("i32") as Int32Array;
 		this.intentTarget = this.storage.column("i32") as Int32Array;
 		this.speciesIndex = this.storage.column("u8") as Uint8Array;
+		this.sparseMask = new Int32Array(this.storage.maskWords);
 		const { storage, grid, scheduler } = this;
 		const own = (column: Column, label: string, travels: boolean) => ({
 			column,
@@ -217,6 +227,7 @@ export class Engine {
 		});
 		this.coreColumns = [
 			own(storage.ids, "ids", false),
+			own(storage.sparse.rowOf, "sparse.row", false),
 			own(storage.masks, "masks", true),
 			own(storage.free, "free", false),
 			own(grid.heads, "cells", false),
@@ -231,13 +242,20 @@ export class Engine {
 			own(this.speciesIndex, "species", true),
 		];
 		for (const [name, fields] of Object.entries(coreSchema)) {
+			const sparse = coreSparse.includes(name);
 			const columns: Record<string, Column> = {};
 			for (const [field, kind] of Object.entries(fields))
-				columns[field] = this.storage.column(kind);
+				columns[field] = sparse
+					? storage.sparse.column(kind)
+					: storage.column(kind);
+			const bit = storage.componentBit(this.components.size);
+			if (sparse)
+				this.sparseMask[bit.word] = (this.sparseMask[bit.word] ?? 0) | bit.bit;
 			this.components.set(name, {
-				bit: this.storage.componentBit(this.components.size),
+				bit,
 				columns: Object.freeze(columns),
 				ownerKey: CORE_KEY,
+				sparse,
 			});
 		}
 		const core = (name: keyof typeof coreSchema) =>

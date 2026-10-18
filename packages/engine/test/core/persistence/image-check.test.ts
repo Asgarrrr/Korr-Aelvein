@@ -13,6 +13,7 @@ import {
 	FREE_COUNT,
 	HIGH_WATER,
 	imageChecksum,
+	POOL_COUNT,
 	SUM,
 	saveFloor,
 	sectionCount,
@@ -55,11 +56,12 @@ const sectionsOf = (engine: Engine, bytes: Uint8Array) => {
 	const words = new Int32Array(bytes.buffer);
 	const highWater = words[HIGH_WATER] ?? 0;
 	const freeCount = words[FREE_COUNT] ?? 0;
+	const pool = words[POOL_COUNT] ?? 0;
 	const at = new Map<unknown, number>();
 	let w = FLOOR_HEADER;
 	for (const section of engine.sections) {
 		at.set(section.array, w);
-		const count = sectionCount(engine, section, highWater, freeCount);
+		const count = sectionCount(engine, section, highWater, freeCount, pool);
 		w += Math.ceil((count * section.unit) / WORD);
 	}
 	return at;

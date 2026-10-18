@@ -30,11 +30,23 @@ the spec is updated to include it.
 - A tide that rises in the dungeon.
 - Light as a resource.
 - Echoes of past runs that replay their actions.
-- Bites through `harm` and carcasses: predation wounds instead of killing, and the body stays as food.
+- Bites through `harm` and carcasses: predation wounds instead of killing, and the body stays as food. Planned in `docs/plans/generative-species.md` (S2, N1).
 - Creatures avoid stepping into fire even without fear, when they move for another reason.
 - An `Edible { class, nutrition }` contract on edible species, once fear reads it for its danger masks (`docs/plans/rust-hunger.md` §5).
 - Module-declared events, registered at build beside core's `Died` and `Spawned`, once a host reader needs one (`docs/plans/rust-hunger.md` §4).
 - Pathfinding for creatures that approach a target: hunger's `Approach` takes one greedy step and fails against a wall (`docs/plans/rust-hunger.md` §5).
+
+## Generated species
+
+See `docs/plans/generative-species.md`.
+
+- Store the Catalogue in the save and bump `FORMAT_VERSION` at the first persisted world, so a generator change no longer breaks saves.
+- A speed gene. Blocked by fear's `MARGIN`: fear's stamps assume every action costs one turn.
+- A metabolism gene: satiety decay per species.
+- Generated producers: forage species drawn from archetypes like consumers.
+- A birth cost for the parent. Needs a hunger contract the reproduction module can read.
+- Display-name epithets grown from the archetype stem.
+- A global herbivore cap, if the local bounds on breeding fail to hold the population.
 
 ## Tooling
 

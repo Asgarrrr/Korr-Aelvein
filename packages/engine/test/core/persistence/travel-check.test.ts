@@ -20,6 +20,7 @@ import {
 	INBOX,
 	imageChecksum,
 	PERIOD,
+	POOL_COUNT,
 	STAGE,
 	SUM,
 	saveFloor,
@@ -112,6 +113,7 @@ for (const section of target.sections)
 			section,
 			words[HIGH_WATER] ?? 0,
 			words[FREE_COUNT] ?? 0,
+			words[POOL_COUNT] ?? 0,
 		) *
 			section.unit) /
 			WORD,
@@ -231,6 +233,15 @@ const cases: [string, Edit, RegExp][] = [
 		/keeps a value in vitality/,
 	],
 	[
+		"an entry keeping a pool value in a sparse component it lacks",
+		(w) => {
+			const { carried, storage, link } = target;
+			const pooled = carried.length + storage.sparse.columns.indexOf(link.x);
+			w[entry(1, ENTRY_HEAD + storage.maskWords + pooled)] = 2;
+		},
+		/keeps a value in link/,
+	],
+	[
 		"an entry whose species index is past the species table",
 		(w) => {
 			const index = target.carried.indexOf(target.speciesIndex);
@@ -274,8 +285,9 @@ test("stairs leading to their own floor, off the floor or on an actor never load
 		const e = engineAt(0);
 		const id = spawn(e, 0, stairsTo(1, 1, 1), 2, 2);
 		const slot = e.storage.slotOf(0, id);
-		e.link.floor[slot] = to;
-		e.link.x[slot] = x;
+		const row = e.storage.sparse.row(slot);
+		e.link.floor[row] = to;
+		e.link.x[row] = x;
 		const at = slot * e.storage.maskWords;
 		if (actor) e.storage.masks[at] = (e.storage.masks[at] ?? 0) | ACTOR;
 		return saveFloor(e, 0);

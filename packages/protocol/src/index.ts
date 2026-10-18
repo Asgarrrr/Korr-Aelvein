@@ -24,6 +24,12 @@ export type Eat = Static<typeof Eat>;
 export const Command = Type.Union([Move, Wait, Eat]);
 export type Command = Static<typeof Command>;
 
+export const Look = Type.Object(
+	{ stem: Type.String(), tier: Type.Integer({ minimum: 0 }) },
+	closed,
+);
+export type Look = Static<typeof Look>;
+
 export const Snapshot = Type.Object(
 	{
 		type: Type.Literal("snapshot"),
@@ -47,6 +53,7 @@ export const Snapshot = Type.Object(
 				Type.Integer(),
 			]),
 		),
+		looks: Type.Record(Type.String(), Look),
 	},
 	closed,
 );

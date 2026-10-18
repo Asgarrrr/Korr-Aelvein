@@ -1,4 +1,4 @@
-import { species } from "../src/content/species";
+import { catalogue } from "../src/content/catalogue";
 import { ember } from "../src/content/species/ember";
 import { rat } from "../src/content/species/rat";
 import { stairs } from "../src/content/species/stairs";
@@ -102,6 +102,7 @@ export function forwardBuilder<S extends Schema, K extends Schema>(
 ): Builder<S, K> {
 	return {
 		write: (name) => b.write(name),
+		sparse: (name) => b.sparse(name),
 		cells: (name) => b.cells(name),
 		previous: (name) => b.previous(name),
 		read: (name) => b.read(name),
@@ -295,13 +296,14 @@ const RESTLESS = exploreConfig.restlessBelow - 1;
 // The starter floor plus an ember and a restless rat beside stairs to a second floor, so every
 // game proposer has a reason to push.
 export function seededWorld(list: readonly AnyModule[]) {
+	const seed = 7;
 	const world = createWorld({
-		seed: 7,
+		seed,
 		floors: 2,
 		width: starter.width,
 		height: starter.height,
 		modules: list,
-		species,
+		species: catalogue(seed).species,
 	});
 	for (const { species: name, x, y } of starter.layout)
 		world.spawn(0, name, x, y);

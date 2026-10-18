@@ -12,6 +12,7 @@ import {
 	FREE_COUNT,
 	HIGH_WATER,
 	imageChecksum,
+	POOL_COUNT,
 	SUM,
 	sectionCount,
 	TIME,
@@ -40,17 +41,18 @@ const shape = {
 };
 const world = createWorld({ ...shape, modules, species });
 const STAIRS_X = 31;
+for (let f = 0; f < 2; f++)
+	for (let i = 0; i < 50; i++) {
+		world.spawn(f, rat, (i % 10) * 3, Math.floor(i / 10) * 6);
+		world.spawn(f, cheese, (i * 5 + 3) % SIDE, (i * 3 + 1) % SIDE);
+	}
+// After the rats: the stairs' pool row differs from their slot.
 world.spawn(
 	FLOOR,
 	{ actor: false, components: { link: { floor: 0, x: 3, y: 3 } } },
 	STAIRS_X,
 	STAIRS_X,
 );
-for (let f = 0; f < 2; f++)
-	for (let i = 0; i < 50; i++) {
-		world.spawn(f, rat, (i % 10) * 3, Math.floor(i / 10) * 6);
-		world.spawn(f, cheese, (i * 5 + 3) % SIDE, (i * 3 + 1) % SIDE);
-	}
 for (let i = 0; i < 10; i++)
 	world.spawn(FLOOR, moss, (i * 7) % SIDE, (i * 13) % SIDE);
 world.runRounds(130);
@@ -68,6 +70,7 @@ for (const section of engine.sections) {
 		section,
 		highWater,
 		header[FREE_COUNT] ?? 0,
+		header[POOL_COUNT] ?? 0,
 	);
 	w += Math.ceil((count * section.unit) / WORD);
 }
@@ -91,6 +94,10 @@ const stairsRow =
 				engine.link.bit) !==
 				0,
 	) ?? -1;
+const stairsPoolRow =
+	(new Uint16Array(image.buffer)[
+		((at.get(engine.storage.sparse.rowOf) ?? 0) * WORD) / 2 + stairsRow
+	] ?? 0) - 1;
 const emptyCell = [...Array(SIDE * SIDE).keys()].find(
 	(c) => word(engine.grid.heads, c) === END,
 );
@@ -114,7 +121,7 @@ const resealed = (
 };
 
 test("the probes found an actor, an item, stairs, an empty cell and a free slot", () => {
-	expect([actorRow, itemRow, stairsRow]).not.toContain(-1);
+	expect([actorRow, itemRow, stairsRow, stairsPoolRow]).not.toContain(-1);
 	expect(emptyCell).toBeDefined();
 	expect(header[FREE_COUNT]).toBeGreaterThan(0);
 	expect(() => world.loadFloor(FLOOR, image, { check: "fast" })).not.toThrow();
@@ -179,12 +186,12 @@ const faults: [string, Uint8Array, RegExp][] = [
 	],
 	[
 		"stairs to a floor the world does not have",
-		resealed(engine.link.floor, stairsRow, 2, 1),
+		resealed(engine.link.floor, stairsPoolRow, 2, 1),
 		/link/,
 	],
 	[
 		"stairs to their own floor",
-		resealed(engine.link.floor, stairsRow, FLOOR, 1),
+		resealed(engine.link.floor, stairsPoolRow, FLOOR, 1),
 		/link/,
 	],
 	[

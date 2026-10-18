@@ -11,6 +11,7 @@ import {
 	FREE_COUNT,
 	HIGH_WATER,
 	imageChecksum,
+	POOL_COUNT,
 	SUM,
 	sectionCount,
 	WORD,
@@ -99,10 +100,11 @@ const sectionAt = (image: Uint8Array, array: unknown) => {
 	const words = new Int32Array(image.buffer, image.byteOffset, FLOOR_HEADER);
 	const highWater = words[HIGH_WATER] ?? 0;
 	const freeCount = words[FREE_COUNT] ?? 0;
+	const pool = words[POOL_COUNT] ?? 0;
 	let w = FLOOR_HEADER;
 	for (const section of engine.sections) {
 		if (section.array === array) return w;
-		const count = sectionCount(engine, section, highWater, freeCount);
+		const count = sectionCount(engine, section, highWater, freeCount, pool);
 		w += Math.ceil((count * section.unit) / WORD);
 	}
 	throw new Error("no such section");
@@ -290,6 +292,39 @@ test("both checks refuse two rows with one id, even behind sound hashes", () => 
 			() => loadWorld(badWorld, { modules, species, check }),
 			check,
 		).toThrow(/held by two slots/);
+});
+
+// Stairs hand their pool row to a row without sparse bits: the count still adds up, so only
+// the link check finds stairs with nowhere to read their link from.
+const strandedLink = (image: Uint8Array) => {
+	const copy = image.slice();
+	const { maskWords, sparse } = engine.storage;
+	const pointers = new Uint16Array(
+		copy.buffer,
+		sectionAt(copy, sparse.rowOf) * WORD,
+	);
+	const words = new Int32Array(copy.buffer);
+	const masks = sectionAt(copy, engine.storage.masks);
+	const mask = (row: number, word = 0) =>
+		words[masks + row * maskWords + word] ?? 0;
+	const rows = [...Array(words[HIGH_WATER] ?? 0).keys()];
+	const stairs = rows.find(
+		(r) => (mask(r, engine.link.word) & engine.link.bit) !== 0,
+	);
+	const plain = rows.find((r) => (mask(r) & 1) !== 0 && pointers[r] === 0);
+	if (stairs === undefined || plain === undefined)
+		throw new Error("no stairs or no row without a pool row");
+	pointers[plain] = pointers[stairs] ?? 0;
+	pointers[stairs] = 0;
+	reseal(copy);
+	return copy;
+};
+
+test("both checks refuse stairs without a pool row, even behind a sound checksum", () => {
+	const world = atSave();
+	const bad = strandedLink(world.saveFloor(1));
+	for (const check of ["fast", "full"] as const)
+		expect(() => world.loadFloor(1, bad, { check }), check).toThrow(/pool row/);
 });
 
 test("the fast check still refuses a floor image whose traffic or round point differs", () => {

@@ -25,7 +25,8 @@ slot across all columns. An `EntityId` names an entity for life.
   period P > 1, an actor re-executes its intent unless
   `(round + id) % P == 0` (`decide` in `turn.ts`). P comes from
   `LOD_PERIODS` by floor distance to the nearest player, fixed at round
-  start (`startRound` in `core/turns/round.ts`). No player anywhere: P = 1.
+  start (`startRound` in `core/turns/round.ts`). No player anywhere: P =
+  `Engine.unwatchedPeriod` (default 1, never saved).
 - FAIL means "this decision is invalid". A FAIL on a cached intent clears
   it and arbitrates in the same turn. A FAIL on a fresh choice clears the
   intent and costs the turn. A step that is only blocked must reach
@@ -57,8 +58,9 @@ slot across all columns. An `EntityId` names an entity for life.
   poisoning (`core/world/game-world.ts`).
 - Travel: `core.travel` posts the row to the destination inbox at
   `time + STAIR_TIME`. Position, schedule and intent are not carried. The
-  mask and every other saved column are (`Engine.carried`, copied by
-  `Inbox.post` and `Inbox.land`). Cell columns never travel.
+  mask, every other saved column and the pool row are (`Engine.carried`
+  and the pool columns, copied by `Inbox.post` and `Inbox.land`). Cell
+  columns never travel.
 - An entity joins or leaves a floor's rows only through `attach` /
   `detach` (`core/lifecycle/membership.ts`). They keep the grid, the
   schedule and `Engine.players` in step. `players[f]` counts the player
@@ -72,7 +74,8 @@ slot across all columns. An `EntityId` names an entity for life.
 | `module/api.ts` | The only engine surface a module sees. Frozen. |
 | `world/world.ts`, `world/game-world.ts` | `World` API (exported for the game only: `createGame`, `loadGame` in `src/game.ts`); call guards. |
 | `engine.ts` | All engine state; `coreColumns`; registers `core/step`, `core/idle`, `core/travel`. |
-| `setup/registration.ts` | Ownership checks, `ModuleBuilder`, fingerprint, carried columns (from `coreColumns`). |
+| `setup/registration.ts` | Module and species checks, fingerprint, carried columns (from `coreColumns`). |
+| `setup/builder.ts` | `ModuleBuilder`: ownership checks on `write`, `sparse`, `read`, `cells`. |
 | `turns/turn.ts` | Tick phase, actor loop, `decide`, `execute` (`requires`, alternates), `step` body. |
 | `turns/round.ts` | `advance`, LOD periods, player turns. |
 | `turns/target.ts` | `validTarget`: one rule for proposals, alternates, inputs and loads. |
@@ -83,11 +86,11 @@ slot across all columns. An `EntityId` names an entity for life.
 | `space/` | Grid lists, `approach`, cell readers and writers. |
 | `events/` | Per-floor event ring and its cap. |
 | `random/` | Keyed `draw` and bounded ints (D6). |
-| `health/` | `coreSchema` (vitality, link) and the harm drain. |
+| `health/` | `coreSchema` (vitality, link), `coreSparse`, the harm drain. |
 | `ecs/` | Storage, masks, queries, getter views; imports nothing else from core. |
 | `lifecycle/` | Spawn by name or shape, `values`, kill, deferred lists, floor membership. |
 | `persistence/image.ts` | Floor image layout, header codec, `FORMAT_VERSION`, `sectionsOf`, checksum. |
-| `persistence/validate.ts`, `rows.ts` | Load checks, fast and full. |
+| `persistence/validate.ts`, `rows.ts`, `sparse.ts`, `links.ts` | Load checks, fast and full; `sparse.ts` checks the pool, `links.ts` the stairs. |
 | `audit/` | Audit mode: column diffs around callbacks, range-checked writes. |
 
 ## Recipes
@@ -120,6 +123,18 @@ checks of a species shape (kind, health rule, link rule). A registered
 component the species lacks throws; an unregistered one is skipped. The
 engine keeps no `values` object. Stairs: `"stairs"` with `values.link`.
 `bench/reference/world.ts` switches events off while it generates.
+
+### Make a component sparse
+
+For a component held by few entities. List it in the module's `sparse`
+and access it with `b.sparse(name)`, never `b.write`. Index its columns
+by `row(slot)`, which is `NONE` for a slot without one. `b.query` and
+`requires` work unchanged. The pool holds `SPARSE_CAP` rows per floor:
+`world.spawn` throws on a full pool and a deferred spawn is dropped. An
+arrival that needs a row waits in the inbox. A range on a sparse field
+throws; spawn values are written at the pool row. `b.read` on a sparse
+component throws. The fingerprint folds the list, so the golden hash
+moves. The core `link` is sparse: read it at `storage.sparse.row(slot)`.
 
 ### Change the frozen core API
 
@@ -178,6 +193,9 @@ typecheck lists any you miss.
 - Per-call allocation in a hot path shows as RSS, not time. An 8-element
   array per flee cost 60–100 MB. Read into locals instead.
 - `ctx.kill` is deferred: the victim stays visible until the callback ends.
+- A pool row is valid in the current callback only. An applied kill moves
+  the floor's last pool row into the freed one. Store `EntityId`s and call
+  `row(slot)` again in each callback.
 - `b.read` returns `undefined` when the owner is not registered. `b.query`
   and `requires` throw on such names: guard them as `fear` does.
 - Audit mode (`audit: true`, tests only) catches writes to non-owned
@@ -206,8 +224,9 @@ typecheck lists any you miss.
   reference. `bun bench/reference.ts` prints one row per section 1 budget.
 - PASS means the median is within budget on this machine. The world round
   row also bounds p95. The plan set budgets on an M5 Pro.
-- It throws if a rerun or a permuted floor order changes the hash. Its
-  exit code ignores budget FAIL rows: read them.
+- It throws if a rerun or a permuted floor order changes the hash. Only
+  the allocated row sets the exit code; read the other FAIL rows.
+  `bun bench/sparse.ts` prints the read cost of dense and pool paths.
 - Determinism tests to reuse: `reversed()` ticks, `floorOrder`
   permutations, events on and off (`core/events/events.test.ts`), save
   plus load mid-run equals an unbroken run, audit on and off.

@@ -4,12 +4,12 @@ import {
 	ID_FLOOR_STRIDE,
 	LOD_PERIODS,
 	MAX_TICK,
+	SPARSE_CAP,
 	TICKS_PER_TURN,
 } from "../config";
 import { ACTOR, ALIVE, indexInsert, knownBits, PLAYER } from "../ecs/storage";
 import { type Engine, FLOOR_STAGE } from "../engine";
 import { END } from "../space/grid";
-import { validLink } from "../travel/link";
 import {
 	FLOOR_HEADER,
 	FORMAT_VERSION,
@@ -25,21 +25,21 @@ import {
 	WORD,
 } from "./image";
 import { inboxProblem } from "./inbox-check";
+import { checkLinks } from "./links";
 import {
 	checkAbsent,
 	checkDead,
 	checkFree,
 	checkIntent,
-	checkLinks,
 	checkLists,
 	checkLive,
 	checkVitality,
 	describe,
-	type Links,
 	OK,
 	playersSeen,
 	type Rows,
 } from "./rows";
+import { checkPool } from "./sparse";
 
 export function checkVersion(version: number | undefined): void {
 	if (version !== FORMAT_VERSION)
@@ -80,12 +80,13 @@ export function checkFloor(
 	if (head.fingerprint !== (engine.fingerprint | 0))
 		throw new Error("image registry fingerprint does not match these modules");
 	if (head.floor !== floor) fail(`claims floor ${head.floor}`);
-	const { highWater, freeCount, counter, stage, period } = head;
+	const { highWater, freeCount, counter, stage, period, pool } = head;
 	const entries = head.inbox;
 	const now = head.time;
 	// Arrivals ignore popCap, so only CAP bounds the rows.
 	if (!(freeCount >= 0 && freeCount <= highWater && highWater <= CAP))
 		fail(`free count ${freeCount}, high water ${highWater}`);
+	if (!(pool >= 0 && pool <= SPARSE_CAP)) fail(`pool count ${pool}`);
 	if (!(counter >= 0 && counter < ID_FLOOR_STRIDE))
 		fail(`id counter ${counter}`);
 	const start = round * TICKS_PER_TURN;
@@ -112,7 +113,7 @@ export function checkFloor(
 	const emitted = head.emitted;
 	if (!(emitted >= 0 && emitted <= EVENT_CAP_PER_TURN))
 		fail(`${emitted} events this turn`);
-	const expected = imageWords(engine, highWater, freeCount, entries);
+	const expected = imageWords(engine, highWater, freeCount, pool, entries);
 	if (words.length !== expected)
 		fail(`${words.length} words, expected ${expected}`);
 	imageChecksum(engine.sum, words, sums);
@@ -124,7 +125,7 @@ export function checkFloor(
 	let w = FLOOR_HEADER;
 	for (let i = 0; i < sections.length; i++) {
 		const section = sections[i] as Section;
-		const count = sectionCount(engine, section, highWater, freeCount);
+		const count = sectionCount(engine, section, highWater, freeCount, pool);
 		const bytes = count * section.unit;
 		at.set(section.array, { at: image.byteOffset + w * WORD, count });
 		const tail = bytes & (WORD - 1);
@@ -171,6 +172,12 @@ export function checkFloor(
 		speciesCount: engine.speciesNames.length,
 		known: knownBits(storage.maskWords, engine.components.size),
 	};
+	const fieldView = (column: Section["array"]) =>
+		byUnit(bySection.get(column) as Section);
+	const pooled =
+		checkPool(engine, rows, pool, fieldView, check === "full") ??
+		checkLinks(engine, rows, fieldView, floor);
+	if (pooled !== undefined) fail(pooled);
 	if (check === "fast")
 		return indexRows(
 			rows,
@@ -182,17 +189,6 @@ export function checkFloor(
 				now,
 				heads: int32(grid.heads),
 				cells: grid.cells,
-				links: {
-					word: engine.link.word,
-					bit: engine.link.bit,
-					floor: uint8(engine.link.floor),
-					x: int16(engine.link.x),
-					y: int16(engine.link.y),
-				},
-				floor,
-				floors: storage.floors,
-				width: grid.width,
-				height: grid.height,
 			},
 			fail,
 		);
@@ -227,34 +223,20 @@ export function checkFloor(
 			int16(engine.vitality.hp),
 			int16(engine.vitality.max),
 		) ||
-		checkLinks(
-			rows,
-			{
-				word: engine.link.word,
-				bit: engine.link.bit,
-				floor: uint8(engine.link.floor),
-				x: int16(engine.link.x),
-				y: int16(engine.link.y),
-			},
-			floor,
-			storage.floors,
-			grid.width,
-			grid.height,
-		) ||
 		checkAbsent(
 			rows,
-			[...engine.components.values()].map(({ bit, columns }) => {
-				const views = Object.values(columns).map((column) =>
-					byUnit(bySection.get(column) as Section),
-				);
-				return {
-					word: bit.word,
-					bit: bit.bit,
-					bytes: views.filter((v) => v instanceof Int8Array),
-					shorts: views.filter((v) => v instanceof Int16Array),
-					words: views.filter((v) => v instanceof Int32Array),
-				};
-			}),
+			[...engine.components.values()]
+				.filter((c) => !c.sparse)
+				.map(({ bit, columns }) => {
+					const views = Object.values(columns).map(fieldView);
+					return {
+						word: bit.word,
+						bit: bit.bit,
+						bytes: views.filter((v) => v instanceof Int8Array),
+						shorts: views.filter((v) => v instanceof Int16Array),
+						words: views.filter((v) => v instanceof Int32Array),
+					};
+				}),
 		);
 	if (code !== OK) fail(describe(code));
 	const problem = inboxProblem(
@@ -282,18 +264,11 @@ function indexRows(
 		readonly now: number;
 		readonly heads: Int32Array;
 		readonly cells: number;
-		readonly links: Links;
-		readonly floor: number;
-		readonly floors: number;
-		readonly width: number;
-		readonly height: number;
 	},
 	fail: (why: string) => never,
 ): number {
 	const { base, highWater, maskWords, ids, masks, cellOf, next, prev } = rows;
-	const { free, freeCount, nextAt, now, heads, cells, links } = guard;
-	// Most worlds keep the link bit in the first mask word, which the loop has already read.
-	const linkInFirst = links.word === 0;
+	const { free, freeCount, nextAt, now, heads, cells } = guard;
 	// One unsigned compare per range: below base wraps past highWater.
 	for (let i = 0; i < freeCount; i++) {
 		const slot = free[i] ?? 0;
@@ -328,24 +303,6 @@ function indexRows(
 			fail(`slot ${base + row} links to slot ${after}, outside this floor`);
 		if (!((before - base) >>> 0 < highWater || before === END))
 			fail(`slot ${base + row} links to slot ${before}, outside this floor`);
-		const linkWord = linkInFirst
-			? mask
-			: (masks[row * maskWords + links.word] ?? 0);
-		if (
-			(linkWord & links.bit) !== 0 &&
-			!validLink(
-				guard.floor,
-				links.floor[row] ?? 0,
-				links.x[row] ?? 0,
-				links.y[row] ?? 0,
-				guard.floors,
-				guard.width,
-				guard.height,
-			)
-		)
-			fail(
-				`slot ${base + row} has a link to floor ${links.floor[row]} that leads nowhere`,
-			);
 	}
 	return players;
 }

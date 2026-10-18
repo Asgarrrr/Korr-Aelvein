@@ -70,6 +70,7 @@ test("the core API exports exactly the frozen names, all in forms the scan reads
 		"Sentinel",
 		"Slot",
 		"SlotList",
+		"SparseColumns",
 		"SpeciesRef",
 		"SpeciesShape",
 		"TargetKind",

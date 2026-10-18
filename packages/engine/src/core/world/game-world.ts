@@ -155,7 +155,9 @@ export class GameWorld<M extends readonly AnyModule[], S extends string>
 		const word = storage.masks[slot * storage.maskWords + entry.bit.word] ?? 0;
 		if ((word & entry.bit.bit) === 0)
 			throw new Error(`no ${component} on ${id}`);
-		return entry.columns[field]?.[slot] ?? 0;
+		const row = entry.sparse ? storage.sparse.row(slot) : slot;
+		if (row === NONE) return 0;
+		return entry.columns[field]?.[row] ?? 0;
 	}
 
 	entities(

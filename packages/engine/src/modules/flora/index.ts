@@ -5,23 +5,25 @@ import { schema } from "./schema";
 export const flora = defineModule({
 	name: "flora",
 	schema,
+	sparse: ["sprout"],
 	config: floraConfig,
 	setup(b, cfg) {
-		const sprout = b.write("sprout");
+		const sprout = b.sparse("sprout");
 		const plants = b.query(["sprout"]);
 		const yields = b.species(cfg.yields);
 
 		b.tick((ctx) => {
 			const rows = plants.slots(ctx);
-			const { period, left } = sprout;
+			const { period, left } = sprout.columns;
 			for (let i = 0; i < rows.length; i++) {
 				const s = rows.at(i);
-				const next = (left[s] ?? 0) - 1;
+				const r = sprout.row(s);
+				const next = (left[r] ?? 0) - 1;
 				if (next > 0) {
-					left[s] = next;
+					left[r] = next;
 					continue;
 				}
-				left[s] = period[s] ?? 0;
+				left[r] = period[r] ?? 0;
 				ctx.spawn(yields, ctx.x(s), ctx.y(s), ctx.idOf(s));
 			}
 		});

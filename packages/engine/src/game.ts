@@ -1,4 +1,6 @@
+import { catalogue, type SpeciesName } from "./content/catalogue";
 import { species } from "./content/species";
+import type { GameSpecies } from "./content/species/types";
 import type { EntityId } from "./core/ecs/ids";
 import type { SpawnFields } from "./core/lifecycle/species";
 import {
@@ -12,7 +14,11 @@ import { modules } from "./registry";
 
 export const game = { modules, species } as const;
 
-export type SpeciesName = keyof typeof species;
+export type { SpeciesName } from "./content/catalogue";
+
+// Every catalogue name is a SpeciesName: fixed names, or a niche and a stratum.
+const tableOf = (seed: number) =>
+	catalogue(seed).species as Readonly<Record<SpeciesName, GameSpecies>>;
 
 export interface World
 	extends Omit<AnyWorld<typeof modules, SpeciesName>, "spawn" | "spawnPlayer"> {
@@ -38,10 +44,15 @@ export function createGame(
 		"modules" | "species" | "floorOrder" | "audit"
 	>,
 ): World {
-	return createWorld({ ...options, ...game });
+	return createWorld({
+		...options,
+		modules,
+		species: tableOf(options.seed),
+	});
 }
 
 export function loadGame(bytes: Uint8Array, options: LoadOptions = {}): World {
 	const { check } = options;
-	return loadWorld(bytes, check === undefined ? game : { ...game, check });
+	const table = { modules, species: tableOf };
+	return loadWorld(bytes, check === undefined ? table : { ...table, check });
 }

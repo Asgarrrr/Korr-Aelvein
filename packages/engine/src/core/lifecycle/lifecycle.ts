@@ -56,8 +56,12 @@ export function spawn(
 	if (player && !compiled.actor) throw new Error("a player must be an actor");
 	if (compiled.actor && e.grid.holdsOtherActor(floor, cell, NONE))
 		throw new Error(`spawn at (${x}, ${y}): the cell holds an actor`);
-	if (crowded(e, floor))
-		throw new Error(`floor ${floor} is at its popCap (${e.popCap})`);
+	if (crowded(e, floor, compiled))
+		throw new Error(
+			compiled.sparse && e.storage.sparse.full(floor)
+				? `floor ${floor} sparse pool is full`
+				: `floor ${floor} is at its popCap (${e.popCap})`,
+		);
 	const id = place(e, floor, compiled, x, y, at, count, player);
 	e.emit(floor, e.spawned, NO_CAUSE, id, 0);
 	return id;
@@ -69,7 +73,7 @@ function readValues(
 	species: CompiledSpecies,
 	values: SpawnValues,
 ): number {
-	const { spawnColumns, spawnValues } = e;
+	const { spawnColumns, spawnValues, spawnPooled } = e;
 	const { label } = species;
 	let count = 0;
 	for (const componentName in values) {
@@ -94,6 +98,7 @@ function readValues(
 				label,
 			);
 			spawnValues[count] = value ?? 0;
+			spawnPooled[count] = component.sparse;
 			count++;
 		}
 	}
@@ -136,8 +141,13 @@ export function checkSpawn(
 	return cell;
 }
 
-export function crowded(e: Engine, floor: number): boolean {
-	const { highWater, freeCount } = e.storage;
+export function crowded(
+	e: Engine,
+	floor: number,
+	species: CompiledSpecies,
+): boolean {
+	const { highWater, freeCount, sparse } = e.storage;
+	if (species.sparse && sparse.full(floor)) return true;
 	return (highWater[floor] ?? 0) - (freeCount[floor] ?? 0) >= e.popCap;
 }
 
@@ -176,10 +186,15 @@ export function place(
 	e.speciesIndex[slot] = species.index;
 	for (let i = 0; i < columns.length; i++)
 		(columns[i] as Column)[slot] = values[i] ?? 0;
+	const row = species.sparse ? storage.sparse.take(floor, slot) : NONE;
+	const { sparseColumns, sparseValues } = species;
+	for (let i = 0; i < sparseColumns.length; i++)
+		(sparseColumns[i] as Column)[row] = sparseValues[i] ?? 0;
 	if (species.ranges.length > 0) drawRanges(e, slot, species.ranges, overrides);
-	const { spawnColumns, spawnValues } = e;
+	const { spawnColumns, spawnValues, spawnPooled } = e;
 	for (let i = 0; i < overrides; i++)
-		(spawnColumns[i] as Column)[slot] = spawnValues[i] ?? 0;
+		(spawnColumns[i] as Column)[spawnPooled[i] ? row : slot] =
+			spawnValues[i] ?? 0;
 	attach(e, floor, slot, x, y, at);
 	return (storage.ids[slot] ?? 0) as EntityId;
 }
@@ -257,7 +272,7 @@ export function applyDeferred(e: Engine, floor: number): void {
 			const y = spawns.ys[n] ?? 0;
 			// Refused, not thrown: the batch is sorted, so which spawn loses is deterministic.
 			if (
-				crowded(e, floor) ||
+				crowded(e, floor, species) ||
 				(species.actor && grid.holdsOtherActor(floor, grid.cellAt(x, y), NONE))
 			)
 				continue;

@@ -176,10 +176,18 @@ export type ContractView<N extends keyof Contracts | keyof CellContracts> =
 			? ReadView<Contracts[N]>
 			: never;
 
+// Pool rows move when a pooled entity dies: resolve `row(slot)` in each callback, never keep it.
+export interface SparseColumns<F extends Fields> {
+	// NONE when the slot holds no pool row.
+	row(slot: Slot): number;
+	readonly columns: Columns<F>;
+}
+
 type NoCells = Readonly<Record<never, Fields>>;
 
 export interface Builder<S extends Schema, K extends Schema = NoCells> {
 	write<N extends keyof S & string>(name: N): Columns<S[N]>;
+	sparse<N extends keyof S & string>(name: N): SparseColumns<S[N]>;
 	cells<N extends keyof K & string>(name: N): CellColumns<K[N]>;
 	// The core copies the owned cells here just before each of this module's ticks, so a tick
 	// reads last round's values while it writes this round's. Readable in that tick only.
@@ -229,6 +237,8 @@ export interface ModuleDef<S extends Schema, C, K extends Schema = NoCells> {
 	readonly name: string;
 	readonly schema: S;
 	readonly cells?: K;
+	// Components stored in the floor's pool rather than per slot: non-actors only.
+	readonly sparse?: readonly (keyof S & string)[];
 	readonly config: C;
 	setup(b: Builder<S, K>, cfg: C): void;
 }

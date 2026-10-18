@@ -105,6 +105,7 @@ test("the opening snapshot shows the floor and the player at the start cell", ()
 			satiety: expect.any(Number),
 		},
 		entities: expect.any(Array),
+		looks: expect.any(Object),
 	});
 	const opened = player(session.opening);
 	expect(Number.isInteger(opened.id) && opened.id > 0).toBe(true);
@@ -126,6 +127,15 @@ test("the opening snapshot lists the starter layout, without the player", () => 
 	});
 	expect(Math.max(...moved)).toBeLessThanOrEqual(1);
 	expect(entities.map(([id]) => id)).not.toContain(player.id);
+});
+
+test("every listed species has a look and herbivore.0 looks like a rat", () => {
+	const { entities, looks } = snapshot(new Session(SEED).opening);
+	const listed = new Set(entities.map(([, species]) => species));
+	expect(Object.keys(looks).sort()).toEqual([...listed].sort());
+	expect(listed.has("herbivore.0")).toBe(true);
+	expect(looks["herbivore.0"]?.stem).toBe("rat");
+	expect(looks.cheese).toEqual({ stem: "cheese", tier: 0 });
 });
 
 test("a move changes the position by (dx, dy)", () => {

@@ -4,7 +4,7 @@ import { cheese } from "../../../src/content/species/cheese";
 import { moss } from "../../../src/content/species/moss";
 import { mushroom } from "../../../src/content/species/mushroom";
 import { rat } from "../../../src/content/species/rat";
-import { CAP } from "../../../src/core/config";
+import { CAP, SPARSE_CAP } from "../../../src/core/config";
 import {
 	type AnyModule,
 	defineModule,
@@ -127,7 +127,7 @@ test("a dead slot's zeroed id does not resolve after load", () => {
 // One floor: world header words 0-8, event switch 9, image length 10, then the
 // floor image: version 11, fingerprint 12, floor 13, counter 14, high water 15,
 // free count 16, time 17, stage 18, period 19, inbox 20, traffic 21, events this turn 22,
-// checksum 23-24, free list from 25.
+// pool count 23, checksum 24-25, free list from 26.
 const SEED_WORD = 3;
 const ROUND_WORD = 4;
 const FLOORS_WORD = 5;
@@ -137,7 +137,8 @@ const COUNTER_WORD = 14;
 const HIGH_WATER_WORD = 15;
 const FREE_COUNT_WORD = 16;
 const TIME_WORD = 17;
-const FIRST_FREE_WORD = 25;
+const POOL_COUNT_WORD = 23;
+const FIRST_FREE_WORD = 26;
 
 const edited = (bytes: Uint8Array, word: number, value: number) => {
 	const copy = bytes.slice();
@@ -151,6 +152,7 @@ test("a damaged save throws and never loads", () => {
 	const bytes = world.save();
 	const words = new Int32Array(bytes.buffer);
 	expect(words[FREE_COUNT_WORD]).toBeGreaterThan(0);
+	expect(words[POOL_COUNT_WORD]).toBe(10);
 	const flipped = (at: number) => {
 		const copy = bytes.slice();
 		copy[at] = (copy[at] ?? 0) ^ 1;
@@ -179,6 +181,17 @@ test("a damaged save throws and never loads", () => {
 		["free count 500", edited(bytes, FREE_COUNT_WORD, 500), /free count 500/],
 		["negative counter", edited(bytes, COUNTER_WORD, -1), /id counter/],
 		["time off its round", edited(bytes, TIME_WORD, 7), /time/],
+		[
+			"pool count past its rows",
+			edited(bytes, POOL_COUNT_WORD, SPARSE_CAP + 1),
+			/pool count/,
+		],
+		["negative pool count", edited(bytes, POOL_COUNT_WORD, -1), /pool count/],
+		[
+			"pool count two lower",
+			edited(bytes, POOL_COUNT_WORD, 8),
+			/words, expected/,
+		],
 		["width changed", edited(bytes, WIDTH_WORD, 64), /words, expected/],
 		[
 			"free slot changed",
