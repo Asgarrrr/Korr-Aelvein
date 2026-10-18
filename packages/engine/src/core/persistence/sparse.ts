@@ -2,7 +2,7 @@ import type { Column } from "../ecs/schema";
 import type { Engine } from "../engine";
 import type { Rows } from "./rows";
 
-type FieldView = Int8Array | Int16Array | Int32Array;
+export type FieldView = Int8Array | Int16Array | Int32Array;
 
 // A pool image is sound when each live sparse row owns one distinct pool row below the count,
 // and no pool row holds a value in a sparse component its owner lacks. "fast" checks only the

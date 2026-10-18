@@ -158,14 +158,7 @@ export function compileSpecies(
 		if (!component) continue;
 		const { word, bit } = component.bit;
 		mask[word] = (mask[word] ?? 0) | bit;
-		if (component.sparse) {
-			if (species.actor)
-				throw speciesError(
-					label,
-					`${componentName} is sparse: no actor holds it`,
-				);
-			sparse = true;
-		}
+		if (component.sparse) sparse = true;
 		const fields = species.components[componentName];
 		for (const field in fields) {
 			const value = fields[field];

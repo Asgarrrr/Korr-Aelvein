@@ -9,7 +9,7 @@ export class SparsePool {
 	readonly rowOf: Uint16Array;
 	readonly counts: Int32Array;
 	readonly columns: Column[] = [];
-	readonly #slotOfRow: Int32Array;
+	private readonly slotOfRow: Int32Array;
 
 	constructor(
 		readonly floors: number,
@@ -17,7 +17,7 @@ export class SparsePool {
 	) {
 		this.rowOf = new Uint16Array(floors * CAP);
 		this.counts = new Int32Array(floors);
-		this.#slotOfRow = new Int32Array(floors * rowsPerFloor);
+		this.slotOfRow = new Int32Array(floors * rowsPerFloor);
 	}
 
 	column(kind: FieldKind): Column {
@@ -42,7 +42,7 @@ export class SparsePool {
 			throw new Error(`slot ${slot} already holds a pool row`);
 		const local = this.counts[floor] ?? 0;
 		const row = floor * this.rowsPerFloor + local;
-		this.#slotOfRow[row] = slot;
+		this.slotOfRow[row] = slot;
 		this.rowOf[slot] = local + 1;
 		this.counts[floor] = local + 1;
 		return row;
@@ -60,8 +60,8 @@ export class SparsePool {
 				const column = columns[c] as Column;
 				column[freed] = column[last] ?? 0;
 			}
-			const moved = this.#slotOfRow[last] ?? 0;
-			this.#slotOfRow[freed] = moved;
+			const moved = this.slotOfRow[last] ?? 0;
+			this.slotOfRow[freed] = moved;
 			this.rowOf[moved] = held;
 		}
 		for (let c = 0; c < columns.length; c++) (columns[c] as Column)[last] = 0;
@@ -72,7 +72,7 @@ export class SparsePool {
 		const base = floor * this.rowsPerFloor;
 		for (let s = floor * CAP; s < floor * CAP + highWater; s++) {
 			const held = this.rowOf[s] ?? 0;
-			if (held !== 0) this.#slotOfRow[base + held - 1] = s;
+			if (held !== 0) this.slotOfRow[base + held - 1] = s;
 		}
 	}
 }

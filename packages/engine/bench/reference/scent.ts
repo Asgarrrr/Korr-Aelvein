@@ -26,11 +26,12 @@ export const scent = defineModule({
 		musk: { strength: "u8", fade: "u8" },
 		tracker: { keen: "u8", trail: "i32", since: "i32" },
 	},
+	sparse: ["tracker"],
 	cells: { scent: { trail: "u8" } },
 	config: scentConfig,
 	setup(b, cfg) {
 		const musk = b.write("musk");
-		const tracker = b.write("tracker");
+		const tracker = b.sparse("tracker");
 		const satiety = b.read("satiety");
 		const carriers = b.query(["musk"]);
 		const trackers = b.query(["tracker"]);
@@ -72,14 +73,16 @@ export const scent = defineModule({
 		const track = b.action("track", "none", ["tracker"], (ctx, actor) => {
 			const cell = strongest(ctx, actor);
 			if (cell === NO_CELL) return FAIL;
-			tracker.trail[actor] = cell;
-			tracker.since[actor] = (tracker.since[actor] ?? 0) + 1;
+			const { trail, since } = tracker.columns;
+			const r = tracker.row(actor);
+			trail[r] = cell;
+			since[r] = (since[r] ?? 0) + 1;
 			return ctx.instead(ctx.step, cell);
 		});
 
 		b.propose((ctx, actor, _perception, out) => {
-			if (!satiety || !trackers.has(actor) || (tracker.keen[actor] ?? 0) === 0)
-				return;
+			if (!satiety || !trackers.has(actor)) return;
+			if ((tracker.columns.keen[tracker.row(actor)] ?? 0) === 0) return;
 			if (satiety.value.get(actor) >= cfg.trackBelow) return;
 			if (strongest(ctx, actor) !== NO_CELL) out.push(track, null, cfg.score);
 		});

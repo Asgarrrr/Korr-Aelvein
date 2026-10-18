@@ -3,7 +3,6 @@ import { ACTOR, ALIVE, indexInsert, PLAYER } from "../ecs/storage";
 import { type ActionEntry, KIND_CODE } from "../engine";
 import { healthy } from "../health/vitality";
 import { END } from "../space/grid";
-import { validLink } from "../travel/link";
 import { validTarget } from "../turns/target";
 
 export const OK = 0;
@@ -35,7 +34,6 @@ const IDLE_INTENT = 23;
 const ABSENT_VALUE = 24;
 const VITALITY = 27;
 const IDLE_PLAYER = 28;
-const LINK = 29;
 const SPECIES = 30;
 
 // The slot and values a failed check reports: plain numbers, so the hot loops close over nothing.
@@ -108,8 +106,6 @@ export function describe(code: number): string {
 			return `slot ${slot} has hp ${value} outside (0, ${problem[2] ?? 0}]`;
 		case IDLE_PLAYER:
 			return `slot ${slot} is a player but does not act`;
-		case LINK:
-			return `slot ${slot} has a link to floor ${value} that leads nowhere`;
 		case SPECIES:
 			return `slot ${slot} has species index ${value}, past the species table`;
 		case TWO_ACTORS:
@@ -359,38 +355,6 @@ export function checkVitality(
 		const left = hp[row] ?? 0;
 		const top = max[row] ?? 0;
 		if (!healthy(left, top)) return report(VITALITY, base + row, left, top);
-	}
-	return OK;
-}
-
-export interface Links {
-	readonly word: number;
-	readonly bit: number;
-	readonly floor: Uint8Array;
-	readonly x: Int16Array;
-	readonly y: Int16Array;
-}
-
-export function checkLinks(
-	rows: Rows,
-	links: Links,
-	floor: number,
-	floors: number,
-	width: number,
-	height: number,
-): number {
-	const { base, highWater, maskWords, masks } = rows;
-	const { word, bit } = links;
-	for (let row = 0; row < highWater; row++) {
-		if (((masks[row * maskWords + word] ?? 0) & bit) === 0) continue;
-		const to = links.floor[row] ?? 0;
-		const x = links.x[row] ?? 0;
-		const y = links.y[row] ?? 0;
-		if (
-			((masks[row * maskWords] ?? 0) & ACTOR) !== 0 ||
-			!validLink(floor, to, x, y, floors, width, height)
-		)
-			return report(LINK, base + row, to);
 	}
 	return OK;
 }

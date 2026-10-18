@@ -3,7 +3,7 @@ import { MAX_SPECIES } from "../config";
 import type { Column } from "../ecs/schema";
 import { createColumn } from "../ecs/schema";
 import { CORE, CORE_KEY, Engine } from "../engine";
-import { coreSchema } from "../health/vitality";
+import { coreSchema, coreSparse } from "../health/vitality";
 import {
 	type CompiledSpecies,
 	compileSpecies,
@@ -170,7 +170,7 @@ export function createEngine(
 		.sort()
 		.map((name) => `${JSON.stringify(name)}:${table.get(name)}`);
 	engine.fingerprint = hashName(
-		`${canonical(coreSchema, CORE)}[${configs.join(",")}]{${named.join(",")}}[${resolved.join(",")}]`,
+		`${canonical([coreSchema, coreSparse], CORE)}[${configs.join(",")}]{${named.join(",")}}[${resolved.join(",")}]`,
 	);
 	engine.sections = sectionsOf(engine);
 	const { storage } = engine;
@@ -178,7 +178,12 @@ export function createEngine(
 		engine.coreColumns.filter((c) => !c.travels).map((c) => c.column),
 	);
 	engine.carried = storage.columns.filter((column) => !local.has(column));
-	engine.inbox = new Inbox(storage, engine.carried);
+	engine.inbox = new Inbox(
+		storage,
+		engine.carried,
+		storage.sparse.columns,
+		engine.sparseMask,
+	);
 	if (shape.audit) engine.audit = new Audit(engine, modules);
 	return engine;
 }

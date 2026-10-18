@@ -6,10 +6,12 @@ import { execute, finishTurn, runFloor } from "./turn";
 
 const LAST_TIER = LOD_PERIODS.length - 1;
 
-// With no player anywhere every floor decides every turn: nobody is near enough to tell a
-// cheaper floor apart, and a world without players keeps the plain arbitration of every turn.
 export function startRound(e: Engine): void {
-	const { players, period, inbox } = e;
+	const { players, period, inbox, unwatchedPeriod } = e;
+	if (!(Number.isInteger(unwatchedPeriod) && unwatchedPeriod >= 1))
+		throw new Error(
+			`unwatched period ${unwatchedPeriod} is not an integer >= 1`,
+		);
 	const floors = e.storage.floors;
 	for (let f = 0; f < floors; f++) {
 		let nearest = -1;
@@ -18,8 +20,8 @@ export function startRound(e: Engine): void {
 			const d = f > g ? f - g : g - f;
 			if (nearest < 0 || d < nearest) nearest = d;
 		}
-		const tier = nearest < 0 ? 0 : nearest > LAST_TIER ? LAST_TIER : nearest;
-		period[f] = LOD_PERIODS[tier] ?? 1;
+		const tier = nearest > LAST_TIER ? LAST_TIER : nearest;
+		period[f] = nearest < 0 ? unwatchedPeriod : (LOD_PERIODS[tier] ?? 1);
 	}
 }
 
